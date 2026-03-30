@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id          String     @id @default(cuid())
+  email       String     @unique
+  password    String?
+  name        String?
+  role        String     @default("AGENCY")
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Integration {
+  id          String   @id @default(cuid())
+  platform    String
+  adAccountId String
+  name        String
+  bmId        String?
+  bmName      String?
+  accessToken String   @default("")
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspaceIntegrations WorkspaceIntegration[]
+}
+
+model Workspace {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  logo          String?
+  publicAccess  Boolean  @default(false)
+  sharePassword String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  integrations WorkspaceIntegration[]
+  clients      User[]
+}
+
+model MetaConnection {
+  id          String    @id @default(cuid())
+  fbUserId    String    @unique
+  accessToken String
+  name        String?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model WorkspaceIntegration {
+  id            String      @id @default(cuid())
+  workspaceId   String
+  integrationId String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, integrationId])
+}
