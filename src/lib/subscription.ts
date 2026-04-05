@@ -152,8 +152,10 @@ export async function countConnectedAccounts(userId: string): Promise<number> {
  * Returns null if allowed, or an error message if blocked.
  */
 export async function validatePlatformLimit(userId: string, newPlatform: string): Promise<string | null> {
-  const sub = await getAndSyncSubscription(userId);
-  if (!sub) return null;
+  let sub = await getAndSyncSubscription(userId);
+  if (!sub) {
+    sub = await createTrialSubscription(userId);
+  }
 
   const plan = PLANS[sub.plan as PlanKey];
   if (!plan || plan.maxPlatforms === null) return null; // plano sem restrição de plataformas
@@ -188,8 +190,11 @@ export async function validatePlatformLimit(userId: string, newPlatform: string)
  * Returns null if allowed, or an error message if blocked.
  */
 export async function validateAccountLimit(userId: string): Promise<string | null> {
-  const sub = await getAndSyncSubscription(userId);
-  if (!sub) return "Assinatura não encontrada.";
+  let sub = await getAndSyncSubscription(userId);
+  if (!sub) {
+    // Auto-create trial for users registered before subscription system was added
+    sub = await createTrialSubscription(userId);
+  }
 
   if (!isPlanActive(sub)) {
     return "Seu plano expirou. Assine um plano para continuar conectando contas.";
