@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
   getAndSyncSubscription,
+  createTrialSubscription,
   countConnectedAccounts,
   trialDaysRemaining,
   isPlanActive,
@@ -15,9 +16,9 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  const sub = await getAndSyncSubscription(session.user.id);
+  let sub = await getAndSyncSubscription(session.user.id);
   if (!sub) {
-    return NextResponse.json({ error: "Assinatura não encontrada" }, { status: 404 });
+    sub = await createTrialSubscription(session.user.id);
   }
 
   const connectedCount = await countConnectedAccounts(session.user.id);

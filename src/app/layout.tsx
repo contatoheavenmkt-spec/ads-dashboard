@@ -8,11 +8,6 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 export const metadata: Metadata = {
   title: "Dashfy — Dashboard de Tráfego Pago",
   description: "Plataforma de dashboards para agências de marketing digital",
-  icons: {
-    icon: "/logo-icon.png",
-    shortcut: "/logo-icon.png",
-    apple: "/logo-icon.png",
-  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
