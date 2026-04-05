@@ -8,16 +8,8 @@ import { FunnelChart } from "@/components/charts/funnel-chart";
 import { TopCampaignsDonut } from "@/components/charts/top-campaigns-donut";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
 import { formatCurrency, formatNumber } from "@/lib/utils";
-import { Loader2, LayoutDashboard, Users, PieChart as PieChartIcon } from "lucide-react";
-import { Pie } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-} from "chart.js";
+import { Loader2, LayoutDashboard } from "lucide-react";
 
-ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface MetricsData {
   timeSeries: { date: string; spend: number; impressions: number; reach: number; clicks: number; purchases: number; leads: number; messages: number; conversions: number; revenue: number }[];
@@ -64,8 +56,6 @@ export default function DashboardPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<Integration | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<any | null>(null);
-  const [creatives, setCreatives] = useState<AdCreative[]>([]);
-  const [demographics, setDemographics] = useState<{ gender: DemographicBreakdown[]; age: DemographicBreakdown[] }>({ gender: [], age: [] });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -97,14 +87,8 @@ export default function DashboardPage() {
     const safeFetch = (url: string) =>
       fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
 
-    Promise.all([
-      safeFetch(`/api/metrics?${params}`),
-      safeFetch(`/api/meta/creatives?${params}`),
-      safeFetch(`/api/meta/demographics?${params}`),
-    ]).then(([metrics, creativesRes, demoRes]) => {
+    safeFetch(`/api/metrics?${params}`).then((metrics) => {
       if (metrics) setData(metrics);
-      setCreatives(creativesRes?.ads ?? []);
-      if (demoRes) setDemographics(demoRes);
     }).finally(() => { setLoading(false); setIsRefreshing(false); });
   }, [days, selectedAccount, selectedCampaign, refreshKey]);
 
@@ -276,138 +260,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Creative Matrix — Capas dos Anúncios */}
-        {creatives.length > 0 && (
-          <div className="glass-panel rounded-2xl p-6 flex flex-col">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <h3 className="text-sm font-black text-white/80 uppercase tracking-[0.2em]">Creative Matrix</h3>
-                <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 uppercase">Meta Ads</span>
-              </div>
-              <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 uppercase tracking-widest">
-                {creatives.filter(a => a.status === "ACTIVE").length} ATIVOS
-              </span>
-            </div>
-            <div className="overflow-x-auto no-scrollbar pb-4">
-              <div className="flex gap-6" style={{ minWidth: `${creatives.length * 160}px` }}>
-                {creatives.map(ad => (
-                  <div key={ad.id} className="flex-shrink-0 w-[160px] group/ad">
-                    <p className="text-[10px] font-bold text-white/40 mb-3 truncate uppercase tracking-tighter group-hover/ad:text-white transition-colors">{ad.name}</p>
-                    <div className="relative aspect-[4/5] w-full rounded-xl overflow-hidden bg-slate-800 border border-white/5 transition-transform group-hover/ad:scale-[1.02] duration-500">
-                      {ad.thumbnail ? (
-                        <img
-                          src={ad.thumbnail}
-                          alt={ad.name}
-                          className="w-full h-full object-cover grayscale-[0.3] group-hover/ad:grayscale-0 transition-all duration-700"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest italic">Sem imagem</span>
-                        </div>
-                      )}
-                      <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${ad.status === "ACTIVE" ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" : "bg-slate-500"}`}></div>
-                      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-                    </div>
-                    <div className="mt-3 space-y-2 px-1">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Impressões</span>
-                        <span className="text-[12px] font-black text-white">{formatNumber(ad.impressions)}</span>
-                      </div>
-                      {ad.messages + ad.leads > 0 && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">Conversas</span>
-                          <span className="text-[12px] font-black text-blue-400">{ad.messages + ad.leads}</span>
-                        </div>
-                      )}
-                      {ad.purchases > 0 && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-widest">Vendas</span>
-                          <span className="text-[12px] font-black text-emerald-400">{ad.purchases}</span>
-                        </div>
-                      )}
-                      {!ad.messages && !ad.leads && !ad.purchases && ad.conversions > 0 && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Conv.</span>
-                          <span className="text-[12px] font-black text-white">{ad.conversions}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* Demographics */}
-        {(demographics.gender.length > 0 || demographics.age.length > 0) && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {demographics.gender.length > 0 && (
-              <div className="glass-panel rounded-2xl p-6 flex flex-col">
-                <div className="flex items-center gap-2 mb-6">
-                  <Users size={16} className="text-blue-400" />
-                  <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Demografia: Gênero</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-6 items-center">
-                  <div className="aspect-square relative max-w-[140px] mx-auto">
-                    <Pie
-                      data={{
-                        labels: demographics.gender.map(g => g.label),
-                        datasets: [{
-                          data: demographics.gender.map(g => g.impressions),
-                          backgroundColor: ["#2563eb", "#93c5fd", "#1e40af"],
-                          borderWidth: 0,
-                        }]
-                      }}
-                      options={{ cutout: "70%", plugins: { legend: { display: false } } }}
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    {demographics.gender.map((g, i) => {
-                      const total = demographics.gender.reduce((a, b) => a + b.impressions, 0);
-                      return (
-                        <div key={i} className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ["#2563eb", "#93c5fd", "#1e40af"][i] }}></div>
-                            {g.label}
-                          </div>
-                          <span className="text-white">{total > 0 ? Math.round((g.impressions / total) * 100) : 0}%</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {demographics.age.length > 0 && (
-              <div className="glass-panel rounded-2xl p-6 flex flex-col">
-                <div className="flex items-center gap-2 mb-6">
-                  <PieChartIcon size={16} className="text-blue-400" />
-                  <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Demografia: Faixa Etária</h3>
-                </div>
-                <div className="space-y-3">
-                  {demographics.age.map((a, i) => {
-                    const total = demographics.age.reduce((acc, curr) => acc + curr.impressions, 0);
-                    const percent = total > 0 ? Math.round((a.impressions / total) * 100) : 0;
-                    return (
-                      <div key={i} className="space-y-1">
-                        <div className="flex justify-between text-[9px] font-bold text-slate-500 uppercase">
-                          <span>{a.label}</span>
-                          <span>{percent}%</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${percent}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Active Campaigns Table */}
         <div className="space-y-3">
