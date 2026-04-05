@@ -152,17 +152,17 @@ export function Sidebar() {
         : "border-gray-200 bg-gray-900"
     )}>
       {/* Logo - Fixed at top */}
-      <div className="mb-6 shrink-0">
+      <div className="mb-4 shrink-0">
         <Link href="/">
           <div className="transition-all hover:scale-110 active:scale-95">
-            <DashfyLogoIcon size={360} />
+            <DashfyLogoIcon size={40} />
           </div>
         </Link>
       </div>
 
       {/* Navigation items - centered in dashboard pages */}
       <div className={cn(
-        "space-y-4 flex flex-col items-center w-full shrink-0",
+        "space-y-4 flex flex-col items-center w-full",
         isDashboard ? "justify-center flex-1" : ""
       )}>
 

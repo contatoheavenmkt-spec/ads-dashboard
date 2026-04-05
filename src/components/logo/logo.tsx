@@ -1,7 +1,7 @@
 export function DashfyLogoIcon({ size = 48, className }: { size?: number; className?: string }) {
   return (
     <img
-      src="/logo icon.png"
+      src="/logo-icon.png"
       alt="Dashfy"
       width={size}
       height={size}
@@ -13,7 +13,7 @@ export function DashfyLogoIcon({ size = 48, className }: { size?: number; classN
 export function DashfyLogoFull({ width = 160, className }: { width?: number; className?: string }) {
   return (
     <img
-      src="/Logo full.png"
+      src="/logo-full.png"
       alt="Dashfy"
       width={width}
       className={`object-contain ${className ?? ""}`}

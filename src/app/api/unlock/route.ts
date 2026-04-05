@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
     path: "/",
     maxAge: 60 * 60 * 24 * 30, // 30 days
     sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
   });
 
   return NextResponse.json({ ok: true });
