@@ -2,7 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import { signIn } from "next-auth/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { DashfyLogoFull } from "@/components/logo/logo";
@@ -15,7 +15,7 @@ const PLAN_LABELS: Record<string, string> = {
   premium: "Plano Premium — R$ 299,90/mês · até 30 contas",
 };
 
-export default function CadastroPage() {
+function CadastroContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const planParam = searchParams.get("plan") as PlanKey | null;
@@ -198,5 +198,13 @@ export default function CadastroPage() {
       </div>
       </div>
     </div>
+  );
+}
+
+export default function CadastroPage() {
+  return (
+    <Suspense>
+      <CadastroContent />
+    </Suspense>
   );
 }

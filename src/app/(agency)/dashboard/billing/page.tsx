@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import {
@@ -90,7 +90,7 @@ const PLAN_UI = {
 
 type PlanKey = keyof typeof PLAN_UI;
 
-export default function BillingPage() {
+function BillingContent() {
   const searchParams = useSearchParams();
   const successParam = searchParams.get("success");
   const canceledParam = searchParams.get("canceled");
@@ -362,5 +362,13 @@ export default function BillingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={<div className="flex-1 flex items-center justify-center"><div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>}>
+      <BillingContent />
+    </Suspense>
   );
 }
