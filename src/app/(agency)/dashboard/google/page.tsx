@@ -81,9 +81,9 @@ export default function GoogleAdsPage() {
     );
   }
 
-  // Se não há dados reais, exibir estado "em breve"
-  const hasData = data && (data.timeSeries.length > 0 || (data.totals?.spend ?? 0) > 0);
-  if (!hasData) {
+  // Se a conta não está conectada, exibir estado "em breve"
+  const isConnected = integrations.length > 0;
+  if (!isConnected && !loading) {
     return (
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <Header title="Google Ads" subtitle="Relatório Google Ads" days={days} onDaysChange={setDays} accounts={integrations} selectedAccount={selectedAccount} onAccountChange={setSelectedAccount} />

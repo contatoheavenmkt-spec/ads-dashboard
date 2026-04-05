@@ -364,7 +364,8 @@ export function ClientDashboard({
   const renderGoogle = () => {
     const t = googleData?.totals;
 
-    if (!googleData || (googleData.timeSeries.length === 0 && (t?.spend ?? 0) === 0)) {
+    const isGoogleConnected = platforms.includes("google");
+    if (!isGoogleConnected) {
       return (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-4 text-center max-w-sm">
@@ -573,7 +574,8 @@ export function ClientDashboard({
   const renderGA4 = () => {
     const t = ga4Data?.totals;
 
-    if (!ga4Data || (ga4Data.timeSeries.length === 0 && (t?.sessions ?? 0) === 0)) {
+    const isGA4Connected = platforms.includes("ga4");
+    if (!isGA4Connected) {
       return (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-4 text-center max-w-sm">

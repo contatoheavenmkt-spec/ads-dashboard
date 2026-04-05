@@ -155,7 +155,7 @@ export function Sidebar() {
       <div className="mb-4 shrink-0">
         <Link href="/">
           <div className="transition-all hover:scale-110 active:scale-95">
-            <DashfyLogoIcon size={40} />
+            <DashfyLogoIcon size={56} />
           </div>
         </Link>
       </div>

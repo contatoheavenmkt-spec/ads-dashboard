@@ -58,7 +58,7 @@ export function PlanGuard({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <Link
-              href="/planos"
+              href="/dashboard/billing"
               className="flex items-center gap-1 text-blue-300 hover:text-white font-bold uppercase tracking-wide text-[10px] transition-colors"
             >
               <Zap size={11} />
@@ -109,7 +109,7 @@ export function PlanGuard({ children }: { children: React.ReactNode }) {
                         key={key}
                         type="button"
                         className="flex items-center justify-between p-3.5 rounded-xl border border-slate-700/60 hover:border-slate-500 bg-slate-800/60 hover:bg-slate-800 transition-all group pointer-events-auto"
-                        onClick={() => window.location.href = `/planos?plan=${key}`}
+                        onClick={() => window.location.href = `/dashboard/billing`}
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-2 h-2 rounded-full bg-gradient-to-r ${PLAN_COLORS[key] ?? "from-slate-500 to-slate-400"}`} />
