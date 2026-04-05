@@ -41,6 +41,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             <Link href="/about" className="hover:text-slate-300 transition-colors">Sobre</Link>
             <Link href="/privacy" className="hover:text-slate-300 transition-colors">Política de Privacidade</Link>
             <Link href="/terms" className="hover:text-slate-300 transition-colors">Termos de Uso</Link>
+            <Link href="/data-deletion" className="hover:text-slate-300 transition-colors">Exclusão de Dados</Link>
           </div>
         </div>
       </footer>

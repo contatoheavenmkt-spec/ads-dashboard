@@ -132,6 +132,8 @@ export default function LoginPage() {
           {" · "}
           <Link href="/terms" className="hover:text-slate-500 transition-colors">Termos de Uso</Link>
           {" · "}
+          <Link href="/data-deletion" className="hover:text-slate-500 transition-colors">Exclusão de Dados</Link>
+          {" · "}
           <Link href="/about" className="hover:text-slate-500 transition-colors">Sobre</Link>
         </p>
       </div>
