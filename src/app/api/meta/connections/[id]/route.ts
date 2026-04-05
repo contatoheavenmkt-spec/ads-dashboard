@@ -14,8 +14,8 @@ export async function DELETE(
 
   const { id } = await params;
 
-  // Remove a conexão OAuth do Facebook
-  await deleteMetaConnection(id);
+  // Remove a conexão OAuth do Facebook (somente do próprio usuário)
+  await deleteMetaConnection(session.user.id, id);
 
   // Remove todas as integrações Meta do workspace do usuário
   if (session?.user?.id) {

@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  const connections = await getMetaConnections();
+  const connections = await getMetaConnections(session.user.id);
 
   if (connections.length === 0) {
     return NextResponse.json({ error: "NO_TOKEN", connections: [], bms: [] });

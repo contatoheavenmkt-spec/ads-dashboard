@@ -8,8 +8,8 @@ const REQUIRED_SCOPE = "https://www.googleapis.com/auth/adwords";
 
 // ─── Token management ──────────────────────────────────────────────
 
-async function getValidToken(): Promise<{ accessToken: string; scopes: string[] } | null> {
-  const conn = await db.googleConnection.findFirst({ orderBy: { connectedAt: "desc" } });
+async function getValidToken(userId: string): Promise<{ accessToken: string; scopes: string[] } | null> {
+  const conn = await db.googleConnection.findFirst({ where: { userId }, orderBy: { connectedAt: "desc" } });
   if (!conn) return null;
 
   const connScopes = (conn.scopes ?? "").split(" ");
@@ -182,14 +182,12 @@ function aggregateTotals(days: DayMetrics[]) {
 // ─── GET handler ──────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  // workspaceId param is used by the public client dashboard (no auth session)
   const workspaceIdParam = req.nextUrl.searchParams.get("workspaceId");
   const force = req.nextUrl.searchParams.get("force") === "1";
-  if (!workspaceIdParam) {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+
+  const session = await auth();
+  if (!workspaceIdParam && !session?.user?.id) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
   const customerId = await resolveCustomerId(req);
@@ -213,7 +211,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const tokenInfo = await getValidToken();
+  const tokenInfo = await getValidToken(session?.user?.id ?? "");
   if (!tokenInfo) {
     return NextResponse.json({ error: "NO_TOKEN" }, { status: 401 });
   }

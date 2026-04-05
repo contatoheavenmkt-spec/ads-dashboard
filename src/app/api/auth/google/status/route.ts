@@ -9,9 +9,8 @@ export async function GET() {
       return NextResponse.json({ connected: false, email: null });
     }
 
-    // Busca a conexão Google mais recente — single-tenant por enquanto
-    // (Google connections são globais, não por usuário, pois usam email como chave)
     const connection = await db.googleConnection.findFirst({
+      where: { userId: session.user.id },
       orderBy: { connectedAt: "desc" },
     });
 

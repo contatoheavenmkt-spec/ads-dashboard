@@ -1,21 +1,16 @@
-// Helper para salvar e buscar o token Meta OAuth no banco de dados
-
 import { db } from "@/lib/db";
 
-export async function getStoredMetaToken(): Promise<string | null> {
-  // Pega a conexão Meta mais recente
+export async function getStoredMetaToken(userId: string): Promise<string | null> {
   const conn = await db.metaConnection.findFirst({
+    where: { userId },
     orderBy: { updatedAt: "desc" },
   });
   if (!conn) return null;
-
-  // Verifica se o token expirou
   if (conn.expiresAt && conn.expiresAt < new Date()) return null;
-
   return conn.accessToken;
 }
 
-export async function saveMetaToken({
+export async function saveMetaToken(userId: string, {
   fbUserId,
   accessToken,
   name,
@@ -24,23 +19,27 @@ export async function saveMetaToken({
   fbUserId: string;
   accessToken: string;
   name?: string;
-  expiresIn?: number; // segundos
+  expiresIn?: number;
 }) {
   const expiresAt = expiresIn
     ? new Date(Date.now() + expiresIn * 1000)
     : null;
 
   await db.metaConnection.upsert({
-    where: { fbUserId },
-    create: { fbUserId, accessToken, name: name ?? null, expiresAt },
+    where: { userId_fbUserId: { userId, fbUserId } },
+    create: { userId, fbUserId, accessToken, name: name ?? null, expiresAt },
     update: { accessToken, name: name ?? undefined, expiresAt, updatedAt: new Date() },
   });
 }
 
-export async function getMetaConnections() {
-  return db.metaConnection.findMany({ orderBy: { updatedAt: "desc" } });
+export async function getMetaConnections(userId: string) {
+  return db.metaConnection.findMany({
+    where: { userId },
+    orderBy: { updatedAt: "desc" },
+  });
 }
 
-export async function deleteMetaConnection(id: string) {
-  await db.metaConnection.delete({ where: { id } });
+export async function deleteMetaConnection(userId: string, id: string) {
+  // Garante que só deleta conexão do próprio usuário
+  await db.metaConnection.deleteMany({ where: { id, userId } });
 }

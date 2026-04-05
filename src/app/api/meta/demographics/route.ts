@@ -28,7 +28,10 @@ export async function GET(req: NextRequest) {
   const adAccountIdParam = searchParams.get("adAccountId");
   const workspaceId = searchParams.get("workspaceId");
 
-  const token = await getStoredMetaToken();
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ gender: [], age: [] });
+
+  const token = await getStoredMetaToken(session.user.id);
   if (!token) return NextResponse.json({ gender: [], age: [] });
 
   let accountIds: string[] = [];
@@ -46,23 +49,19 @@ export async function GET(req: NextRequest) {
         .map((wi) => wi.integration.adAccountId);
     }
   } else {
-    // Usa workspace do usuário logado
-    const session = await auth();
-    if (session?.user?.id) {
-      const user = await db.user.findUnique({
-        where: { id: session.user.id },
-        select: { workspaceId: true },
+    const user = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { workspaceId: true },
+    });
+    const userWorkspaceId = user?.workspaceId ?? (session.user as { workspaceId?: string }).workspaceId;
+    if (userWorkspaceId) {
+      const wsIntegrations = await db.workspaceIntegration.findMany({
+        where: { workspaceId: userWorkspaceId },
+        include: { integration: { select: { adAccountId: true, platform: true } } },
       });
-      const userWorkspaceId = user?.workspaceId ?? (session.user as { workspaceId?: string }).workspaceId;
-      if (userWorkspaceId) {
-        const wsIntegrations = await db.workspaceIntegration.findMany({
-          where: { workspaceId: userWorkspaceId },
-          include: { integration: { select: { adAccountId: true, platform: true } } },
-        });
-        accountIds = wsIntegrations
-          .filter((wi) => wi.integration.platform === "meta")
-          .map((wi) => wi.integration.adAccountId);
-      }
+      accountIds = wsIntegrations
+        .filter((wi) => wi.integration.platform === "meta")
+        .map((wi) => wi.integration.adAccountId);
     }
   }
 

@@ -30,7 +30,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const token = await getStoredMetaToken();
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({
+      timeSeries: [],
+      totals: { spend: 0, impressions: 0, reach: 0, clicks: 0, conversions: 0, revenue: 0, cpc: 0, cpa: 0, roas: 0, ctr: 0 },
+      campaigns: [],
+      accountIds: [],
+    });
+  }
+
+  const token = await getStoredMetaToken(session.user.id);
   if (!token) {
     return NextResponse.json({
       timeSeries: [],

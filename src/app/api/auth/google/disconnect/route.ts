@@ -18,11 +18,10 @@ export async function POST(request: Request) {
 
     // Revogar tokens no Google (opcional, mas boa prática)
     const connection = await db.googleConnection.findUnique({
-      where: { email },
+      where: { userId_email: { userId: session.user.id, email } },
     });
 
     if (connection) {
-      // Tentar revogar o refresh token
       try {
         await fetch(`https://oauth2.googleapis.com/revoke?token=${connection.refreshToken}`, {
           method: "POST",
@@ -31,9 +30,9 @@ export async function POST(request: Request) {
         console.warn("Não foi possível revogar token no Google:", err);
       }
 
-      // Remover do banco
-      await db.googleConnection.delete({
-        where: { email },
+      // Garante que só deleta a conexão do próprio usuário
+      await db.googleConnection.deleteMany({
+        where: { email, userId: session.user.id },
       });
     }
 

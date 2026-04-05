@@ -24,9 +24,14 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
   const error = searchParams.get("error_description");
+  const userId = searchParams.get("state"); // userId passado pelo start route
 
   if (error || !code) {
     return htmlClose("error", error ?? "Autorização cancelada");
+  }
+
+  if (!userId) {
+    return htmlClose("error", "Sessão inválida. Tente novamente.");
   }
 
   const appId = process.env.META_APP_ID;
@@ -34,11 +39,10 @@ export async function GET(req: NextRequest) {
   const redirectUri = process.env.META_REDIRECT_URI;
 
   if (!appId || !appSecret || !redirectUri) {
-    return htmlClose("error", "Configuração do servidor incompleta (META_APP_ID, META_APP_SECRET ou META_REDIRECT_URI ausentes)");
+    return htmlClose("error", "Configuração do servidor incompleta");
   }
 
   try {
-    // Troca o code pelo access token
     const tokenUrl = new URL(`${GRAPH_API}/oauth/access_token`);
     tokenUrl.searchParams.set("client_id", appId);
     tokenUrl.searchParams.set("client_secret", appSecret);
@@ -55,18 +59,14 @@ export async function GET(req: NextRequest) {
     const accessToken: string = tokenData.access_token;
     const expiresIn: number | undefined = tokenData.expires_in;
 
-    // Busca informações do usuário Facebook
-    const meRes = await fetch(
-      `${GRAPH_API}/me?fields=id,name&access_token=${accessToken}`
-    );
+    const meRes = await fetch(`${GRAPH_API}/me?fields=id,name&access_token=${accessToken}`);
     const meData = await meRes.json();
 
     if (meData.error) {
       return htmlClose("error", meData.error.message);
     }
 
-    // Salva no banco
-    await saveMetaToken({
+    await saveMetaToken(userId, {
       fbUserId: meData.id,
       accessToken,
       name: meData.name,
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
 
     return htmlClose("success");
   } catch (err: any) {
-    console.error("[meta/oauth/callback] Erro inesperado:", err?.message ?? err);
-    return htmlClose("error", "Erro interno ao processar autenticação Meta. Tente novamente.");
+    console.error("[meta/oauth/callback] Erro:", err?.message ?? err);
+    return htmlClose("error", "Erro interno ao processar autenticação Meta.");
   }
 }

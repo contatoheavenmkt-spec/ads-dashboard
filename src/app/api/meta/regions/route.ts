@@ -58,7 +58,10 @@ export async function GET(req: NextRequest) {
   const adAccountIdParam = searchParams.get("adAccountId");
   const workspaceId = searchParams.get("workspaceId");
 
-  const token = await getStoredMetaToken();
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ regions: [] });
+
+  const token = await getStoredMetaToken(session.user.id);
   if (!token) return NextResponse.json({ regions: [] });
 
   let accountIds: string[] = [];

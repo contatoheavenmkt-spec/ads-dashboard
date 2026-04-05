@@ -7,10 +7,10 @@ const REQUIRED_SCOPE = "https://www.googleapis.com/auth/adwords";
 
 // ─── Token management ──────────────────────────────────────────────
 
-async function getValidToken(): Promise<{ accessToken: string; scopes: string[] } | null> {
+async function getValidToken(userId: string): Promise<{ accessToken: string; scopes: string[] } | null> {
   console.log("[google/accounts] === GETTING VALID TOKEN ===");
 
-  const conn = await db.googleConnection.findFirst({ orderBy: { connectedAt: "desc" } });
+  const conn = await db.googleConnection.findFirst({ where: { userId }, orderBy: { connectedAt: "desc" } });
   if (!conn) {
     console.log("[google/accounts] ❌ No Google connection found in DB");
     return null;
@@ -91,7 +91,7 @@ export async function GET() {
 
   const loginCustomerId = rawLoginCustomerId.replace(/-/g, "");
 
-  const tokenInfo = await getValidToken();
+  const tokenInfo = await getValidToken(session.user.id);
   if (!tokenInfo) {
     return NextResponse.json({
       accounts: [],
