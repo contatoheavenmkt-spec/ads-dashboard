@@ -10,13 +10,17 @@ export default auth((req) => {
 
   const isAuthPage = nextUrl.pathname.startsWith("/login") || nextUrl.pathname.startsWith("/cadastro");
   const isPublicClient = nextUrl.pathname.startsWith("/cliente");
+  const isPublicPage =
+    nextUrl.pathname.startsWith("/privacy") ||
+    nextUrl.pathname.startsWith("/terms") ||
+    nextUrl.pathname.startsWith("/about");
   const isAgencyRoute =
     nextUrl.pathname.startsWith("/dashboard") ||
     nextUrl.pathname.startsWith("/integracoes") ||
     nextUrl.pathname.startsWith("/workspaces");
 
   // Deixa rotas públicas passarem
-  if (isPublicClient) return NextResponse.next();
+  if (isPublicClient || isPublicPage) return NextResponse.next();
 
   // Redireciona para login se não autenticado
   if (!isLoggedIn && !isAuthPage) {

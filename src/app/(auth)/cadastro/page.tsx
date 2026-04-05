@@ -195,6 +195,13 @@ function CadastroContent() {
         <p className="text-center text-[10px] text-slate-600 mt-4 font-medium">
           Dashfy · Dashboard de Tráfego Pago
         </p>
+        <p className="text-center text-[10px] text-slate-700 mt-2">
+          <Link href="/privacy" className="hover:text-slate-500 transition-colors">Privacidade</Link>
+          {" · "}
+          <Link href="/terms" className="hover:text-slate-500 transition-colors">Termos de Uso</Link>
+          {" · "}
+          <Link href="/about" className="hover:text-slate-500 transition-colors">Sobre</Link>
+        </p>
       </div>
       </div>
     </div>
