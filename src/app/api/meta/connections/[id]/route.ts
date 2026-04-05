@@ -17,34 +17,22 @@ export async function DELETE(
   // Remove a conexão OAuth do Facebook (somente do próprio usuário)
   await deleteMetaConnection(session.user.id, id);
 
-  // Remove todas as integrações Meta do workspace do usuário
-  if (session?.user?.id) {
-    const user = await db.user.findUnique({
-      where: { id: session.user.id },
-      select: { workspaceId: true },
-    });
-    const workspaceId = user?.workspaceId ?? (session.user as { workspaceId?: string }).workspaceId;
+  // Verifica se ainda resta alguma conexão (Meta ou Google) para este usuário
+  const [remainingGoogle, remainingMeta] = await Promise.all([
+    db.googleConnection.count({ where: { userId: session.user.id } }),
+    db.metaConnection.count({ where: { userId: session.user.id } }),
+  ]);
 
-    if (workspaceId) {
-      // Busca todas as integrações Meta vinculadas a este workspace
-      const wsIntegrations = await db.workspaceIntegration.findMany({
-        where: { workspaceId },
-        include: { integration: true },
+  if (remainingGoogle === 0 && remainingMeta === 0) {
+    // Remove todos os workspaces (nullifica workspaceId dos usuários antes para evitar FK constraint)
+    const allWorkspaces = await db.workspace.findMany({ select: { id: true } });
+    if (allWorkspaces.length > 0) {
+      const ids = allWorkspaces.map((w) => w.id);
+      await db.user.updateMany({
+        where: { workspaceId: { in: ids } },
+        data: { workspaceId: null },
       });
-
-      const metaIntegrationIds = wsIntegrations
-        .filter((wi) => wi.integration.platform === "meta")
-        .map((wi) => wi.integrationId);
-
-      if (metaIntegrationIds.length > 0) {
-        // Remove vínculos e integrações
-        await db.workspaceIntegration.deleteMany({
-          where: { workspaceId, integrationId: { in: metaIntegrationIds } },
-        });
-        await db.integration.deleteMany({
-          where: { id: { in: metaIntegrationIds } },
-        });
-      }
+      await db.workspace.deleteMany({ where: { id: { in: ids } } });
     }
   }
 

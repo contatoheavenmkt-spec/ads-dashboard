@@ -7,7 +7,8 @@ import { PerformanceChart } from "@/components/charts/performance-chart";
 import { RegionList, RegionMap } from "@/components/dashboard/region-heatmap";
 import { Pie } from "react-chartjs-2";
 import { formatNumber, formatCurrency } from "@/lib/utils";
-import { Loader2, Search, Target, MousePointer2 } from "lucide-react";
+import { Loader2, Search, Target, MousePointer2, Zap } from "lucide-react";
+import Link from "next/link";
 import { KeywordsTable } from "@/components/dashboard/keywords-table";
 import {
   Chart as ChartJS,
@@ -47,8 +48,18 @@ export default function DetalhesPage() {
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [demographics, setDemographics] = useState<{ gender: DemographicBreakdown[]; age: DemographicBreakdown[] }>({ gender: [], age: [] });
   const [regions, setRegions] = useState<{ name: string; value: number }[]>([]);
+  const [hasConnectedAccounts, setHasConnectedAccounts] = useState(false);
+  const [connectionsChecked, setConnectionsChecked] = useState(false);
 
   useEffect(() => {
+    fetch("/api/connections/status")
+      .then((r) => r.json())
+      .then((data) => {
+        setHasConnectedAccounts((data?.connectedCount ?? 0) > 0);
+        setConnectionsChecked(true);
+      })
+      .catch(() => setConnectionsChecked(true));
+
     fetch("/api/accounts")
       .then((r) => r.json())
       .then((ints: any[]) => {
@@ -128,6 +139,39 @@ export default function DetalhesPage() {
   const totalAI = demographics.age.reduce((a, b) => a + b.impressions, 0) || 1;
   const aLabels = demographics.age.length > 0 ? demographics.age.map(a => a.label) : FALLBACK_AGE.labels;
   const aData = demographics.age.length > 0 ? demographics.age.map(a => Math.round((a.impressions / totalAI) * 100)) : FALLBACK_AGE.data;
+
+  if (connectionsChecked && !hasConnectedAccounts) {
+    return (
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <Header
+          title="Detalhamento Geral"
+          subtitle="Resumo Multiplataforma"
+          days={days}
+          onDaysChange={setDays}
+        />
+        <div className="flex-1 flex items-start justify-center pt-12">
+          <div className="flex flex-col items-center gap-6 text-center max-w-md px-6">
+            <img src="/Logo Full.png" alt="Dashfy" className="h-96 object-contain opacity-80" />
+            <div className="space-y-2 -mt-32">
+              <h2 className="text-xl font-black text-white">Sem Contas Conectadas</h2>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Conecte suas contas de anúncios para visualizar o detalhamento completo.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 w-full max-w-xs">
+              <Link
+                href="/integracoes"
+                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-6 py-3.5 rounded-2xl transition-all active:scale-95 shadow-xl shadow-blue-500/20"
+              >
+                <Zap size={16} />
+                Conectar Contas
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading && !metaData) {
     return (
