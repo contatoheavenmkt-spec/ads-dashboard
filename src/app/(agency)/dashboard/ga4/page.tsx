@@ -7,7 +7,8 @@ import { PerformanceChart } from "@/components/charts/performance-chart";
 import { FunnelChart } from "@/components/charts/funnel-chart";
 import { TopCampaignsDonut } from "@/components/charts/top-campaigns-donut";
 import { formatNumber } from "@/lib/utils";
-import { Loader2, LayoutDashboard, Users, PieChart as PieChartIcon } from "lucide-react";
+import { Loader2, LayoutDashboard, Users, PieChart as PieChartIcon, Zap } from "lucide-react";
+import Link from "next/link";
 import { Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -40,18 +41,32 @@ export default function GA4Page() {
   const [data, setData] = useState<GA4Metrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/connections/status")
+      .then(r => r.json())
+      .then(status => setIsConnected(status?.ga4 === true || status?.google === true))
+      .catch(() => setIsConnected(false));
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     fetch(`/api/ga4/metrics?days=${days}`)
-      .then(r => r.json())
-      .then(setData)
+      .then(r => {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then(json => {
+        if (json && json.timeSeries) setData(json);
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [days]);
 
   const t = data?.totals;
 
-  if (loading && !data) {
+  if (loading && !data && isConnected !== false) {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-900">
         <div className="flex flex-col items-center gap-4">
@@ -62,20 +77,35 @@ export default function GA4Page() {
     );
   }
 
-  // Se não há dados reais, exibir estado "em breve"
+  // Se não há dados reais, exibir estado vazio com logo
   const hasData = data && (data.timeSeries.length > 0 || (data.totals?.sessions ?? 0) > 0);
-  if (!hasData) {
+  if (isConnected === false || !hasData) {
     return (
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <Header title="Google Analytics 4" subtitle="Métricas de Audiência e Comportamento" days={days} onDaysChange={setDays} />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4 text-center max-w-sm">
-            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-              <LayoutDashboard size={28} className="text-orange-500/60" />
+        <div className="flex-1 flex items-start justify-center pt-12">
+          <div className="flex flex-col items-center gap-6 text-center max-w-md px-6">
+            <img src="/Logo Full.png" alt="Dashfy" className="h-96 object-contain opacity-80" />
+            <div className="space-y-2 -mt-32">
+              <h2 className="text-xl font-black text-white">Comece do Zero</h2>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Sua dashboard está vazia. Conecte suas contas de anúncios para começar a visualizar métricas.
+              </p>
             </div>
-            <div>
-              <p className="text-slate-200 font-bold text-sm">Integração Google Analytics 4</p>
-              <p className="text-slate-500 text-xs mt-1">A conexão com GA4 estará disponível em breve. Os dados aparecerão aqui assim que a integração for ativada.</p>
+            <div className="flex flex-col gap-3 w-full max-w-xs">
+              <Link
+                href="/integracoes"
+                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-6 py-3.5 rounded-2xl transition-all active:scale-95 shadow-xl shadow-blue-500/20"
+              >
+                <Zap size={16} />
+                Conectar Contas
+              </Link>
+              <Link
+                href="/integracoes/onboarding"
+                className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm px-6 py-3.5 rounded-2xl transition-all border border-slate-700"
+              >
+                Ver Tutorial
+              </Link>
             </div>
           </div>
         </div>

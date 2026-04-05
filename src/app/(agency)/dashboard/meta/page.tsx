@@ -8,7 +8,8 @@ import { FunnelChart } from "@/components/charts/funnel-chart";
 import { TopCampaignsDonut } from "@/components/charts/top-campaigns-donut";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
 import { formatCurrency, formatNumber } from "@/lib/utils";
-import { Loader2, LayoutDashboard } from "lucide-react";
+import { Loader2, LayoutDashboard, Zap } from "lucide-react";
+import Link from "next/link";
 
 
 interface MetricsData {
@@ -58,6 +59,14 @@ export default function DashboardPage() {
   const [selectedCampaign, setSelectedCampaign] = useState<any | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/connections/status")
+      .then(r => r.json())
+      .then(status => setIsConnected(status?.meta === true))
+      .catch(() => setIsConnected(false));
+  }, []);
 
   useEffect(() => {
     fetch("/api/accounts")
@@ -94,12 +103,46 @@ export default function DashboardPage() {
 
   const t = data?.totals;
 
-  if (loading && !data) {
+  if (loading && !data && isConnected !== false) {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-900">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
           <p className="text-slate-400 text-sm font-medium animate-pulse">Carregando métricas em tempo real...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isConnected === false) {
+    return (
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <Header title="Meta Ads" subtitle="Relatório Meta Ads" days={days} onDaysChange={setDays} />
+        <div className="flex-1 flex items-start justify-center pt-12">
+          <div className="flex flex-col items-center gap-6 text-center max-w-md px-6">
+            <img src="/Logo Full.png" alt="Dashfy" className="h-96 object-contain opacity-80" />
+            <div className="space-y-2 -mt-32">
+              <h2 className="text-xl font-black text-white">Comece do Zero</h2>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Sua dashboard está vazia. Conecte suas contas de anúncios para começar a visualizar métricas.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 w-full max-w-xs">
+              <Link
+                href="/integracoes"
+                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-6 py-3.5 rounded-2xl transition-all active:scale-95 shadow-xl shadow-blue-500/20"
+              >
+                <Zap size={16} />
+                Conectar Contas
+              </Link>
+              <Link
+                href="/integracoes/onboarding"
+                className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm px-6 py-3.5 rounded-2xl transition-all border border-slate-700"
+              >
+                Ver Tutorial
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     );
