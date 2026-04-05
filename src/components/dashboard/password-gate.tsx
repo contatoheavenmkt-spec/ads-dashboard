@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { BarChart3, Lock, Loader2 } from "lucide-react";
+import { Lock, Loader2 } from "lucide-react";
+import { DashfyLogoFull } from "@/components/logo/logo";
 
 interface PasswordGateProps {
   slug: string;
@@ -42,10 +43,7 @@ export function PasswordGate({ slug, workspaceName }: PasswordGateProps) {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-blue-950 p-4">
       <div className="w-full max-w-sm">
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center">
-            <BarChart3 size={20} className="text-white" />
-          </div>
-          <span className="text-2xl font-bold text-white">AdsPanel</span>
+          <DashfyLogoFull width={140} />
         </div>
 
         <div className="bg-white rounded-2xl p-8 shadow-2xl">

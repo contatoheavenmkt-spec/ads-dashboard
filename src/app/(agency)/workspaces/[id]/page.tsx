@@ -4,11 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Header } from "@/components/layout/header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -16,13 +11,17 @@ import {
   Eye,
   EyeOff,
   ExternalLink,
+  ImageIcon,
   KeyRound,
   Link2,
   Loader2,
   Lock,
+  Pencil,
   Trash2,
+  Upload,
   UserMinus,
   UserPlus,
+  X,
 } from "lucide-react";
 
 interface Integration {
@@ -55,6 +54,54 @@ interface CreatedCredentials {
   password: string;
 }
 
+function Section({ icon, title, badge, children }: {
+  icon: React.ReactNode;
+  title: string;
+  badge?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="glass-panel rounded-2xl p-6 space-y-4">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 bg-slate-800/80 rounded-lg flex items-center justify-center border border-slate-700/50 text-blue-400">
+            {icon}
+          </div>
+          <h2 className="text-xs font-black text-slate-200 uppercase tracking-widest">{title}</h2>
+        </div>
+        {badge && (
+          <span className="text-[9px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700 uppercase tracking-wider">
+            {badge}
+          </span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function DarkInput({ value, onChange, placeholder, type = "text", readOnly = false, onKeyDown, className = "" }: {
+  value: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  type?: string;
+  readOnly?: boolean;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  className?: string;
+}) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      readOnly={readOnly}
+      onKeyDown={onKeyDown}
+      className={`w-full bg-slate-900/80 border border-slate-700 hover:border-slate-600 focus:border-blue-500 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none transition-colors ${readOnly ? "cursor-default opacity-70" : ""} ${className}`}
+    />
+  );
+}
+
 export default function WorkspaceDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -71,8 +118,8 @@ export default function WorkspaceDetailPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
-  // Criação de usuário cliente
   const [clients, setClients] = useState<Client[]>([]);
   const [newEmail, setNewEmail] = useState("");
   const [newClientName, setNewClientName] = useState("");
@@ -81,6 +128,10 @@ export default function WorkspaceDetailPage() {
   const [addingClient, setAddingClient] = useState(false);
   const [clientError, setClientError] = useState("");
   const [createdCredentials, setCreatedCredentials] = useState<CreatedCredentials | null>(null);
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  const [editPassword, setEditPassword] = useState("");
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -122,6 +173,19 @@ export default function WorkspaceDetailPage() {
     router.push("/workspaces");
   }
 
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const json = await res.json();
+    if (json.url) setLogo(json.url);
+    setUploadingLogo(false);
+    e.target.value = "";
+  }
+
   async function handleDelete() {
     if (!confirm(`Excluir cliente "${workspace?.name}"? Esta ação não pode ser desfeita.`)) return;
     setDeleting(true);
@@ -130,18 +194,30 @@ export default function WorkspaceDetailPage() {
   }
 
   function copyLink() {
-    navigator.clipboard.writeText(
-      `${window.location.origin}/cliente/${workspace?.slug}`
-    );
+    navigator.clipboard.writeText(`${window.location.origin}/cliente/${workspace?.slug}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  // Recarrega os dados do workspace do banco
+  async function reloadWorkspace() {
+    const ws = await fetch(`/api/workspaces/${id}`).then((r) => r.json());
+    if (ws) {
+      setWorkspace(ws);
+      setName(ws.name);
+      setLogo(ws.logo ?? "");
+      setPublicAccess(ws.publicAccess);
+      setSharePassword(ws.sharePassword ?? "");
+      setUsePassword(!!ws.sharePassword);
+      setSelected(ws.integrations.map((i: { integration: Integration }) => i.integration.id));
+      setClients(ws.clients ?? []);
+    }
   }
 
   async function handleAddClient() {
     if (!newEmail.trim()) return;
     setAddingClient(true);
     setClientError("");
-    setCreatedCredentials(null);
 
     const res = await fetch(`/api/workspaces/${id}/clients`, {
       method: "POST",
@@ -156,13 +232,8 @@ export default function WorkspaceDetailPage() {
     setAddingClient(false);
 
     if (res.ok) {
-      const newClient = await res.json();
-      setClients((prev) => {
-        if (prev.find((c) => c.id === newClient.id)) {
-          return prev.map((c) => (c.id === newClient.id ? newClient : c));
-        }
-        return [...prev, newClient];
-      });
+      // Recarrega do banco para garantir que os dados estão atualizados
+      await reloadWorkspace();
       if (newPassword) {
         setCreatedCredentials({ email: newEmail.trim(), password: newPassword });
       }
@@ -175,14 +246,37 @@ export default function WorkspaceDetailPage() {
   }
 
   async function handleRemoveClient(clientId: string) {
-    await fetch(`/api/workspaces/${id}/clients/${clientId}`, { method: "DELETE" });
-    setClients((prev) => prev.filter((c) => c.id !== clientId));
+    const res = await fetch(`/api/workspaces/${id}/clients/${clientId}`, { method: "DELETE" });
+    if (res.ok) {
+      await reloadWorkspace();
+    }
+  }
+
+  async function handleEditPassword(client: Client) {
+    if (!editPassword.trim()) return;
+    setSavingPassword(true);
+    const res = await fetch(`/api/workspaces/${id}/clients`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: client.email, name: client.name, password: editPassword }),
+    });
+    setSavingPassword(false);
+    if (res.ok) {
+      await reloadWorkspace();
+      setCreatedCredentials({ email: client.email, password: editPassword });
+      setEditingClientId(null);
+      setEditPassword("");
+      setShowEditPassword(false);
+    }
   }
 
   if (!workspace) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent" />
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex items-center gap-3 text-slate-500">
+          <Loader2 size={18} className="animate-spin" />
+          <span className="text-xs font-bold uppercase tracking-wider">Carregando...</span>
+        </div>
       </div>
     );
   }
@@ -192,135 +286,112 @@ export default function WorkspaceDetailPage() {
     : `/cliente/${workspace.slug}`;
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex-1 flex flex-col h-full overflow-hidden">
       <Header title={workspace.name} subtitle="Configurações do cliente" />
 
-      <div className="p-6 max-w-2xl space-y-6">
-        <Link href="/workspaces">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft size={14} />
-            Voltar
-          </Button>
-        </Link>
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-2xl mx-auto space-y-5">
 
-        {/* Informações do cliente */}
-        <Card>
-          <CardHeader><CardTitle>Informações do Cliente</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="wsName">Nome</Label>
-              <Input
-                id="wsName"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="mt-1"
-                placeholder="Nome do cliente"
-              />
+          <Link href="/workspaces">
+            <button className="flex items-center gap-2 text-slate-400 hover:text-slate-200 text-xs font-bold uppercase tracking-wider transition-colors mb-2">
+              <ArrowLeft size={14} />
+              Voltar
+            </button>
+          </Link>
+
+          {/* Informações */}
+          <Section icon={<span className="text-xs font-black">ID</span>} title="Informações do Cliente">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nome</label>
+              <DarkInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do cliente" />
             </div>
-            <div>
-              <Label htmlFor="wsLogo">URL do Logo (opcional)</Label>
-              <Input
-                id="wsLogo"
-                type="url"
-                value={logo}
-                onChange={(e) => setLogo(e.target.value)}
-                className="mt-1"
-                placeholder="https://..."
-              />
-              {logo && (
-                <div className="mt-2 flex items-center gap-2">
-                  <img src={logo} alt="Logo preview" className="w-10 h-10 rounded-lg object-cover border" />
-                  <span className="text-xs text-gray-400">Preview do logo</span>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Logo do Cliente</label>
+              <div className="flex items-center gap-4">
+                {logo ? (
+                  <img src={logo} alt="Logo" className="w-14 h-14 rounded-2xl object-cover border border-slate-700 shadow-lg" />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-600">
+                    <ImageIcon size={20} />
+                  </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  <label className={`cursor-pointer flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 rounded-xl text-xs font-bold text-slate-300 transition-all active:scale-95 ${uploadingLogo ? "opacity-60 pointer-events-none" : ""}`}>
+                    {uploadingLogo ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                    {uploadingLogo ? "Enviando..." : logo ? "Trocar imagem" : "Enviar logo"}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={uploadingLogo} />
+                  </label>
+                  {logo && (
+                    <button onClick={() => setLogo("")} className="flex items-center gap-1.5 text-[10px] text-slate-500 hover:text-rose-400 transition-colors">
+                      <X size={10} /> Remover
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </Section>
 
-        {/* Link público */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Link2 size={16} />
-              <CardTitle>Link de Convite</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Input readOnly value={clientLink} className="text-xs text-gray-500" />
-              <Button variant="outline" size="icon" onClick={copyLink}>
-                {copied ? <CheckCircle2 size={14} className="text-green-500" /> : <Copy size={14} />}
-              </Button>
+          {/* Link público */}
+          <Section icon={<Link2 size={13} />} title="Link de Convite">
+            <div className="flex gap-2">
+              <DarkInput value={clientLink} readOnly className="flex-1 font-mono text-xs" />
+              <button
+                onClick={copyLink}
+                className="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-400 hover:text-blue-400 transition-all"
+              >
+                {copied ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Copy size={14} />}
+              </button>
               <a href={`/cliente/${workspace.slug}`} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="icon">
+                <button className="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-400 hover:text-emerald-400 transition-all">
                   <ExternalLink size={14} />
-                </Button>
+                </button>
               </a>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="publicAccess"
-                checked={publicAccess}
-                onChange={(e) => setPublicAccess(e.target.checked)}
-                className="rounded"
-              />
-              <Label htmlFor="publicAccess" className="text-sm">Acesso público (sem senha)</Label>
-            </div>
-          </CardContent>
-        </Card>
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <div
+                onClick={() => setPublicAccess((v) => !v)}
+                className={`w-10 h-5 rounded-full transition-all relative flex-shrink-0 ${publicAccess ? "bg-blue-600" : "bg-slate-700"}`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${publicAccess ? "left-5.5 translate-x-0.5" : "left-0.5"}`} />
+              </div>
+              <span className="text-xs font-bold text-slate-300">Acesso público (sem senha)</span>
+            </label>
+          </Section>
 
-        {/* Senha do link */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Lock size={16} />
-              <CardTitle>Senha do Link</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="usePassword"
-                checked={usePassword}
-                onChange={(e) => setUsePassword(e.target.checked)}
-                className="rounded"
-              />
-              <Label htmlFor="usePassword" className="text-sm">Proteger link com senha</Label>
-            </div>
+          {/* Senha do link */}
+          <Section icon={<Lock size={13} />} title="Senha do Link">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div
+                onClick={() => setUsePassword((v) => !v)}
+                className={`w-10 h-5 rounded-full transition-all relative flex-shrink-0 ${usePassword ? "bg-blue-600" : "bg-slate-700"}`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${usePassword ? "left-5.5 translate-x-0.5" : "left-0.5"}`} />
+              </div>
+              <span className="text-xs font-bold text-slate-300">Proteger link com senha</span>
+            </label>
             {usePassword && (
-              <div>
-                <Label htmlFor="sharePassword" className="text-sm">Senha</Label>
-                <Input
-                  id="sharePassword"
-                  type="text"
-                  placeholder="Senha de acesso ao link"
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Senha de acesso</label>
+                <DarkInput
                   value={sharePassword}
                   onChange={(e) => setSharePassword(e.target.value)}
-                  className="mt-1"
+                  placeholder="Senha de acesso ao link"
                 />
-                <p className="text-xs text-gray-400 mt-1">
-                  O cliente precisará digitar esta senha ao acessar o link.
-                </p>
+                <p className="text-[10px] text-slate-500">O cliente precisará digitar esta senha ao acessar o link.</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </Section>
 
-        {/* Contas de anúncio */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Contas de Anúncio</CardTitle>
-              <span className="text-sm text-gray-400">{selected.length} selecionada{selected.length !== 1 ? "s" : ""}</span>
-            </div>
-          </CardHeader>
-          <CardContent>
+          {/* Contas de anúncio */}
+          <Section
+            icon={<span className="text-[10px] font-black">AD</span>}
+            title="Contas de Anúncio"
+            badge={`${selected.length} selecionada${selected.length !== 1 ? "s" : ""}`}
+          >
             {allIntegrations.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">
-                Nenhuma conta conectada. Vá em{" "}
-                <Link href="/integracoes" className="text-blue-600 underline">Integrações</Link>.
+              <p className="text-xs text-slate-500 text-center py-4 font-bold uppercase tracking-wider">
+                Nenhuma conta conectada.{" "}
+                <Link href="/integracoes" className="text-blue-400 hover:underline">Ir para Integrações</Link>
               </p>
             ) : (
               <div className="space-y-2">
@@ -330,160 +401,232 @@ export default function WorkspaceDetailPage() {
                     <div
                       key={int.id}
                       onClick={() => toggleAccount(int.id)}
-                      className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
-                        isSelected ? "border-blue-500 bg-blue-50" : "border-gray-100 hover:border-gray-200"
-                      }`}
+                      className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all ${isSelected
+                        ? "border-blue-500/60 bg-blue-500/10"
+                        : "border-slate-700/50 bg-slate-800/40 hover:border-slate-600/60"
+                        }`}
                     >
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{int.name}</p>
-                        <p className="text-xs text-gray-400">{int.bmName ?? int.adAccountId}</p>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center border text-xs font-black ${isSelected ? "bg-blue-600/20 border-blue-500/30 text-blue-400" : "bg-slate-800 border-slate-700 text-slate-400"
+                          }`}>
+                          {int.platform.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-100">{int.name}</p>
+                          <p className="text-[10px] text-slate-500">{int.bmName ?? int.adAccountId}</p>
+                        </div>
                       </div>
-                      {isSelected && <CheckCircle2 size={18} className="text-blue-500" />}
+                      {isSelected && <CheckCircle2 size={16} className="text-blue-400 shrink-0" />}
                     </div>
                   );
                 })}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </Section>
 
-        {/* Usuários Cliente com login/senha */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <KeyRound size={16} />
-                <CardTitle>Acesso com Login e Senha</CardTitle>
-              </div>
-              <span className="text-sm text-gray-400">{clients.length} usuário{clients.length !== 1 ? "s" : ""}</span>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-xs text-gray-500">
+          {/* Acesso com login/senha */}
+          <Section
+            icon={<KeyRound size={13} />}
+            title="Acesso com Login e Senha"
+            badge={`${clients.length} usuário${clients.length !== 1 ? "s" : ""}`}
+          >
+            <p className="text-[10px] text-slate-400">
               Crie um login para o cliente acessar o sistema com email e senha, vendo apenas o dashboard dele.
             </p>
 
-            {/* Credenciais criadas com sucesso */}
+            {/* Credenciais criadas */}
             {createdCredentials && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
-                <div className="flex items-center gap-2 text-green-700 font-medium text-sm">
-                  <CheckCircle2 size={16} />
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 space-y-2 relative">
+                <button
+                  onClick={() => setCreatedCredentials(null)}
+                  className="absolute top-3 right-3 text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  <X size={13} />
+                </button>
+                <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+                  <CheckCircle2 size={14} />
                   Acesso criado! Compartilhe com o cliente:
                 </div>
-                <div className="text-sm space-y-1">
+                <div className="space-y-1.5 text-xs">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-500 w-14">Email:</span>
-                    <code className="bg-white px-2 py-0.5 rounded border text-xs">{createdCredentials.email}</code>
+                    <span className="text-slate-400 w-12 shrink-0">Email:</span>
+                    <code className="bg-slate-900 px-2 py-0.5 rounded border border-slate-700 text-slate-200">{createdCredentials.email}</code>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-500 w-14">Senha:</span>
-                    <code className="bg-white px-2 py-0.5 rounded border text-xs">{createdCredentials.password}</code>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
+                    <span className="text-slate-400 w-12 shrink-0">Senha:</span>
+                    <code className="bg-slate-900 px-2 py-0.5 rounded border border-slate-700 text-slate-200">{createdCredentials.password}</code>
+                    <button
                       onClick={() => navigator.clipboard.writeText(`Email: ${createdCredentials.email}\nSenha: ${createdCredentials.password}`)}
+                      className="p-1 text-slate-400 hover:text-blue-400 transition-colors"
+                      title="Copiar credenciais"
                     >
-                      <Copy size={12} />
-                    </Button>
+                      <Copy size={11} />
+                    </button>
                   </div>
                 </div>
-                <p className="text-xs text-green-600">Acesso via: <strong>{window.location.origin}/login</strong></p>
+                <p className="text-[10px] text-emerald-400/70">Acesso via: <strong>{typeof window !== "undefined" ? window.location.origin : ""}/login</strong></p>
               </div>
             )}
 
             {/* Formulário */}
-            <div className="space-y-3 border border-gray-100 rounded-lg p-4">
+            <div className="space-y-3 border border-slate-700/50 rounded-xl p-4 bg-slate-800/30">
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Nome do cliente</Label>
-                  <Input
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nome do cliente</label>
+                  <input
                     placeholder="João Silva"
                     value={newClientName}
                     onChange={(e) => setNewClientName(e.target.value)}
-                    className="mt-1 h-8 text-sm"
+                    className="w-full bg-slate-900/80 border border-slate-700 hover:border-slate-600 focus:border-blue-500 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none transition-colors"
                   />
                 </div>
-                <div>
-                  <Label className="text-xs">Email *</Label>
-                  <Input
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email *</label>
+                  <input
                     type="email"
                     placeholder="cliente@email.com"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleAddClient()}
-                    className="mt-1 h-8 text-sm"
+                    className="w-full bg-slate-900/80 border border-slate-700 hover:border-slate-600 focus:border-blue-500 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none transition-colors"
                   />
                 </div>
               </div>
-              <div>
-                <Label className="text-xs">Senha de acesso</Label>
-                <div className="relative mt-1">
-                  <Input
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Senha de acesso</label>
+                <div className="relative">
+                  <input
                     type={showNewPassword ? "text" : "password"}
                     placeholder="Crie uma senha para o cliente"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="h-8 text-sm pr-9"
+                    className="w-full bg-slate-900/80 border border-slate-700 hover:border-slate-600 focus:border-blue-500 rounded-xl px-3 py-2 pr-9 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none transition-colors"
                   />
                   <button
                     type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     onClick={() => setShowNewPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-300 transition-colors"
                   >
-                    {showNewPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {showNewPassword ? <EyeOff size={13} /> : <Eye size={13} />}
                   </button>
                 </div>
               </div>
               {clientError && (
-                <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded">{clientError}</p>
+                <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-xl">{clientError}</p>
               )}
-              <Button
-                size="sm"
+              <button
                 onClick={handleAddClient}
                 disabled={addingClient || !newEmail.trim()}
-                className="w-full"
+                className="w-full flex items-center justify-center gap-2 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all active:scale-95"
               >
-                {addingClient ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                {addingClient ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
                 Criar acesso
-              </Button>
+              </button>
             </div>
 
             {/* Lista de clientes */}
             {clients.length > 0 && (
               <div className="space-y-2">
                 {clients.map((client) => (
-                  <div key={client.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{client.name ?? client.email}</p>
-                      {client.name && <p className="text-xs text-gray-400">{client.email}</p>}
+                  <div key={client.id} className="rounded-xl border border-emerald-500/25 bg-emerald-500/5">
+                    <div className="flex items-center justify-between p-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
+                          <KeyRound size={13} className="text-emerald-400" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-100">{client.name ?? client.email}</p>
+                          {client.name && <p className="text-[10px] text-slate-500">{client.email}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase">Ativo</span>
+                        <button
+                          onClick={() => {
+                            setEditingClientId(editingClientId === client.id ? null : client.id);
+                            setEditPassword("");
+                            setShowEditPassword(false);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
+                          title="Alterar senha"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={() => handleRemoveClient(client.id)}
+                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
+                          title="Remover acesso"
+                        >
+                          <UserMinus size={13} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">Cliente</Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-gray-400 hover:text-red-500"
-                        onClick={() => handleRemoveClient(client.id)}
-                      >
-                        <UserMinus size={13} />
-                      </Button>
-                    </div>
+
+                    {/* Edição inline de senha */}
+                    {editingClientId === client.id && (
+                      <div className="px-3.5 pb-3.5 pt-0 space-y-2 border-t border-emerald-500/15">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pt-3">Nova senha de acesso</p>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type={showEditPassword ? "text" : "password"}
+                              placeholder="Digite a nova senha"
+                              value={editPassword}
+                              onChange={(e) => setEditPassword(e.target.value)}
+                              onKeyDown={(e) => e.key === "Enter" && handleEditPassword(client)}
+                              className="w-full bg-slate-900/80 border border-slate-700 hover:border-slate-600 focus:border-blue-500 rounded-xl px-3 py-2 pr-9 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none transition-colors"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowEditPassword((v) => !v)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-300 transition-colors"
+                            >
+                              {showEditPassword ? <EyeOff size={12} /> : <Eye size={12} />}
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => handleEditPassword(client)}
+                            disabled={savingPassword || !editPassword.trim()}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all active:scale-95 whitespace-nowrap"
+                          >
+                            {savingPassword ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                            Salvar
+                          </button>
+                          <button
+                            onClick={() => { setEditingClientId(null); setEditPassword(""); }}
+                            className="p-2 text-slate-400 hover:text-slate-300 hover:bg-slate-700 rounded-xl transition-all"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </Section>
 
-        <div className="flex gap-3">
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : "Salvar Alterações"}
-          </Button>
-          <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-            {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-            Excluir Cliente
-          </Button>
+          {/* Ações */}
+          <div className="flex gap-3 pb-6">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-lg shadow-blue-500/20"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+              {saving ? "Salvando..." : "Salvar Alterações"}
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex items-center gap-2 px-5 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-400 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
+            >
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              Excluir Cliente
+            </button>
+          </div>
+
         </div>
       </div>
     </div>

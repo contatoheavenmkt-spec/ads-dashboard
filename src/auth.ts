@@ -2,8 +2,10 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { authConfig } from "./auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [
     Credentials({
       name: "Credentials",
@@ -35,36 +37,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           workspaceId: user.workspaceId,
           workspaceSlug: user.workspace?.slug ?? null,
+          onboardingCompleted: user.onboardingCompleted,
         };
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.role = (user as { role?: string }).role;
-        token.workspaceId = (user as { workspaceId?: string }).workspaceId;
-        token.workspaceSlug = (user as { workspaceSlug?: string | null }).workspaceSlug;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as string;
-        session.user.workspaceId = token.workspaceId as string | undefined;
-        session.user.workspaceSlug = token.workspaceSlug as string | undefined;
-      }
-      return session;
-    },
-  },
-  pages: {
-    signIn: "/login",
-  },
-  session: {
-    strategy: "jwt",
-  },
 });
 
 declare module "next-auth" {
@@ -76,6 +53,7 @@ declare module "next-auth" {
       role: string;
       workspaceId?: string;
       workspaceSlug?: string;
+      onboardingCompleted: boolean;
     };
   }
 }

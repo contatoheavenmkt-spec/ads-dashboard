@@ -62,6 +62,27 @@ export default function GA4Page() {
     );
   }
 
+  // Se não há dados reais, exibir estado "em breve"
+  const hasData = data && (data.timeSeries.length > 0 || (data.totals?.sessions ?? 0) > 0);
+  if (!hasData) {
+    return (
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <Header title="Google Analytics 4" subtitle="Métricas de Audiência e Comportamento" days={days} onDaysChange={setDays} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4 text-center max-w-sm">
+            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
+              <LayoutDashboard size={28} className="text-orange-500/60" />
+            </div>
+            <div>
+              <p className="text-slate-200 font-bold text-sm">Integração Google Analytics 4</p>
+              <p className="text-slate-500 text-xs mt-1">A conexão com GA4 estará disponível em breve. Os dados aparecerão aqui assim que a integração for ativada.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Mapeia timeSeries GA4 para o formato do PerformanceChart
   const chartSeries = (data?.timeSeries ?? []).map(d => ({
     date: d.date,
@@ -88,35 +109,31 @@ export default function GA4Page() {
         onDaysChange={setDays}
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
         {/* KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <KpiCard
             title="Sessões"
             value={formatNumber(t?.sessions ?? 0)}
-            change={8.2}
             sparklineColor="#f97316"
             sparklineData={data?.timeSeries.map(d => d.sessions) ?? []}
           />
           <KpiCard
             title="Usuários"
             value={formatNumber(t?.users ?? 0)}
-            change={6.5}
             sparklineColor="#fb923c"
             sparklineData={data?.timeSeries.map(d => d.users) ?? []}
           />
           <KpiCard
             title="Novos Usuários"
             value={formatNumber(t?.newUsers ?? 0)}
-            change={4.1}
             sparklineColor="#fdba74"
             sparklineData={data?.timeSeries.map(d => d.newUsers) ?? []}
           />
           <KpiCard
             title="Engajamento"
             value={`${t?.engagementRate ?? 0}%`}
-            change={3.7}
             sparklineColor="#fbbf24"
             sparklineData={data?.timeSeries.map(d =>
               d.sessions > 0 ? (d.engagedSessions / d.sessions) * 100 : 0
@@ -125,7 +142,6 @@ export default function GA4Page() {
           <KpiCard
             title="Eventos / Sessão"
             value={String(t?.eventsPerSession ?? 0)}
-            change={5.3}
             sparklineColor="#fde68a"
             sparklineData={data?.timeSeries.map(d =>
               d.sessions > 0 ? d.events / d.sessions : 0

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { auth } from "@/auth";
 
 export interface ConnectionStatus {
   meta: boolean;
@@ -9,27 +10,42 @@ export interface ConnectionStatus {
   platforms: string[];
 }
 
-// Plataformas com APIs mock ativas (dados ficticios para demonstração).
-// Quando a integração real for adicionada ao DB, o mock é ignorado.
-const MOCK_PLATFORMS = ["google", "ga4"];
-
 export async function GET() {
-  const integrations = await db.integration.findMany({
-    where: { status: "active" },
-    select: { platform: true },
-  });
+  const session = await auth();
 
-  const realPlatforms = [...new Set(integrations.map(i => i.platform))];
+  // Resolve workspaceId do banco (token pode estar em cache)
+  let workspaceId: string | null = null;
+  if (session?.user?.id) {
+    const user = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { workspaceId: true },
+    });
+    workspaceId = user?.workspaceId ?? (session.user as { workspaceId?: string }).workspaceId ?? null;
+  }
 
-  // Junta plataformas reais + mock (sem duplicar)
-  const allPlatforms = [...new Set([...realPlatforms, ...MOCK_PLATFORMS])];
+  let realPlatforms: string[] = [];
+
+  if (workspaceId) {
+    // Busca apenas integrações do workspace do usuário
+    const wsIntegrations = await db.workspaceIntegration.findMany({
+      where: { workspaceId },
+      include: { integration: { select: { platform: true, status: true } } },
+    });
+    realPlatforms = [
+      ...new Set(
+        wsIntegrations
+          .filter((wi) => wi.integration.status === "active")
+          .map((wi) => wi.integration.platform)
+      ),
+    ];
+  }
 
   const status: ConnectionStatus = {
-    meta: allPlatforms.includes("meta"),
-    google: allPlatforms.includes("google"),
-    ga4: allPlatforms.includes("ga4"),
-    connectedCount: allPlatforms.length,
-    platforms: allPlatforms,
+    meta: realPlatforms.includes("meta"),
+    google: realPlatforms.includes("google"),
+    ga4: realPlatforms.includes("ga4"),
+    connectedCount: realPlatforms.length,
+    platforms: realPlatforms,
   };
 
   return NextResponse.json(status);

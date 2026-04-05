@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(copy *)",
+      "Bash(npx *)",
+      "Bash(mkdir *)",
+      "Bash(timeout *)",
+      "Bash(curl *)",
+      "Bash(git diff *)",
+      "Bash(agency)",
+      "Bash(/dashboard/detalhes/page.tsx)",
+      "Bash(git checkout *)",
+      "Bash(del *)"
+    ]
+  },
+  "$version": 3
+}

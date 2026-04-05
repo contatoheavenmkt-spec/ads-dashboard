@@ -11,7 +11,10 @@ export async function GET(
     where: { id },
     include: {
       integrations: { include: { integration: true } },
-      clients: { select: { id: true, email: true, name: true } },
+      clients: {
+        where: { role: "CLIENT" },
+        select: { id: true, email: true, name: true },
+      },
     },
   });
 
@@ -42,10 +45,10 @@ export async function PUT(
       sharePassword,
       integrations: integrationIds?.length
         ? {
-            create: (integrationIds as string[]).map((integrationId: string) => ({
-              integrationId,
-            })),
-          }
+          create: (integrationIds as string[]).map((integrationId: string) => ({
+            integrationId,
+          })),
+        }
         : undefined,
     },
     include: {

@@ -2,22 +2,37 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import {
   Zap,
   Share2,
   Users,
   LogOut,
-  Settings
+  Settings,
+  CreditCard,
+  BadgeCheck,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
+import { DashfyLogoIcon } from "@/components/logo/logo";
 
 // Custom SVGs from Design System
-const ChartIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
+const ChartIcon = ({ active }: { active?: boolean }) => (
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={active ? "#60a5fa" : "#94a3b8"}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="w-6 h-6 mb-1 transition-all group-hover:scale-110"
+  >
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <rect x="8" y="12" width="2" height="5" fill={active ? "#60a5fa" : "none"} rx="0.5" />
+    <rect x="12" y="10" width="2" height="7" fill={active ? "#60a5fa" : "none"} rx="0.5" />
+    <rect x="16" y="13" width="2" height="4" fill={active ? "#60a5fa" : "none"} rx="0.5" />
   </svg>
 );
 
@@ -27,22 +42,39 @@ const GridIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const MetaIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12.0001 2.00018C6.47721 2.00018 2.00012 6.47728 2.00012 12.0002C2.00012 17.523 6.47721 22.0002 12.0001 22.0002C17.523 22.0002 22.0001 17.523 22.0001 12.0002C22.0001 6.47728 17.523 2.00018 12.0001 2.00018ZM8.49021 15.6582C7.0223 15.6582 5.83226 14.4682 5.83226 13.0002C5.83226 11.5323 7.0223 10.3423 8.49021 10.3423C9.95813 10.3423 11.1482 11.5323 11.1482 13.0002C11.1482 14.4682 9.95813 15.6582 8.49021 15.6582ZM15.5098 15.6582C14.0419 15.6582 12.8519 14.4682 12.8519 13.0002C12.8519 11.5323 14.0419 10.3423 15.5098 10.3423C16.9777 10.3423 18.1678 11.5323 18.1678 13.0002C18.1678 14.4682 16.9777 15.6582 15.5098 15.6582Z"></path>
-  </svg>
+// Ícones de plataforma com imagens reais
+
+const MetaIcon = ({ active = false }: { active?: boolean }) => (
+  <img
+    src="/icon-meta.png"
+    alt="Meta Ads"
+    className="w-7 h-7 object-contain transition-all duration-200"
+    style={{
+      filter: active ? "none" : "grayscale(1) brightness(0.5)",
+    }}
+  />
 );
 
-const GoogleIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12.0001 2.00018C6.47721 2.00018 2.00012 6.47728 2.00012 12.0002C2.00012 17.523 6.47721 22.0002 12.0001 22.0002C17.523 22.0002 22.0001 17.523 22.0001 12.0002C22.0001 6.47728 17.523 2.00018 12.0001 2.00018ZM15.5098 15.6582C14.0419 15.6582 12.8519 14.4682 12.8519 13.0002L8.49021 10.3423V15.6582C7.0223 15.6582 5.83226 14.4682 5.83226 13.0002C5.83226 11.5323 7.0223 10.3423 8.49021 10.3423C9.95813 10.3423 11.1482 11.5323 11.1482 13.0002L15.5098 10.3423C16.9777 10.3423 18.1678 11.5323 18.1678 13.0002C18.1678 14.4682 16.9777 15.6582 15.5098 15.6582Z"></path>
-  </svg>
+const GoogleAdsIcon = ({ active = false }: { active?: boolean }) => (
+  <img
+    src="/icon-google-ads.webp"
+    alt="Google Ads"
+    className="w-6 h-6 object-contain transition-all duration-200"
+    style={{
+      filter: active ? "none" : "grayscale(1) brightness(0.5)",
+    }}
+  />
 );
 
-const GA4Icon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M3 19H21V21H3V19ZM14 5H18V17H14V5ZM8 10H12V17H8V10ZM2 14H6V17H2V14Z"></path>
-  </svg>
+const GA4Icon = ({ active = false }: { active?: boolean }) => (
+  <img
+    src="/icon-ga4.png"
+    alt="Google Analytics 4"
+    className="w-6 h-6 object-contain transition-all duration-200"
+    style={{
+      filter: active ? "none" : "grayscale(1) brightness(0.5)",
+    }}
+  />
 );
 
 interface NavItem {
@@ -51,22 +83,24 @@ interface NavItem {
   icon: any;
   color?: string;
   activeColor?: string;
-  platform?: string; // qual plataforma precisa estar conectada para mostrar
-  requiresMulti?: boolean; // só aparece se 2+ plataformas conectadas
+  platform?: string;
+  requiresMulti?: boolean;
+  isSvgIcon?: boolean;
 }
 
 const saasItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Zap },
   { href: "/integracoes", label: "Contas", icon: Share2 },
   { href: "/workspaces", label: "Workspaces", icon: Users },
+  { href: "/dashboard/billing", label: "Plano", icon: BadgeCheck, activeColor: "text-emerald-400" },
 ];
 
 const allDashboardItems: NavItem[] = [
   { href: "/dashboard", label: "Visão Geral", icon: GridIcon, requiresMulti: true },
   { href: "/dashboard/meta", label: "Meta Ads", icon: MetaIcon, color: "text-slate-500", activeColor: "text-blue-400", platform: "meta" },
-  { href: "/dashboard/google", label: "Google Ads", icon: GoogleIcon, color: "text-slate-500", activeColor: "text-cyan-400", platform: "google" },
+  { href: "/dashboard/google", label: "Google Ads", icon: GoogleAdsIcon, color: "text-slate-500", activeColor: "text-cyan-400", platform: "google" },
   { href: "/dashboard/ga4", label: "GA4", icon: GA4Icon, color: "text-orange-400", platform: "ga4" },
-  { href: "/dashboard/detalhes", label: "Detalhes", icon: ChartIcon }, // sempre visível, sempre por último
+  { href: "/dashboard/detalhes", label: "Detalhes", icon: ChartIcon, isSvgIcon: true },
 ];
 
 interface ConnectionStatus {
@@ -81,56 +115,60 @@ export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [connections, setConnections] = useState<ConnectionStatus | null>(null);
+  const [onboardingPending, setOnboardingPending] = useState(false);
 
   const isDashboard = pathname.startsWith("/dashboard");
   const variant = isDashboard ? "dark" : "light";
 
   useEffect(() => {
+    // Fetch connection status when in dashboard
     if (isDashboard) {
       fetch("/api/connections/status")
         .then(r => r.json())
         .then(setConnections)
         .catch(() => null);
     }
+    // Fetch onboarding status
+    fetch("/api/onboarding/status")
+      .then(r => r.json())
+      .then(data => {
+        if (!data.onboardingCompleted) {
+          setOnboardingPending(true);
+        }
+      })
+      .catch(() => null);
   }, [isDashboard]);
 
-  // Filtra itens baseado nas conexões ativas
-  const dashboardItems = allDashboardItems.filter(item => {
-    if (!connections) return true; // enquanto carrega, mostra tudo
-    if (item.requiresMulti) return connections.connectedCount >= 2;
-    if (item.platform) return connections[item.platform as keyof ConnectionStatus] === true;
-    return true;
-  });
+  // Mostra TODOS os itens sempre (o usuário pode navegar livremente)
+  const dashboardItems = allDashboardItems;
 
   const currentItems = isDashboard ? dashboardItems : saasItems;
 
-  const userInitials = session?.user?.name
-    ? session.user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-    : "NA";
-
   return (
     <aside className={cn(
-      "w-20 lg:w-24 flex flex-col items-center py-6 border-r flex-shrink-0 z-20 transition-all duration-300 shadow-2xl",
+      "w-20 lg:w-24 flex flex-col items-center py-6 border-r flex-shrink-0 z-20 transition-all duration-300 shadow-2xl h-screen",
       variant === "dark"
         ? "border-slate-800/80 bg-slate-950"
         : "border-gray-200 bg-gray-900"
     )}>
-      <div className="flex-1 space-y-4 flex flex-col items-center w-full overflow-y-auto no-scrollbar pt-2">
-        {/* Logo/Home */}
-        <div className="mb-6">
-          <Link href="/">
-            <div className={cn(
-              "w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-xl transition-all hover:scale-110 active:scale-95",
-              variant === "dark" ? "bg-blue-600 shadow-blue-500/20" : "bg-blue-500 shadow-blue-500/10"
-            )}>
-              <Zap size={24} fill="currentColor" />
-            </div>
-          </Link>
-        </div>
+      {/* Logo - Fixed at top */}
+      <div className="mb-6 shrink-0">
+        <Link href="/">
+          <div className="transition-all hover:scale-110 active:scale-95">
+            <DashfyLogoIcon size={360} />
+          </div>
+        </Link>
+      </div>
 
-        {currentItems.map(({ href, label, icon: Icon, color, activeColor }) => {
+      {/* Navigation items - centered in dashboard pages */}
+      <div className={cn(
+        "space-y-4 flex flex-col items-center w-full shrink-0",
+        isDashboard ? "justify-center flex-1" : ""
+      )}>
+
+        {currentItems.map(({ href, label, icon: Icon, color, activeColor, platform, isSvgIcon }) => {
           const active = pathname === href || (href !== "/" && pathname.startsWith(href) && href !== "/dashboard");
-          const isGA4 = label === "GA4";
+          const isPlatformIcon = platform !== undefined;
 
           return (
             <Link
@@ -147,46 +185,61 @@ export function Sidebar() {
                     : "text-gray-400 hover:bg-gray-800 hover:text-white")
               )}
             >
-              <Icon
-                className={cn(
-                  "w-6 h-6 mb-1 transition-all group-hover:scale-110",
-                  active ? (activeColor || "text-blue-400") : (color || "opacity-70"),
-                  isGA4 && !active ? "text-orange-400 opacity-90" : ""
-                )}
-              />
+              {isPlatformIcon ? (
+                <div className="mb-1 transition-all duration-300 group-hover:scale-110">
+                  <Icon active={active} />
+                </div>
+              ) : isSvgIcon ? (
+                <div className="mb-1 transition-all duration-300 group-hover:scale-110">
+                  <Icon active={active} />
+                </div>
+              ) : (
+                <Icon
+                  className={cn(
+                    "w-6 h-6 mb-1 transition-all group-hover:scale-110",
+                    active ? (activeColor || "text-blue-400") : (color || "opacity-70"),
+                  )}
+                />
+              )}
               <span className={cn(
                 "text-[8px] font-bold transition-colors text-center px-1 uppercase tracking-wider",
                 active && variant === "dark" ? (activeColor || "text-blue-400/90") :
-                active && variant === "light" ? "text-white" :
-                "text-slate-400"
+                  active && variant === "light" ? "text-white" :
+                    "text-slate-400"
               )}>
                 {label}
               </span>
 
               {/* Pill indicador ativo */}
               {active && variant === "dark" && (
-                <div className="absolute -right-0.5 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-blue-500 rounded-full shadow-[0_0_12px_rgba(59,130,246,0.9)]"></div>
+                <div className="absolute -right-0.5 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-blue-500 rounded-full shadow-[0_0_12px_rgba(59,130,246,0.9)]" />
               )}
             </Link>
           );
         })}
       </div>
 
-      {/* Bottom Actions */}
-      <div className="mt-auto space-y-6 flex flex-col items-center w-full pt-6">
+      {/* Bottom Actions - Fixed at bottom */}
+      <div className="mt-auto shrink-0 space-y-6 flex flex-col items-center w-full pt-6 pb-6">
         <div className="flex flex-col items-center gap-5">
           <Link
             href="/integracoes"
             className={cn(
-              "transition-all duration-300 hover:scale-110",
+              "transition-all duration-300 hover:scale-110 relative",
               variant === "dark" ? "text-slate-500 hover:text-blue-400" : "text-gray-400 hover:text-white"
             )}
             title="Configurações"
           >
             <Settings size={22} className="opacity-70 hover:opacity-100" />
+            {onboardingPending && (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+              </span>
+            )}
           </Link>
 
-          <button
+<button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className={cn(
               "transition-all duration-300 hover:scale-110",
@@ -196,15 +249,6 @@ export function Sidebar() {
           >
             <LogOut size={22} className="opacity-70 hover:opacity-100" />
           </button>
-        </div>
-
-        <div className={cn(
-          "w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-transform hover:scale-105",
-          variant === "dark"
-            ? "bg-slate-800 border-slate-700 text-slate-100 shadow-lg shadow-black/20"
-            : "bg-white border-gray-200 text-gray-900 shadow-md"
-        )}>
-          {userInitials}
         </div>
       </div>
     </aside>

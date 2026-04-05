@@ -43,9 +43,11 @@ export default function GoogleAdsPage() {
   const [integrations, setIntegrations] = useState<any[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<any | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    fetch("/api/integrations")
+    fetch("/api/accounts")
       .then((r) => r.json())
       .then((ints: any[]) => {
         setIntegrations(ints.filter(i => i.platform === "google"));
@@ -54,15 +56,17 @@ export default function GoogleAdsPage() {
 
   useEffect(() => {
     setLoading(true);
+    const force = refreshKey > 0;
     const params = new URLSearchParams({ days: String(days) });
     if (selectedAccount) params.set("adAccountId", selectedAccount.adAccountId);
     if (selectedCampaign) params.set("campaignId", selectedCampaign.id);
+    if (force) params.set("force", "1");
 
     fetch(`/api/google/metrics?${params}`)
       .then((r) => r.json())
       .then(setData)
-      .finally(() => setLoading(false));
-  }, [days, selectedAccount, selectedCampaign]);
+      .finally(() => { setLoading(false); setIsRefreshing(false); });
+  }, [days, selectedAccount, selectedCampaign, refreshKey]);
 
   const t = data?.totals;
 
@@ -72,6 +76,27 @@ export default function GoogleAdsPage() {
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-10 h-10 text-cyan-500 animate-spin" />
           <p className="text-slate-400 text-sm font-medium animate-pulse">Carregando métricas Google Ads...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Se não há dados reais, exibir estado "em breve"
+  const hasData = data && (data.timeSeries.length > 0 || (data.totals?.spend ?? 0) > 0);
+  if (!hasData) {
+    return (
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <Header title="Google Ads" subtitle="Relatório Google Ads" days={days} onDaysChange={setDays} accounts={integrations} selectedAccount={selectedAccount} onAccountChange={setSelectedAccount} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4 text-center max-w-sm">
+            <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+              <LayoutDashboard size={28} className="text-cyan-500/60" />
+            </div>
+            <div>
+              <p className="text-slate-200 font-bold text-sm">Integração Google Ads</p>
+              <p className="text-slate-500 text-xs mt-1">A conexão com Google Ads estará disponível em breve. Os dados aparecerão aqui assim que a integração for ativada.</p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -90,6 +115,8 @@ export default function GoogleAdsPage() {
         campaigns={data?.campaigns || []}
         selectedCampaign={selectedCampaign}
         onCampaignChange={setSelectedCampaign}
+        onRefresh={() => { setIsRefreshing(true); setRefreshKey(k => k + 1); }}
+        isRefreshing={isRefreshing}
         onDownload={() => {
           const headers = ["Data", "Investimento", "Impressões", "Cliques", "Conversões"];
           const rows = data?.timeSeries.map(d => [
@@ -109,48 +136,33 @@ export default function GoogleAdsPage() {
         }}
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
         {/* KPIs */}
-        <div className={`grid gap-4 ${t && t.revenue > 0 ? "grid-cols-1 md:grid-cols-3 lg:grid-cols-5" : "grid-cols-1 md:grid-cols-3 lg:grid-cols-3"}`}>
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
           <KpiCard
             title="Investimento"
             value={formatCurrency(t?.spend ?? 0)}
-            change={6.1}
             sparklineColor="#22d3ee"
             sparklineData={data?.timeSeries.map(d => d.spend) ?? []}
           />
-          {t && t.revenue > 0 && (
-            <KpiCard
-              title="Receita"
-              value={formatCurrency(t?.revenue ?? 0)}
-              change={9.8}
-              sparklineColor="#10b981"
-              sparklineData={data?.timeSeries.map(d => d.revenue) ?? []}
-            />
-          )}
           <KpiCard
             title="Conversões"
             value={formatNumber(t?.conversions ?? 0)}
-            change={11.2}
             sparklineColor="#06b6d4"
             sparklineData={data?.timeSeries.map(d => d.conversions) ?? []}
           />
-          {t && t.revenue > 0 && (
-            <KpiCard
-              title="ROAS Médio"
-              value={`${(t?.roas ?? 0).toFixed(2)}x`}
-              change={4.5}
-              sparklineColor="#a855f7"
-              sparklineData={data?.timeSeries.map(d => d.spend > 0 ? d.revenue / d.spend : 0) ?? []}
-            />
-          )}
           <KpiCard
             title="CPC Médio"
             value={formatCurrency(t?.cpc ?? 0)}
-            change={-2.4}
             sparklineColor="#60a5fa"
             sparklineData={data?.timeSeries.map(d => d.clicks > 0 ? d.spend / d.clicks : 0) ?? []}
+          />
+          <KpiCard
+            title="Custo por Conv."
+            value={formatCurrency(t?.cpa ?? 0)}
+            sparklineColor="#a855f7"
+            sparklineData={data?.timeSeries.map(d => d.conversions > 0 ? d.spend / d.conversions : 0) ?? []}
           />
         </div>
 
@@ -176,19 +188,13 @@ export default function GoogleAdsPage() {
             <div className="flex-1 w-full min-h-[300px]">
               <PerformanceChart
                 data={data?.timeSeries ?? []}
-                metrics={t && t.revenue > 0 ? ["spend", "revenue"] : ["spend", "clicks"]}
+                metrics={["spend", "clicks"]}
               />
             </div>
             <div className="flex justify-center gap-6 mt-4">
-              {t && t.revenue > 0 ? (
-                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
-                  <span className="w-3 h-1 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></span> Receita
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
-                  <span className="w-3 h-1 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.4)]"></span> Cliques
-                </div>
-              )}
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
+                <span className="w-3 h-1 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.4)]"></span> Cliques
+              </div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
                 <span className="w-3 h-1 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]"></span> Investimento
               </div>
@@ -198,9 +204,9 @@ export default function GoogleAdsPage() {
           {/* Top Campaigns Donut */}
           <div className="glass-panel rounded-xl p-5 lg:col-span-3 flex flex-col">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 text-center">Top Campanhas</h2>
-            <TopCampaignsDonut 
-              campaigns={data?.campaigns ?? []} 
-              conversionLabel={t && t.revenue > 0 ? "Vendas" : "Conversões"}
+            <TopCampaignsDonut
+              campaigns={data?.campaigns ?? []}
+              conversionLabel="Conversões"
             />
           </div>
         </div>
@@ -214,65 +220,74 @@ export default function GoogleAdsPage() {
 
           {/* Demographics */}
           <div className="lg:col-span-5 flex flex-col gap-6">
-            <div className="glass-panel rounded-2xl p-6 flex flex-col">
-              <div className="flex items-center gap-2 mb-6">
-                <Users size={16} className="text-cyan-400" />
-                <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Demografia: Gênero</h3>
+            {(data?.demographics.gender.length ?? 0) > 0 && (
+              <div className="glass-panel rounded-2xl p-6 flex flex-col">
+                <div className="flex items-center gap-2 mb-6">
+                  <Users size={16} className="text-cyan-400" />
+                  <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Demografia: Gênero</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-6 items-center">
+                  <div className="aspect-square relative max-w-[140px] mx-auto">
+                    <Pie
+                      data={{
+                        labels: data!.demographics.gender.map(g => g.label),
+                        datasets: [{
+                          data: data!.demographics.gender.map(g => g.impressions),
+                          backgroundColor: ['#22d3ee', '#2563eb', '#1e40af'],
+                          borderWidth: 0,
+                        }]
+                      }}
+                      options={{ cutout: '70%', plugins: { legend: { display: false } } }}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    {(() => {
+                      const total = data!.demographics.gender.reduce((a, b) => a + b.impressions, 0);
+                      return data!.demographics.gender.map((g, i) => (
+                        <div key={i} className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ['#22d3ee', '#2563eb', '#1e40af'][i] }}></div>
+                            {g.label}
+                          </div>
+                          <span className="text-white">{total > 0 ? Math.round((g.impressions / total) * 100) : 0}%</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-6 items-center">
-                <div className="aspect-square relative max-w-[140px] mx-auto">
-                  <Pie
-                    data={{
-                      labels: data?.demographics.gender.map(g => g.label) ?? [],
-                      datasets: [{
-                        data: data?.demographics.gender.map(g => g.impressions) ?? [],
-                        backgroundColor: ['#22d3ee', '#2563eb', '#1e40af'],
-                        borderWidth: 0,
-                      }]
-                    }}
-                    options={{ cutout: '70%', plugins: { legend: { display: false } } }}
-                  />
+            )}
+
+            {(data?.demographics.age.length ?? 0) > 0 && (
+              <div className="glass-panel rounded-2xl p-6 flex flex-col">
+                <div className="flex items-center gap-2 mb-6">
+                  <PieChartIcon size={16} className="text-cyan-400" />
+                  <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Demografia: Idade</h3>
                 </div>
                 <div className="space-y-3">
-                  {data?.demographics.gender.map((g, i) => (
-                    <div key={i} className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ['#22d3ee', '#2563eb', '#1e40af'][i] }}></div>
-                        {g.label}
-                      </div>
-                      <span className="text-white">{Math.round((g.impressions / data.demographics.gender.reduce((a,b) => a+b.impressions, 0)) * 100)}%</span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const total = data!.demographics.age.reduce((acc, curr) => acc + curr.impressions, 0);
+                    return data!.demographics.age.map((a, i) => {
+                      const percent = total > 0 ? Math.round((a.impressions / total) * 100) : 0;
+                      return (
+                        <div key={i} className="space-y-1">
+                          <div className="flex justify-between text-[9px] font-bold text-slate-500 uppercase">
+                            <span>{a.label}</span>
+                            <span>{percent}%</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-cyan-500 rounded-full"
+                              style={{ width: `${percent}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
-            </div>
-
-            <div className="glass-panel rounded-2xl p-6 flex flex-col">
-              <div className="flex items-center gap-2 mb-6">
-                <PieChartIcon size={16} className="text-cyan-400" />
-                <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Demografia: Idade</h3>
-              </div>
-              <div className="space-y-3">
-                {data?.demographics.age.map((a, i) => {
-                  const total = data.demographics.age.reduce((acc, curr) => acc + curr.impressions, 0);
-                  const percent = Math.round((a.impressions / total) * 100);
-                  return (
-                    <div key={i} className="space-y-1">
-                      <div className="flex justify-between text-[9px] font-bold text-slate-500 uppercase">
-                        <span>{a.label}</span>
-                        <span>{percent}%</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-cyan-500 rounded-full" 
-                          style={{ width: `${percent}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            )}
           </div>
         </div>
 

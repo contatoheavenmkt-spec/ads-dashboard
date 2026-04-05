@@ -6,7 +6,7 @@ import "./globals.css";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
-  title: "AdsPanel — Dashboard de Tráfego Pago",
+  title: "Dashfy — Dashboard de Tráfego Pago",
   description: "Plataforma de dashboards para agências de marketing digital",
 };
 

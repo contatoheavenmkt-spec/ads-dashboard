@@ -1,9 +1,11 @@
 "use client";
 
-import { Loader2, Zap } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { DashfyLogoFull } from "@/components/logo/logo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,9 +36,12 @@ export default function LoginPage() {
     const session = await res.json();
     const role = session?.user?.role;
     const slug = session?.user?.workspaceSlug;
+    const onboardingCompleted = session?.user?.onboardingCompleted;
 
     if (role === "CLIENT" && slug) {
       router.push(`/workspace/${slug}`);
+    } else if (!onboardingCompleted) {
+      router.push("/integracoes?tab=inicio");
     } else {
       router.push("/dashboard");
     }
@@ -44,25 +49,20 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-900 relative overflow-x-hidden">
       {/* Background glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-indigo-600/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed bottom-0 right-0 w-[400px] h-[400px] bg-indigo-600/5 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="w-full max-w-sm relative z-10">
+      <div className="flex min-h-screen items-center justify-center px-4 py-6">
+      <div className="w-full max-w-sm relative z-10" style={{ marginTop: "-5vh" }}>
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-10">
-          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/30">
-            <Zap size={24} fill="currentColor" className="text-white" />
-          </div>
-          <div>
-            <span className="text-2xl font-black text-white tracking-tight">AdsPanel</span>
-            <p className="text-[9px] font-bold text-blue-400 uppercase tracking-[0.3em] leading-none">Agency Platform</p>
-          </div>
+        <div className="flex items-center justify-center mt-6 mb-2">
+          <DashfyLogoFull width={520} />
         </div>
 
         {/* Card */}
-        <div className="glass-panel rounded-2xl p-8 shadow-2xl">
+        <div className="glass-panel rounded-2xl p-7 shadow-2xl">
           <div className="mb-6">
             <h1 className="text-lg font-black text-white mb-1 uppercase tracking-tight">Entrar na plataforma</h1>
             <p className="text-xs text-slate-400 font-medium">Acesse sua conta de gestão</p>
@@ -115,11 +115,19 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          <p className="text-center text-xs text-slate-500 mt-6">
+            Não tem uma conta?{" "}
+            <Link href="/cadastro" className="text-blue-400 hover:text-blue-300 font-bold transition-colors">
+              Criar conta
+            </Link>
+          </p>
         </div>
 
         <p className="text-center text-[10px] text-slate-600 mt-6 font-medium">
-          AdsPanel · Dashboard de Tráfego Pago
+          Dashfy · Dashboard de Tráfego Pago
         </p>
+      </div>
       </div>
     </div>
   );

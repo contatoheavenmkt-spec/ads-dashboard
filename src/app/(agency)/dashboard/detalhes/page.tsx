@@ -46,9 +46,10 @@ export default function DetalhesPage() {
   const [ga4Data, setGa4Data] = useState<{ totals: any; regions: { name: string; value: number }[]; demographics?: any } | null>(null);
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [demographics, setDemographics] = useState<{ gender: DemographicBreakdown[]; age: DemographicBreakdown[] }>({ gender: [], age: [] });
+  const [regions, setRegions] = useState<{ name: string; value: number }[]>([]);
 
   useEffect(() => {
-    fetch("/api/integrations")
+    fetch("/api/accounts")
       .then((r) => r.json())
       .then((ints: any[]) => {
         setIntegrations(ints);
@@ -57,23 +58,42 @@ export default function DetalhesPage() {
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({ days: String(days) });
-    if (selectedAccount) params.set("adAccountId", selectedAccount.adAccountId);
-    
-    // Se a campanha for selecionada, mandamos para a API correspondente
-    const metaParams = new URLSearchParams(params);
-    if (selectedCampaign) metaParams.set("campaignId", selectedCampaign.id);
+
+    // Roteia adAccountId apenas para a plataforma correta
+    const isGoogleSelected = selectedAccount?.platform === "google";
+    const isMetaSelected = selectedAccount && !isGoogleSelected;
+    const hasSpecificAccount = !!selectedAccount;
+    const metaAccountId = isGoogleSelected ? null : selectedAccount?.adAccountId ?? null;
+    const googleAccountId = isGoogleSelected ? selectedAccount.adAccountId : null;
+
+    const metaParams = new URLSearchParams({ days: String(days) });
+    if (metaAccountId) metaParams.set("adAccountId", metaAccountId);
+    if (selectedCampaign && !isGoogleSelected) metaParams.set("campaignId", selectedCampaign.id);
+
+    const googleParams = new URLSearchParams({ days: String(days) });
+    if (googleAccountId) googleParams.set("adAccountId", googleAccountId);
+    if (selectedCampaign && isGoogleSelected) googleParams.set("campaignId", selectedCampaign.id);
+
+    const ga4Params = new URLSearchParams({ days: String(days) });
+    if (googleAccountId) ga4Params.set("adAccountId", googleAccountId);
+
+    // Quando uma conta específica está selecionada, busca apenas dados da plataforma correspondente
+    const showMeta = !hasSpecificAccount || isMetaSelected;
+    const showGoogle = !hasSpecificAccount || isGoogleSelected;
+    const showGa4 = !hasSpecificAccount || isGoogleSelected;
 
     Promise.all([
-      fetch(`/api/metrics?${metaParams}`).then(r => r.json()).catch(() => null),
-      fetch(`/api/meta/creatives?${metaParams}`).then(r => r.json()).catch(() => ({ ads: [] })),
-      fetch(`/api/meta/demographics?${metaParams}`).then(r => r.json()).catch(() => ({ gender: [], age: [] })),
-      fetch(`/api/google/metrics?${params}`).then(r => r.json()).catch(() => null),
-      fetch(`/api/ga4/metrics?${params}`).then(r => r.json()).catch(() => null),
-    ]).then(([meta, creativesRes, demo, google, ga4]) => {
+      showMeta ? fetch(`/api/metrics?${metaParams}`).then(r => r.json()).catch(() => null) : Promise.resolve(null),
+      showMeta ? fetch(`/api/meta/creatives?${metaParams}`).then(r => r.json()).catch(() => ({ ads: [] })) : Promise.resolve({ ads: [] }),
+      showMeta ? fetch(`/api/meta/demographics?${metaParams}`).then(r => r.json()).catch(() => ({ gender: [], age: [] })) : Promise.resolve({ gender: [], age: [] }),
+      showMeta ? fetch(`/api/meta/regions?${metaParams}`).then(r => r.json()).catch(() => ({ regions: [] })) : Promise.resolve({ regions: [] }),
+      showGoogle ? fetch(`/api/google/metrics?${googleParams}`).then(r => r.json()).catch(() => null) : Promise.resolve(null),
+      showGa4 ? fetch(`/api/ga4/metrics?${ga4Params}`).then(r => r.json()).catch(() => null) : Promise.resolve(null),
+    ]).then(([meta, creativesRes, demo, regionsRes, google, ga4]) => {
       setMetaData(meta);
       setCreatives(creativesRes?.ads ?? []);
       setDemographics(demo);
+      setRegions((regionsRes as { regions: { name: string; value: number }[] })?.regions ?? []);
       setGoogleData(google);
       setGa4Data(ga4);
     }).finally(() => setLoading(false));
@@ -87,8 +107,17 @@ export default function DetalhesPage() {
   } : mtRaw;
 
   const gtRaw = googleData?.totals;
-  const gt = gtRaw; // Para Google, mantemos o total da conta se o filtro for Meta
+  const gt = gtRaw;
   const g4t = ga4Data?.totals;
+
+  const isGoogleSelected = selectedAccount?.platform === "google";
+  const isMetaSelected = selectedAccount && !isGoogleSelected;
+  const hasSpecificAccount = !!selectedAccount;
+
+  const showMetaSection = !hasSpecificAccount || isMetaSelected;
+  const showGoogleSection = !hasSpecificAccount || isGoogleSelected;
+  const showGa4Section = !hasSpecificAccount || isGoogleSelected;
+
   const convRate = mt && mt.clicks > 0 ? Math.round((mt.conversions / mt.clicks) * 1000) / 10 : 0;
 
   // Demographics
@@ -146,7 +175,7 @@ export default function DetalhesPage() {
       <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
 
         {/* ═══ Row 1: Gauge | Line | Gênero | Faixa Etária ═══ */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {showMetaSection && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
           {/* Gauge + KPIs */}
           <div className="lg:col-span-3 flex flex-col gap-4">
@@ -163,7 +192,7 @@ export default function DetalhesPage() {
                 <span>Investimento</span>
                 <span className="text-white">{formatCurrency(mt?.spend ?? 0)}</span>
               </div>
-              
+
               {/* WhatsApp Metric */}
               {(mt?.messages > 0 || mt?.leads > 0) && (
                 <div className="pt-1 border-t border-white/5 space-y-1">
@@ -228,9 +257,9 @@ export default function DetalhesPage() {
               </div>
             </div>
             <div className="flex-1 min-h-[220px]">
-              <PerformanceChart 
-                data={metaData?.timeSeries ?? []} 
-                metrics={["conversions", "spend"]} 
+              <PerformanceChart
+                data={metaData?.timeSeries ?? []}
+                metrics={["conversions", "spend"]}
                 customLabels={{ conversions: mt?.purchases > 0 ? "Vendas" : mt?.messages > 0 ? "Conversas" : mt?.leads > 0 ? "Leads" : "Conversões" }}
               />
             </div>
@@ -288,10 +317,10 @@ export default function DetalhesPage() {
             </div>
           </div>
 
-        </div>
+        </div>}
 
         {/* ═══ Row 2: Anúncios Meta (FULL WIDTH) ═══ */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {showMetaSection && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-12 glass-panel rounded-2xl p-6 flex flex-col">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -327,28 +356,28 @@ export default function DetalhesPage() {
                       </div>
                       <div className="mt-3 space-y-2 px-1">
                         <div className="flex justify-between items-center">
-                            <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Reach</span>
-                            <span className="text-[12px] font-black text-white">{formatNumber(ad.impressions)}</span>
+                          <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Reach</span>
+                          <span className="text-[12px] font-black text-white">{formatNumber(ad.impressions)}</span>
                         </div>
-                        
+
                         {ad.messages + ad.leads > 0 && (
                           <div className="flex justify-between items-center">
-                              <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">Conversas</span>
-                              <span className="text-[12px] font-black text-blue-400">{ad.messages + ad.leads}</span>
+                            <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">Conversas</span>
+                            <span className="text-[12px] font-black text-blue-400">{ad.messages + ad.leads}</span>
                           </div>
                         )}
 
                         {ad.purchases > 0 && (
                           <div className="flex justify-between items-center">
-                              <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-widest">Vendas</span>
-                              <span className="text-[12px] font-black text-emerald-400">{ad.purchases}</span>
+                            <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-widest">Vendas</span>
+                            <span className="text-[12px] font-black text-emerald-400">{ad.purchases}</span>
                           </div>
                         )}
 
                         {!ad.messages && !ad.leads && !ad.purchases && ad.conversions > 0 && (
                           <div className="flex justify-between items-center">
-                              <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Conv.</span>
-                              <span className="text-[12px] font-black text-white">{ad.conversions}</span>
+                            <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Conv.</span>
+                            <span className="text-[12px] font-black text-white">{ad.conversions}</span>
                           </div>
                         )}
                       </div>
@@ -372,29 +401,29 @@ export default function DetalhesPage() {
               </div>
             )}
           </div>
-        </div>
+        </div>}
 
         {/* ═══ Row 3: Região & Mapa Geográfico (SPLIT) ═══ */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {showMetaSection && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-4 h-[480px]">
-            <RegionList data={ga4Data?.regions ?? []} title="Market Reach" />
+            <RegionList data={regions} title="Market Reach" />
           </div>
           <div className="lg:col-span-8 h-[480px]">
-            <RegionMap data={ga4Data?.regions ?? []} title="Geographic Intelligence" />
+            <RegionMap data={regions} title="Geographic Intelligence" />
           </div>
-        </div>
+        </div>}
 
-        {/* ═══ Row 3: Keywords (Google Ads) ═══ */}
-        {googleData?.keywords && (
+        {/* ═══ Row 4: Keywords (Google Ads) ═══ */}
+        {showGoogleSection && googleData?.keywords && (
           <div className="grid grid-cols-1 gap-6">
             <KeywordsTable keywords={googleData.keywords} />
           </div>
         )}
 
-        {/* ═══ Row 4: Painéis laterais — Google Ads + GA4 ═══ */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* ═══ Row 5: Painéis laterais — Google Ads + GA4 ═══ */}
+        {showGoogleSection && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-          {/* Google Ads — painel completo fictício */}
+          {/* Google Ads — painel */}
           <div className="lg:col-span-6 glass-panel rounded-2xl p-6 flex flex-col border border-cyan-500/10">
             <div className="flex items-center gap-2 mb-5">
               <div className="w-3 h-3 rounded-full bg-cyan-400"></div>
@@ -490,7 +519,7 @@ export default function DetalhesPage() {
             </div>
           </div>
 
-        </div>
+        </div>}
 
       </div>
     </div>

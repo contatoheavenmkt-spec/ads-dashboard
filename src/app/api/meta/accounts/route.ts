@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { getMetaBMs, type MetaBM } from "@/lib/meta-api";
 import { getMetaConnections } from "@/lib/meta-token";
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   const connections = await getMetaConnections();
 
   if (connections.length === 0) {

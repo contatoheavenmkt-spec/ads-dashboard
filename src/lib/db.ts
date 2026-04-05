@@ -1,11 +1,13 @@
 import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
 function createPrismaClient() {
-  const adapter = new PrismaLibSql({
-    url: process.env.DATABASE_URL ?? "file:./dev.db",
+  const pool = new Pool({
+    connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
   });
-  return new PrismaClient({ adapter } as never);
+  const adapter = new PrismaPg(pool);
+  return new PrismaClient({ adapter });
 }
 
 const globalForPrisma = globalThis as unknown as {

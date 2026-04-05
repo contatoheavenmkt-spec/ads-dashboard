@@ -25,6 +25,37 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Scrollbar fino global — aparece em todos os painéis com overflow */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(71, 85, 105, 0.45) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.45);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.75);
+}
+
+/* Mobile: scrollbar um pouco mais visível para facilitar o toque */
+@media (max-width: 768px) {
+  *::-webkit-scrollbar {
+    width: 3px;
+  }
+}
+
 @layer utilities {
   .glass-panel {
     background: rgba(30, 41, 59, 0.7); /* slate-800 with opacity */
@@ -36,6 +67,7 @@ body {
     text-shadow: 0 0 10px rgba(56, 189, 248, 0.5); /* sky-400 */
   }
 
+  /* Usado em dropdowns, tabelas horizontais e listas internas pequenas */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }

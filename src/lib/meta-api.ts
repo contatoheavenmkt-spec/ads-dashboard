@@ -23,6 +23,7 @@ export interface MetaInsightDay {
   date: string;
   spend: number;
   impressions: number;
+  reach: number;
   clicks: number;
   purchases: number;
   leads: number;
@@ -109,7 +110,7 @@ export async function getAccountInsights(
   const sinceStr = since.toISOString().split("T")[0];
   const untilStr = new Date().toISOString().split("T")[0];
 
-  const fields = "spend,impressions,clicks,actions,action_values";
+  const fields = "spend,impressions,reach,clicks,actions,action_values";
   const url =
     `${GRAPH_API}/${adAccountId}/insights` +
     `?fields=${fields}` +
@@ -126,6 +127,7 @@ export async function getAccountInsights(
   return ((data.data ?? []) as Array<{
     spend: string;
     impressions: string;
+    reach: string;
     clicks: string;
     actions?: Array<{ action_type: string; value: string }>;
     action_values?: Array<{ action_type: string; value: string }>;
@@ -145,6 +147,7 @@ export async function getAccountInsights(
       date: row.date_start,
       spend: Number(row.spend ?? 0),
       impressions: Number(row.impressions ?? 0),
+      reach: Number(row.reach ?? 0),
       clicks: Number(row.clicks ?? 0),
       purchases,
       leads,
@@ -165,7 +168,7 @@ export async function getCampaignInsights(
   const sinceStr = since.toISOString().split("T")[0];
   const untilStr = new Date().toISOString().split("T")[0];
 
-  const fields = "spend,impressions,clicks,actions,action_values";
+  const fields = "spend,impressions,reach,clicks,actions,action_values";
   const url =
     `${GRAPH_API}/${campaignId}/insights` +
     `?fields=${fields}` +
@@ -182,6 +185,7 @@ export async function getCampaignInsights(
   return ((data.data ?? []) as Array<{
     spend: string;
     impressions: string;
+    reach: string;
     clicks: string;
     actions?: Array<{ action_type: string; value: string }>;
     action_values?: Array<{ action_type: string; value: string }>;
@@ -201,6 +205,7 @@ export async function getCampaignInsights(
       date: row.date_start,
       spend: Number(row.spend ?? 0),
       impressions: Number(row.impressions ?? 0),
+      reach: Number(row.reach ?? 0),
       clicks: Number(row.clicks ?? 0),
       purchases,
       leads,
@@ -292,6 +297,7 @@ export async function getAccountsInsights(
     if (existing) {
       existing.spend += d.spend;
       existing.impressions += d.impressions;
+      existing.reach += d.reach;
       existing.clicks += d.clicks;
       existing.purchases += d.purchases;
       existing.leads += d.leads;
@@ -444,6 +450,7 @@ export function aggregateInsights(days: MetaInsightDay[]) {
     (acc, d) => ({
       spend: acc.spend + d.spend,
       impressions: acc.impressions + d.impressions,
+      reach: acc.reach + d.reach,
       clicks: acc.clicks + d.clicks,
       purchases: acc.purchases + d.purchases,
       leads: acc.leads + d.leads,
@@ -451,7 +458,7 @@ export function aggregateInsights(days: MetaInsightDay[]) {
       conversions: acc.conversions + d.conversions,
       revenue: acc.revenue + d.revenue,
     }),
-    { spend: 0, impressions: 0, clicks: 0, purchases: 0, leads: 0, messages: 0, conversions: 0, revenue: 0 }
+    { spend: 0, impressions: 0, reach: 0, clicks: 0, purchases: 0, leads: 0, messages: 0, conversions: 0, revenue: 0 }
   );
 
   return {

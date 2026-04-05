@@ -1,11 +1,14 @@
-import { auth } from "@/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
 import { NextResponse } from "next/server";
+
+const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const { nextUrl, auth: session } = req;
   const isLoggedIn = !!session?.user;
 
-  const isAuthPage = nextUrl.pathname.startsWith("/login");
+  const isAuthPage = nextUrl.pathname.startsWith("/login") || nextUrl.pathname.startsWith("/cadastro");
   const isPublicClient = nextUrl.pathname.startsWith("/cliente");
   const isAgencyRoute =
     nextUrl.pathname.startsWith("/dashboard") ||
