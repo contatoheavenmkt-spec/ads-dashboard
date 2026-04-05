@@ -159,7 +159,7 @@ export default function DashboardPage() {
           a.click();
         }}
       />
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6">
 
         {/* Top KPIs */}
         {(() => {
@@ -212,8 +212,6 @@ export default function DashboardPage() {
             }] : []),
           ];
 
-          const cols = kpis.length;
-
           return (
             <div
               className="grid gap-4"
@@ -236,7 +234,7 @@ export default function DashboardPage() {
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[400px]">
           {/* Funnel */}
-          <div className="glass-panel rounded-xl p-5 lg:col-span-3 flex flex-col relative">
+          <div className="glass-panel rounded-xl p-5 lg:col-span-3 flex flex-col relative min-w-0">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 text-center">Funil de Conversão</h2>
             <FunnelChart data={{
               impressions: t?.impressions ?? 0,
@@ -248,7 +246,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Line Chart */}
-          <div className="glass-panel rounded-xl p-5 lg:col-span-6 flex flex-col">
+          <div className="glass-panel rounded-xl p-5 lg:col-span-6 flex flex-col min-w-0">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Performance ao Longo do Tempo</h2>
             </div>
@@ -269,7 +267,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Donut */}
-          <div className="glass-panel rounded-xl p-5 lg:col-span-3 flex flex-col">
+          <div className="glass-panel rounded-xl p-5 lg:col-span-3 flex flex-col min-w-0">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 text-center">Top Campanhas</h2>
             <TopCampaignsDonut
               campaigns={data?.campaigns ?? []}
