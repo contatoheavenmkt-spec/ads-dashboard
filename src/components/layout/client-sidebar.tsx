@@ -102,7 +102,7 @@ export function ClientSidebar({ logo, workspaceName, platforms, view, onViewChan
     <aside className="w-20 lg:w-24 flex flex-col items-center py-6 border-r border-slate-800/80 bg-slate-950 flex-shrink-0 z-20 shadow-2xl">
       {/* Logo Dashfy */}
       <div className="mb-4 shrink-0">
-        <DashfyLogoIcon size={360} />
+        <DashfyLogoIcon size={52} />
       </div>
 
       {/* Divider */}

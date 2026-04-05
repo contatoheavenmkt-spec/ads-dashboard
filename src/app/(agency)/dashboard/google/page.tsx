@@ -63,8 +63,17 @@ export default function GoogleAdsPage() {
     if (force) params.set("force", "1");
 
     fetch(`/api/google/metrics?${params}`)
-      .then((r) => r.json())
-      .then(setData)
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then((json) => {
+        // Only set data if we got a valid response with timeSeries (not an error object)
+        if (json && json.timeSeries) {
+          setData(json);
+        }
+      })
+      .catch(() => {})
       .finally(() => { setLoading(false); setIsRefreshing(false); });
   }, [days, selectedAccount, selectedCampaign, refreshKey]);
 
@@ -81,9 +90,8 @@ export default function GoogleAdsPage() {
     );
   }
 
-  // Se a conta não está conectada, exibir estado "em breve"
-  const isConnected = integrations.length > 0;
-  if (!isConnected && !loading) {
+  // Se não tem dados carregados e não está carregando, mostra estado vazio
+  if (!data && !loading) {
     return (
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <Header title="Google Ads" subtitle="Relatório Google Ads" days={days} onDaysChange={setDays} accounts={integrations} selectedAccount={selectedAccount} onAccountChange={setSelectedAccount} />
@@ -94,7 +102,7 @@ export default function GoogleAdsPage() {
             </div>
             <div>
               <p className="text-slate-200 font-bold text-sm">Integração Google Ads</p>
-              <p className="text-slate-500 text-xs mt-1">A conexão com Google Ads estará disponível em breve. Os dados aparecerão aqui assim que a integração for ativada.</p>
+              <p className="text-slate-500 text-xs mt-1">Conecte sua conta do Google Ads na tela de integrações para visualizar as métricas aqui.</p>
             </div>
           </div>
         </div>

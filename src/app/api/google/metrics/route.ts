@@ -12,8 +12,10 @@ async function getValidToken(userId: string): Promise<{ accessToken: string; sco
   const conn = await db.googleConnection.findFirst({ where: { userId }, orderBy: { connectedAt: "desc" } });
   if (!conn) return null;
 
-  const connScopes = (conn.scopes ?? "").split(" ");
-  if (!connScopes.includes(REQUIRED_SCOPE)) return null;
+  const connScopes = (conn.scopes ?? "").split(" ").filter(Boolean);
+  // If scopes are recorded and don't include adwords, skip this connection
+  // But if scopes are empty (legacy data), proceed anyway and let the API call fail naturally
+  if (connScopes.length > 0 && !connScopes.includes(REQUIRED_SCOPE)) return null;
 
   let token = conn.accessToken;
 
@@ -213,7 +215,11 @@ export async function GET(req: NextRequest) {
 
   const tokenInfo = await getValidToken(session?.user?.id ?? "");
   if (!tokenInfo) {
-    return NextResponse.json({ error: "NO_TOKEN" }, { status: 401 });
+    console.warn("[google/metrics] No valid token found, returning empty data");
+    return NextResponse.json({
+      timeSeries: [], totals: { spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0, cpc: 0, cpa: 0, roas: 0, ctr: 0, searchImpressionShare: 0, qualityScoreAvg: 0 },
+      campaigns: [], keywords: [], demographics: { gender: [], age: [] }, regions: [],
+    });
   }
 
   // login-customer-id deve ser o MCC (manager) que tem acesso à conta.
