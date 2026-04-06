@@ -17,7 +17,8 @@ export const metaLoginConfig = {
 };
 
 export const metaMarketingConfig = {
-  appId:     process.env.META_MARKETING_APP_ID     ?? process.env.META_APP_ID     ?? "",
+  // App de marketing separado — NÃO faz fallback para META_APP_ID (que é o app de login)
+  appId:     process.env.META_MARKETING_APP_ID     ?? "",
   appSecret: process.env.META_MARKETING_APP_SECRET ?? process.env.META_APP_SECRET ?? "",
 };
 
