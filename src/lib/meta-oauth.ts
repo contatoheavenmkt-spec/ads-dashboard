@@ -8,16 +8,16 @@ import { createHmac, randomBytes } from "crypto";
 
 // ─── Configs dos dois apps ─────────────────────────────────────────────────
 
+// App de marketing usado tanto para OAuth quanto para dados/métricas
+// (permissões de ads_read/ads_management só existem nesse tipo de app)
 export const metaLoginConfig = {
-  appId:       process.env.META_LOGIN_APP_ID       ?? process.env.META_APP_ID       ?? "",
-  appSecret:   process.env.META_LOGIN_APP_SECRET   ?? process.env.META_APP_SECRET   ?? "",
+  appId:       process.env.META_MARKETING_APP_ID   ?? process.env.META_APP_ID       ?? "",
+  appSecret:   process.env.META_MARKETING_APP_SECRET ?? process.env.META_APP_SECRET ?? "",
   redirectUri: process.env.META_LOGIN_REDIRECT_URI ?? process.env.META_REDIRECT_URI ?? "",
-  // Escopos necessários: login básico + permissões para listar contas de anúncio
   scopes: (process.env.META_LOGIN_SCOPES ?? "ads_read,ads_management,business_management,email,public_profile"),
 };
 
 export const metaMarketingConfig = {
-  // App de marketing (921630540830406) — puxa dados e métricas
   appId:     process.env.META_MARKETING_APP_ID     ?? process.env.META_APP_ID     ?? "",
   appSecret: process.env.META_MARKETING_APP_SECRET ?? process.env.META_APP_SECRET ?? "",
 };
