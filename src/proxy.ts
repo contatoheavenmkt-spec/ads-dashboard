@@ -13,7 +13,8 @@ export default auth((req) => {
   const isPublicPage =
     nextUrl.pathname.startsWith("/privacy") ||
     nextUrl.pathname.startsWith("/terms") ||
-    nextUrl.pathname.startsWith("/about");
+    nextUrl.pathname.startsWith("/about") ||
+    nextUrl.pathname.startsWith("/data-deletion");
   const isAgencyRoute =
     nextUrl.pathname.startsWith("/dashboard") ||
     nextUrl.pathname.startsWith("/integracoes") ||
