@@ -242,7 +242,7 @@ export default function DashboardPage() {
           return (
             <div
               className="grid gap-4"
-              style={{ gridTemplateColumns: `repeat(auto-fill, minmax(160px, 1fr))` }}
+              style={{ gridTemplateColumns: `repeat(auto-fill, minmax(200px, 1fr))` }}
             >
               {kpis.map((k) => (
                 <KpiCard

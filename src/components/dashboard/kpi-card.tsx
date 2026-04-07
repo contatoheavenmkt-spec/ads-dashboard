@@ -28,7 +28,7 @@ export function KpiCard({
   const isPositive = change !== undefined && change >= 0;
 
   return (
-    <div className="glass-panel rounded-xl p-4 flex flex-col justify-between h-28 relative overflow-hidden group">
+    <div className="glass-panel rounded-xl p-5 flex flex-col justify-between h-36 relative overflow-hidden group">
       <div className="relative z-10">
         <div className="flex justify-between items-start mb-1">
           <h3 className="text-xs text-slate-400 font-medium uppercase tracking-wider">{title}</h3>
@@ -39,7 +39,7 @@ export function KpiCard({
           )}
         </div>
         <div className="flex items-baseline gap-2">
-          <span className="text-xl lg:text-2xl font-bold text-slate-100">{value}</span>
+          <span className="text-2xl lg:text-3xl font-bold text-slate-100">{value}</span>
           {change !== undefined && (
             <span className={cn(
               "text-[10px] flex items-center gap-0.5 font-bold px-1.5 py-0.5 rounded-full",
@@ -53,7 +53,7 @@ export function KpiCard({
       </div>
       
       {/* Background Sparkline */}
-      <div className="absolute bottom-0 left-0 right-0 h-12 opacity-60 pointer-events-none group-hover:opacity-100 transition-opacity">
+      <div className="absolute bottom-0 left-0 right-0 h-16 opacity-60 pointer-events-none group-hover:opacity-100 transition-opacity">
         <Sparkline data={sparklineData} color={sparklineColor} />
       </div>
       

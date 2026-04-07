@@ -281,7 +281,7 @@ export function ClientDashboard({
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
         {/* Top KPIs */}
-        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(150px, 1fr))` }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(200px, 1fr))` }}>
           {kpis.map((k) => (
             <KpiCard
               key={k.title}
