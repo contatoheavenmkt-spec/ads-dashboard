@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { auth } from "@/auth";
+
+async function requireAgency() {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== "AGENCY") return null;
+  return session.user.id;
+}
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!await requireAgency()) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
   const { id } = await params;
 
   const workspace = await db.workspace.findUnique({
@@ -29,6 +39,9 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!await requireAgency()) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
   const { id } = await params;
   const body = await req.json();
   const { name, logo, integrationIds, publicAccess, sharePassword } = body;
@@ -63,6 +76,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!await requireAgency()) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
   const { id } = await params;
   await db.workspace.delete({ where: { id } });
   return NextResponse.json({ ok: true });

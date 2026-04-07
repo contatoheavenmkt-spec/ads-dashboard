@@ -184,12 +184,15 @@ export function ClientDashboard({
   // Fetch data when view or days changes
   useEffect(() => {
     setLoading(true);
-    const needsMeta = ["meta", "overview", "detalhes"].includes(view);
-    const needsGoogle = ["google", "overview", "detalhes"].includes(view);
-    const needsGA4 = ["ga4", "overview", "detalhes"].includes(view);
-    const needsCreatives = view === "detalhes";
-    const needsDemographics = view === "detalhes";
-    const needsRegions = view === "detalhes";
+    const hasMeta = platforms.includes("meta");
+    const hasGoogle = platforms.includes("google");
+    const hasGA4 = platforms.includes("ga4");
+    const needsMeta = view === "meta" || view === "overview" || (view === "detalhes" && hasMeta);
+    const needsGoogle = view === "google" || view === "overview" || (view === "detalhes" && hasGoogle);
+    const needsGA4 = view === "ga4" || view === "overview" || (view === "detalhes" && hasGA4);
+    const needsCreatives = view === "detalhes" && hasMeta;
+    const needsDemographics = view === "detalhes" && hasMeta;
+    const needsRegions = view === "detalhes" && hasMeta;
 
     const metaParams = new URLSearchParams({ workspaceId, days: String(days) });
     if (selectedCampaign) metaParams.set("campaignId", selectedCampaign.id);
@@ -274,13 +277,11 @@ export function ClientDashboard({
       ...(hasRevenue ? [{ title: "Faturamento", value: formatCurrency(t?.revenue ?? 0), color: "#22c55e", data: metaData?.timeSeries.map(d => d.revenue) ?? [] }] : []),
     ];
 
-    const cols = kpis.length;
-
     return (
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
         {/* Top KPIs */}
-        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(150px, 1fr))` }}>
           {kpis.map((k) => (
             <KpiCard
               key={k.title}
@@ -1026,6 +1027,9 @@ export function ClientDashboard({
   };
 
   const renderDetalhes = () => {
+    const hasMeta = platforms.includes("meta");
+    const hasGoogle = platforms.includes("google");
+    const hasGA4 = platforms.includes("ga4");
     const mt = metaData?.totals;
     const gt = googleData?.totals;
     const g4t = ga4Data?.totals;
@@ -1043,8 +1047,8 @@ export function ClientDashboard({
     return (
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
-        {/* ═══ Row 1: Gauge | Line | Gênero | Faixa Etária ═══ */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* ═══ Row 1: Gauge | Line | Gênero | Faixa Etária (Meta only) ═══ */}
+        {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
           {/* Gauge + KPIs */}
           <div className="lg:col-span-3 flex flex-col gap-4">
@@ -1194,10 +1198,10 @@ export function ClientDashboard({
             )}
           </div>
 
-        </div>
+        </div>}
 
         {/* ═══ Row 2: Anúncios Meta (FULL WIDTH) ═══ */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-12 glass-panel rounded-2xl p-6 flex flex-col">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -1278,17 +1282,17 @@ export function ClientDashboard({
               </div>
             )}
           </div>
-        </div>
+        </div>}
 
-        {/* ═══ Row 3: Região & Mapa Geográfico (SPLIT) ═══ */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* ═══ Row 3: Região & Mapa Geográfico (SPLIT, Meta only) ═══ */}
+        {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-4 h-[480px]">
             <RegionList data={regions} title="Alcance por Região" />
           </div>
           <div className="lg:col-span-8 h-[480px]">
             <RegionMap data={regions} title="Inteligência Geográfica" />
           </div>
-        </div>
+        </div>}
 
         {/* ═══ Row 4: Keywords (Google Ads) ═══ */}
         {googleData?.keywords && (
@@ -1298,10 +1302,10 @@ export function ClientDashboard({
         )}
 
         {/* ═══ Row 5: Painéis laterais — Google Ads + GA4 ═══ */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {(hasGoogle || hasGA4) && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
           {/* Google Ads panel */}
-          <div className="lg:col-span-6 glass-panel rounded-2xl p-6 flex flex-col border border-cyan-500/10">
+          {hasGoogle && <div className="lg:col-span-6 glass-panel rounded-2xl p-6 flex flex-col border border-cyan-500/10">
             <div className="flex items-center gap-2 mb-5">
               <div className="w-3 h-3 rounded-full bg-cyan-400"></div>
               <h3 className="text-sm font-bold text-slate-200">Google Ads</h3>
@@ -1335,10 +1339,10 @@ export function ClientDashboard({
                 <span className="w-2 h-0.5 bg-blue-500 rounded"></span> Investimento
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* GA4 panel */}
-          <div className="lg:col-span-6 glass-panel rounded-2xl p-6 flex flex-col border border-orange-500/10">
+          {hasGA4 && <div className="lg:col-span-6 glass-panel rounded-2xl p-6 flex flex-col border border-orange-500/10">
             <div className="flex items-center gap-2 mb-5">
               <div className="w-3 h-3 rounded-full bg-orange-400"></div>
               <h3 className="text-sm font-bold text-slate-200">Google Analytics 4</h3>
@@ -1364,9 +1368,9 @@ export function ClientDashboard({
             <div className="flex-1 flex items-center justify-center text-[10px] text-slate-600 font-bold uppercase tracking-widest text-center">
               Integração GA4 em breve
             </div>
-          </div>
+          </div>}
 
-        </div>
+        </div>}
 
       </div>
     );

@@ -69,17 +69,7 @@ export async function GET(req: NextRequest) {
     accountIds = workspace.integrations
       .filter((wi) => wi.integration.platform === "meta")
       .map((wi) => wi.integration.adAccountId);
-
-    // Se workspace não tem integrações Meta, busca contas que o token OAuth realmente tem acesso
-    if (accountIds.length === 0) {
-      const { getMetaAdAccounts } = await import('@/lib/meta-api');
-      try {
-        const accounts = await getMetaAdAccounts(token);
-        accountIds = accounts.filter(a => a.account_status === 1).map(a => a.id);
-      } catch (err: any) {
-        console.error('[metrics] Erro ao buscar contas via API Meta para workspace:', err.message);
-      }
-    }
+    // If workspace has no Meta integrations, return empty — don't leak other clients' data
   } else if (adAccountId) {
     accountIds = [adAccountId];
   } else if (bmId) {
@@ -100,12 +90,7 @@ export async function GET(req: NextRequest) {
       console.log(`[metrics] Token OAuth tem acesso a ${accountIds.length} contas Meta`);
     } catch (err: any) {
       console.error('[metrics] Erro ao buscar contas via API Meta:', err.message);
-      // Fallback: tenta usar integrações do banco
-      const allMetaIntegrations = await db.integration.findMany({
-        where: { platform: "meta", status: "active" },
-        select: { adAccountId: true },
-      });
-      accountIds = allMetaIntegrations.map((i) => i.adAccountId);
+      // Sem fallback para todas as contas — evita vazar dados de outros clientes
     }
   }
 

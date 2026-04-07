@@ -15,24 +15,31 @@ async function resolveWorkspaceId(userId: string, tokenWorkspaceId?: string): Pr
 }
 
 async function getOrCreateWorkspace(userId: string, tokenWorkspaceId?: string): Promise<string> {
-  const existing = await resolveWorkspaceId(userId, tokenWorkspaceId);
-  if (existing) return existing;
+  // Always check DB (JWT may be stale from an older session)
+  const freshUser = await db.user.findUnique({ where: { id: userId }, select: { workspaceId: true, name: true, email: true } });
+  if (freshUser?.workspaceId) return freshUser.workspaceId;
 
-  // Cria workspace automaticamente
-  const user = await db.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
-  const name = user?.name ?? user?.email?.split("@")[0] ?? "Minha Agência";
-  const slug = `workspace-${userId.slice(-8)}-${Date.now()}`;
+  // No workspace yet — create one inside a transaction to prevent race conditions
+  try {
+    const result = await db.$transaction(async (tx) => {
+      // Double-check inside the transaction
+      const u = await tx.user.findUnique({ where: { id: userId }, select: { workspaceId: true } });
+      if (u?.workspaceId) return u.workspaceId;
 
-  const workspace = await db.workspace.create({
-    data: { name, slug, publicAccess: false },
-  });
+      const name = freshUser?.name ?? freshUser?.email?.split("@")[0] ?? "Minha Agência";
+      const slug = `workspace-${userId.slice(-8)}`;
 
-  await db.user.update({
-    where: { id: userId },
-    data: { workspaceId: workspace.id, onboardingCompleted: true },
-  });
-
-  return workspace.id;
+      const workspace = await tx.workspace.create({ data: { name, slug, publicAccess: false } });
+      await tx.user.update({ where: { id: userId }, data: { workspaceId: workspace.id, onboardingCompleted: true } });
+      return workspace.id;
+    });
+    return result;
+  } catch {
+    // Race condition: another request may have created the workspace — re-fetch
+    const u2 = await db.user.findUnique({ where: { id: userId }, select: { workspaceId: true } });
+    if (u2?.workspaceId) return u2.workspaceId;
+    throw new Error("Falha ao criar workspace");
+  }
 }
 
 export async function GET() {

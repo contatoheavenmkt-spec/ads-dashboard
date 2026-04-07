@@ -1,12 +1,27 @@
 import NextAuth from "next-auth";
 import { authConfig } from "@/auth.config";
 import { NextResponse } from "next/server";
+import { verifyAdminToken, ADMIN_COOKIE } from "@/lib/admin-auth";
 
 const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const { nextUrl, auth: session } = req;
   const isLoggedIn = !!session?.user;
+
+  // ─── Admin routes — autenticação separada ─────────────────────────────────
+  const isAdminRoute = nextUrl.pathname.startsWith("/admin");
+  const isAdminLogin = nextUrl.pathname === "/admin/login";
+
+  if (isAdminLogin) return NextResponse.next();
+
+  if (isAdminRoute) {
+    const token = req.cookies.get(ADMIN_COOKIE)?.value ?? null;
+    if (!token || !verifyAdminToken(token)) {
+      return NextResponse.redirect(new URL("/admin/login", nextUrl));
+    }
+    return NextResponse.next();
+  }
 
   const isAuthPage = nextUrl.pathname.startsWith("/login") || nextUrl.pathname.startsWith("/cadastro");
   const isPublicClient = nextUrl.pathname.startsWith("/cliente");

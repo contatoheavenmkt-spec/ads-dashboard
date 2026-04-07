@@ -16,6 +16,7 @@ model User {
   workspaceId          String?
   onboardingCompleted  Boolean       @default(false)
   stripeCustomerId     String?       @unique
+  forcePasswordChange  Boolean       @default(false)
   workspace            Workspace?    @relation(fields: [workspaceId], references: [id])
   subscription         Subscription?
   metaConnections      MetaConnection[]
@@ -107,6 +108,19 @@ model WorkspaceIntegration {
   integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, integrationId])
+}
+
+model AdminLog {
+  id          String   @id @default(cuid())
+  action      String
+  targetId    String?
+  details     String?
+  adminIp     String?
+  createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([targetId])
+  @@index([createdAt])
 }
 
 model MetricsCache {
