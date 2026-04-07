@@ -13,14 +13,19 @@ export default auth((req) => {
   const isAdminRoute = nextUrl.pathname.startsWith("/admin");
   const isAdminLogin = nextUrl.pathname === "/admin/login";
 
-  if (isAdminLogin) return NextResponse.next();
-
   if (isAdminRoute) {
+    if (isAdminLogin) {
+      const res = NextResponse.next();
+      res.headers.set("x-admin-pathname", nextUrl.pathname);
+      return res;
+    }
     const token = req.cookies.get(ADMIN_COOKIE)?.value ?? null;
     if (!token || !verifyAdminToken(token)) {
       return NextResponse.redirect(new URL("/admin/login", nextUrl));
     }
-    return NextResponse.next();
+    const res = NextResponse.next();
+    res.headers.set("x-admin-pathname", nextUrl.pathname);
+    return res;
   }
 
   const isAuthPage = nextUrl.pathname.startsWith("/login") || nextUrl.pathname.startsWith("/cadastro");
