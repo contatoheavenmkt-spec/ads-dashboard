@@ -1,4 +1,4 @@
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyAdminToken, ADMIN_COOKIE } from "@/lib/admin-auth";
 import { AdminSidebar } from "./_components/admin-sidebar";
@@ -6,22 +6,10 @@ import { AdminSidebar } from "./_components/admin-sidebar";
 export const metadata = { title: "Admin — Dashfy" };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const headersList = await headers();
-  const pathname = headersList.get("x-admin-pathname") ?? "";
-  const isLoginPage = pathname === "/admin/login";
-
-  // Não verifica auth na página de login — evita redirect loop
-  if (!isLoginPage) {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(ADMIN_COOKIE)?.value;
-    if (!token || !verifyAdminToken(token)) {
-      redirect("/admin/login");
-    }
-  }
-
-  // Login page: renderiza sem sidebar
-  if (isLoginPage) {
-    return <>{children}</>;
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ADMIN_COOKIE)?.value;
+  if (!token || !verifyAdminToken(token)) {
+    redirect("/admin/login");
   }
 
   return (

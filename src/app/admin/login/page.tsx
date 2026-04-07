@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Shield, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, Shield } from "lucide-react";
+import { DashfyLogoFull } from "@/components/logo/logo";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -37,24 +38,29 @@ export default function AdminLoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        {/* Logo / título */}
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shadow-xl shadow-red-500/10">
-            <Shield size={28} className="text-red-400" />
-          </div>
-          <div className="text-center">
-            <h1 className="text-xl font-black text-white tracking-tight">Admin Panel</h1>
-            <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-widest">Dashfy — Acesso Restrito</p>
+      {/* Glow de fundo */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-blue-500/5 rounded-full blur-3xl" />
+      </div>
+
+      <div className="w-full max-w-sm relative z-10">
+        {/* Logo */}
+        <div className="flex flex-col items-center gap-2 mb-8">
+          <DashfyLogoFull className="h-10 w-auto" />
+          <div className="flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
+            <Shield size={11} className="text-blue-400" />
+            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Acesso Administrativo</span>
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-6 shadow-2xl backdrop-blur-md">
+        <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-6 shadow-2xl shadow-black/40 backdrop-blur-md">
+          <h2 className="text-base font-black text-white mb-5">Entrar no Admin</h2>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                Email Admin
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                Email
               </label>
               <input
                 type="email"
@@ -62,13 +68,13 @@ export default function AdminLoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
-                placeholder="admin@dashfys.com"
-                className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all"
+                placeholder="admin@dashfys.com.br"
+                className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/20 transition-all"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                 Senha
               </label>
               <div className="relative">
@@ -79,7 +85,7 @@ export default function AdminLoginPage() {
                   required
                   autoComplete="current-password"
                   placeholder="••••••••"
-                  className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all"
+                  className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/20 transition-all"
                 />
                 <button
                   type="button"
@@ -100,16 +106,19 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm py-3 rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-red-500/20"
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm py-3 rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-blue-500/20 mt-2"
             >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <Shield size={16} />}
-              {loading ? "Autenticando..." : "Entrar no Admin"}
+              {loading
+                ? <Loader2 size={16} className="animate-spin" />
+                : <Shield size={16} />
+              }
+              {loading ? "Autenticando..." : "Acessar Admin"}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-[10px] text-slate-700 mt-6 uppercase tracking-widest">
-          Área restrita — acesso não autorizado é monitorado
+        <p className="text-center text-[10px] text-slate-700 mt-5 uppercase tracking-widest">
+          Área restrita — acesso monitorado
         </p>
       </div>
     </div>
