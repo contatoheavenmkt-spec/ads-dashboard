@@ -12,6 +12,23 @@ export const authConfig: NextAuthConfig = {
         token.workspaceSlug = (user as { workspaceSlug?: string | null }).workspaceSlug;
         token.onboardingCompleted = (user as { onboardingCompleted?: boolean }).onboardingCompleted ?? false;
       }
+
+      // Se workspaceId está null no token, revalida no banco (pode ter sido criado após o login)
+      if (!token.workspaceId && token.id) {
+        try {
+          const { db } = await import("@/lib/db");
+          const fresh = await db.user.findUnique({
+            where: { id: token.id as string },
+            select: { workspaceId: true, workspace: { select: { slug: true } }, onboardingCompleted: true },
+          });
+          if (fresh?.workspaceId) {
+            token.workspaceId = fresh.workspaceId;
+            token.workspaceSlug = fresh.workspace?.slug ?? null;
+            token.onboardingCompleted = fresh.onboardingCompleted;
+          }
+        } catch { /* silencia erros de DB no middleware edge */ }
+      }
+
       return token;
     },
     async session({ session, token }) {
