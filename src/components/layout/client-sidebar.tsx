@@ -116,16 +116,16 @@ export function ClientSidebar({ logo, workspaceName, platforms, view, onViewChan
             alt={workspaceName}
             className="w-12 h-12 rounded-2xl object-cover border border-slate-700 shadow-xl"
             onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-              const parent = (e.target as HTMLElement).parentElement;
-              const fallback = parent?.querySelector(".fallback-icon") as HTMLElement | null;
+              const img = e.target as HTMLImageElement;
+              img.style.display = "none";
+              const fallback = img.nextElementSibling as HTMLElement | null;
               if (fallback) fallback.style.display = "flex";
             }}
           />
         ) : null}
         <div
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl ${logo ? "fallback-icon hidden" : "bg-white/8 border-2 border-slate-700"
-            }`}
+          className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl bg-white/8 border-2 border-slate-700"
+          style={{ display: logo ? "none" : "flex" }}
         >
           <LayoutDashboard size={20} className="text-slate-400" />
         </div>
