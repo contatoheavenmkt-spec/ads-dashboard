@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { LogOut, LayoutDashboard } from "lucide-react";
+import { LogOut } from "lucide-react";
 import React from "react";
 import { DashfyLogoIcon } from "@/components/logo/logo";
 
@@ -108,28 +108,6 @@ export function ClientSidebar({ logo, workspaceName, platforms, view, onViewChan
       {/* Divider */}
       <div className="w-8 h-px bg-slate-800 mb-4" />
 
-      {/* Logo do workspace */}
-      <div className="mb-6">
-        {logo ? (
-          <img
-            src={logo}
-            alt={workspaceName}
-            className="w-12 h-12 rounded-2xl object-cover border border-slate-700 shadow-xl"
-            onError={(e) => {
-              const img = e.target as HTMLImageElement;
-              img.style.display = "none";
-              const fallback = img.nextElementSibling as HTMLElement | null;
-              if (fallback) fallback.style.display = "flex";
-            }}
-          />
-        ) : null}
-        <div
-          className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl bg-white/8 border-2 border-slate-700"
-          style={{ display: logo ? "none" : "flex" }}
-        >
-          <LayoutDashboard size={20} className="text-slate-400" />
-        </div>
-      </div>
 
       {/* Nav items */}
       <div className="flex-1 space-y-4 flex flex-col items-center justify-center w-full overflow-y-auto no-scrollbar">
