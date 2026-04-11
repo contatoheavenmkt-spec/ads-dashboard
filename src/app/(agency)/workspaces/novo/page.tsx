@@ -17,7 +17,6 @@ interface Integration {
 export default function NovoWorkspacePage() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [logo, setLogo] = useState("");
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -44,7 +43,7 @@ export default function NovoWorkspacePage() {
     const res = await fetch("/api/workspaces", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, logo, integrationIds: selected }),
+      body: JSON.stringify({ name, integrationIds: selected }),
     });
     if (res.ok) {
       router.push("/workspaces");
@@ -88,22 +87,6 @@ export default function NovoWorkspacePage() {
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">URL do Logo (opcional)</label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={logo}
-                  onChange={(e) => setLogo(e.target.value)}
-                  className="w-full bg-slate-900/80 border border-slate-700 hover:border-slate-600 focus:border-blue-500 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none transition-colors"
-                />
-                {logo && (
-                  <div className="flex items-center gap-3 mt-2 p-3 bg-slate-800/40 rounded-xl border border-slate-700/50">
-                    <img src={logo} alt="Preview" className="w-10 h-10 rounded-lg object-cover border border-slate-700" />
-                    <span className="text-xs text-slate-400">Preview do logo</span>
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* Contas */}

@@ -13,7 +13,7 @@ import { ClientSidebar, ClientView } from "@/components/layout/client-sidebar";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import {
   Loader2, LayoutDashboard, Calendar, ChevronDown, Check,
-  Download, Zap, Users, PieChart as PieChartIcon,
+  Download, Users, PieChart as PieChartIcon,
   Search, Target, Layers, MousePointer2, TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -1396,25 +1396,6 @@ export function ClientDashboard({
         {/* Header */}
         <header className="px-6 py-4 flex items-center justify-between border-b border-slate-700/50 bg-slate-900/40 backdrop-blur-md flex-shrink-0 z-30 relative">
           <div className="flex items-center gap-3">
-            {logo ? (
-              <img
-                src={logo}
-                alt={workspaceName}
-                className="w-9 h-9 rounded-xl object-cover border border-slate-700 shadow-lg"
-                onError={(e) => {
-                  const img = e.target as HTMLImageElement;
-                  img.style.display = "none";
-                  const fallback = img.nextElementSibling as HTMLElement | null;
-                  if (fallback) fallback.style.display = "flex";
-                }}
-              />
-            ) : null}
-            <div
-              className="w-9 h-9 rounded-xl bg-white/8 border-2 border-slate-700 items-center justify-center"
-              style={{ display: logo ? "none" : "flex" }}
-            >
-              <Zap size={16} className="text-slate-400" />
-            </div>
             <div>
               <h1 className="text-base font-bold tracking-tight text-slate-100 leading-none">{workspaceName}</h1>
               <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">Dashboard de Performance</p>
