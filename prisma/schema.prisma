@@ -17,7 +17,8 @@ model User {
   onboardingCompleted  Boolean       @default(false)
   stripeCustomerId     String?       @unique
   forcePasswordChange  Boolean       @default(false)
-  workspace            Workspace?    @relation(fields: [workspaceId], references: [id])
+  workspace            Workspace?    @relation("MemberWorkspace", fields: [workspaceId], references: [id])
+  ownedWorkspaces      Workspace[]   @relation("OwnedWorkspaces")
   subscription         Subscription?
   metaConnections      MetaConnection[]
   googleConnections    GoogleConnection[]
@@ -57,6 +58,8 @@ model Integration {
 
 model Workspace {
   id            String   @id @default(cuid())
+  ownerId       String?
+  owner         User?    @relation("OwnedWorkspaces", fields: [ownerId], references: [id])
   name          String
   slug          String   @unique
   logo          String?
@@ -66,7 +69,7 @@ model Workspace {
   updatedAt     DateTime @updatedAt
 
   integrations WorkspaceIntegration[]
-  clients      User[]
+  clients      User[]   @relation("MemberWorkspace")
 }
 
 model MetaConnection {

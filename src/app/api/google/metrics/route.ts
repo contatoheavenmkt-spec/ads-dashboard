@@ -213,7 +213,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const tokenInfo = await getValidToken(session?.user?.id ?? "");
+  // Resolve userId: se tem sessão usa ela; caso contrário usa ownerId do workspace (acesso público/mobile)
+  let resolvedUserId = session?.user?.id;
+  if (!resolvedUserId && workspaceIdParam) {
+    const ws = await db.workspace.findUnique({
+      where: { id: workspaceIdParam },
+      select: { ownerId: true },
+    });
+    resolvedUserId = ws?.ownerId ?? undefined;
+  }
+
+  const tokenInfo = await getValidToken(resolvedUserId ?? "");
   if (!tokenInfo) {
     console.warn("[google/metrics] No valid token found, returning empty data");
     return NextResponse.json({

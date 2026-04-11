@@ -29,7 +29,7 @@ async function getOrCreateWorkspace(userId: string, tokenWorkspaceId?: string): 
       const name = freshUser?.name ?? freshUser?.email?.split("@")[0] ?? "Minha Agência";
       const slug = `workspace-${userId.slice(-8)}`;
 
-      const workspace = await tx.workspace.create({ data: { name, slug, publicAccess: false } });
+      const workspace = await tx.workspace.create({ data: { name, slug, publicAccess: false, ownerId: userId } });
       await tx.user.update({ where: { id: userId }, data: { workspaceId: workspace.id, onboardingCompleted: true } });
       return workspace.id;
     });

@@ -10,7 +10,6 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  // Busca direto do banco para ignorar token em cache
   const freshUser = await db.user.findUnique({
     where: { id: session.user.id },
     select: { workspaceId: true, role: true },
@@ -18,9 +17,17 @@ export async function GET() {
 
   const userRole = freshUser?.role ?? (session.user as { role?: string }).role;
 
-  // Se usuário tem role AGENCY, retorna TODOS os workspaces
   if (userRole === "AGENCY") {
+    // Retorna APENAS workspaces criados por este usuário (ownerId)
+    // Também inclui workspaces legados onde ownerId é null mas o usuário é member
     const workspaces = await db.workspace.findMany({
+      where: {
+        OR: [
+          { ownerId: session.user.id },
+          // Fallback para workspaces migrados sem ownerId: usa workspaceId do user
+          { id: freshUser?.workspaceId ?? undefined, ownerId: null },
+        ],
+      },
       orderBy: { createdAt: "desc" },
       include: {
         integrations: { include: { integration: true } },
@@ -33,7 +40,7 @@ export async function GET() {
     return NextResponse.json(workspaces);
   }
 
-  // Se é CLIENT, retorna apenas o workspace dele
+  // CLIENT — retorna apenas o workspace ao qual pertence
   const userWorkspaceId = freshUser?.workspaceId ?? (session.user as { workspaceId?: string }).workspaceId;
 
   if (!userWorkspaceId) {
@@ -81,6 +88,7 @@ export async function POST(req: NextRequest) {
       name,
       slug,
       logo: logo ?? null,
+      ownerId: session.user.id,  // associa ao criador
       integrations: integrationIds?.length
         ? {
           create: (integrationIds as string[]).map((id: string) => ({

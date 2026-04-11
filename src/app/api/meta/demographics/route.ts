@@ -22,6 +22,16 @@ function mergeBreakdown(results: { label: string; impressions: number; clicks: n
     .sort((a, b) => b.impressions - a.impressions);
 }
 
+async function resolveMetaToken(sessionUserId: string | undefined, workspaceId: string | null) {
+  let userId = sessionUserId;
+  if (!userId && workspaceId) {
+    const ws = await db.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } });
+    userId = ws?.ownerId ?? undefined;
+  }
+  if (!userId) return null;
+  return getStoredMetaToken(userId);
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const days = parseInt(searchParams.get("days") ?? "30");
@@ -29,9 +39,7 @@ export async function GET(req: NextRequest) {
   const workspaceId = searchParams.get("workspaceId");
 
   const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ gender: [], age: [] });
-
-  const token = await getStoredMetaToken(session.user.id);
+  const token = await resolveMetaToken(session?.user?.id, workspaceId);
   if (!token) return NextResponse.json({ gender: [], age: [] });
 
   let accountIds: string[] = [];
@@ -48,7 +56,7 @@ export async function GET(req: NextRequest) {
         .filter((wi) => wi.integration.platform === "meta")
         .map((wi) => wi.integration.adAccountId);
     }
-  } else {
+  } else if (session?.user?.id) {
     const user = await db.user.findUnique({
       where: { id: session.user.id },
       select: { workspaceId: true },
