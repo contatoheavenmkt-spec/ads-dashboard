@@ -19,15 +19,13 @@ export async function GET() {
 
   if (userRole === "AGENCY") {
     // Retorna APENAS workspaces criados por este usuário (ownerId)
-    // Também inclui workspaces legados onde ownerId é null mas o usuário é member
+    // Fallback seguro: se o usuário tem um workspaceId específico sem ownerId (legado pós-migração)
+    const orConditions: any[] = [{ ownerId: session.user.id }];
+    if (freshUser?.workspaceId) {
+      orConditions.push({ id: freshUser.workspaceId, ownerId: null });
+    }
     const workspaces = await db.workspace.findMany({
-      where: {
-        OR: [
-          { ownerId: session.user.id },
-          // Fallback para workspaces migrados sem ownerId: usa workspaceId do user
-          { id: freshUser?.workspaceId ?? undefined, ownerId: null },
-        ],
-      },
+      where: { OR: orConditions },
       orderBy: { createdAt: "desc" },
       include: {
         integrations: { include: { integration: true } },
