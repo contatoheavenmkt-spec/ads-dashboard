@@ -45,3 +45,6 @@ next-env.d.ts
 # Runtime uploads (logos, etc) — gerados pelo servidor, não commitados
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+# Uploads fora de public (servidos via /api/uploads/)
+/uploads/
