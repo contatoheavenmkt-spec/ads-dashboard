@@ -68,8 +68,6 @@ interface NavItem {
 }
 
 interface ClientSidebarProps {
-  logo?: string | null;
-  workspaceName: string;
   platforms: string[]; // e.g. ["meta", "google"]
   view: ClientView;
   onViewChange: (v: ClientView) => void;
@@ -78,7 +76,7 @@ interface ClientSidebarProps {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ClientSidebar({ logo, workspaceName, platforms, view, onViewChange, onLogout }: ClientSidebarProps) {
+export function ClientSidebar({ platforms, view, onViewChange, onLogout }: ClientSidebarProps) {
   const hasMeta = platforms.includes("meta");
   const hasGoogle = platforms.includes("google");
   const hasGA4 = platforms.includes("ga4");
@@ -100,24 +98,9 @@ export function ClientSidebar({ logo, workspaceName, platforms, view, onViewChan
 
   return (
     <aside className="w-20 lg:w-24 flex flex-col items-center py-6 border-r border-slate-800/80 bg-slate-950 flex-shrink-0 z-20 shadow-2xl">
-      {/* Logo do workspace (cliente) ou Dashfy como fallback */}
+      {/* Logo Dashfy — sempre visível no topo do sidebar */}
       <div className="mb-4 shrink-0">
-        {logo ? (
-          <img
-            src={logo}
-            alt={workspaceName}
-            className="w-12 h-12 rounded-2xl object-cover border border-slate-700 shadow-xl"
-            onError={(e) => {
-              const img = e.target as HTMLImageElement;
-              img.style.display = "none";
-              const fallback = img.nextElementSibling as HTMLElement | null;
-              if (fallback) fallback.style.display = "flex";
-            }}
-          />
-        ) : null}
-        <div style={{ display: logo ? "none" : "flex" }}>
-          <DashfyLogoIcon size={52} />
-        </div>
+        <DashfyLogoIcon size={52} />
       </div>
 
       {/* Divider */}
