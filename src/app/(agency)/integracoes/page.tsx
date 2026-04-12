@@ -172,30 +172,38 @@ export default function IntegracoesPage() {
 
   async function connectGoogle(account: { customerId: string; name: string }) {
     setConnectingGoogle(account.customerId);
-    const res = await fetch("/api/integrations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        platform: "google",
-        adAccountId: account.customerId,
-        name: account.name,
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      setGoogleAccountsError(err.error ?? `Erro ${res.status} ao adicionar conta`);
-    } else {
-      setGoogleAccountsError(null);
+    try {
+      const res = await fetch("/api/integrations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform: "google",
+          adAccountId: account.customerId,
+          name: account.name,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setGoogleAccountsError(err.error ?? `Erro ${res.status} ao adicionar conta`);
+      } else {
+        setGoogleAccountsError(null);
+      }
+      await loadIntegrations();
+    } finally {
+      setConnectingGoogle(null);
     }
-    await loadIntegrations();
-    setConnectingGoogle(null);
   }
 
   async function loadIntegrations() {
-    const r = await fetch("/api/integrations");
-    const data = await r.json();
-    setIntegrations(data);
-    setLoadingIntegrations(false);
+    try {
+      const r = await fetch("/api/integrations");
+      const data = await r.json();
+      if (Array.isArray(data)) setIntegrations(data);
+    } catch {
+      // silencia erro de rede — estado atual permanece
+    } finally {
+      setLoadingIntegrations(false);
+    }
   }
 
   async function loadAccounts() {
@@ -261,25 +269,28 @@ export default function IntegracoesPage() {
 
   async function connect(account: MetaAdAccount, bm: MetaBM) {
     setConnecting(account.id);
-    const res = await fetch("/api/integrations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        platform: "meta",
-        adAccountId: account.id,
-        name: account.name,
-        bmId: bm.id !== "sem-bm" ? bm.id : null,
-        bmName: bm.id !== "sem-bm" ? bm.name : null,
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      setBmsError(err.error ?? `Erro ${res.status} ao adicionar conta`);
-    } else {
-      setBmsError(null);
+    try {
+      const res = await fetch("/api/integrations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform: "meta",
+          adAccountId: account.id,
+          name: account.name,
+          bmId: bm.id !== "sem-bm" ? bm.id : null,
+          bmName: bm.id !== "sem-bm" ? bm.name : null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setBmsError(err.error ?? `Erro ${res.status} ao adicionar conta`);
+      } else {
+        setBmsError(null);
+      }
+      await loadIntegrations();
+    } finally {
+      setConnecting(null);
     }
-    await loadIntegrations();
-    setConnecting(null);
   }
 
   async function disconnect(id: string) {

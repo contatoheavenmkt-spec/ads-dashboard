@@ -3,10 +3,8 @@ import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { validateAccountLimit, validatePlatformLimit } from "@/lib/subscription";
 
-async function resolveWorkspaceId(userId: string, tokenWorkspaceId?: string): Promise<string | null> {
-  if (tokenWorkspaceId) return tokenWorkspaceId;
-
-  // Token em cache — busca direto do banco
+async function resolveWorkspaceId(userId: string): Promise<string | null> {
+  // Sempre busca do banco para evitar inconsistências com JWT em cache
   const user = await db.user.findUnique({
     where: { id: userId },
     select: { workspaceId: true },
@@ -14,7 +12,7 @@ async function resolveWorkspaceId(userId: string, tokenWorkspaceId?: string): Pr
   return user?.workspaceId ?? null;
 }
 
-async function getOrCreateWorkspace(userId: string, tokenWorkspaceId?: string): Promise<string> {
+async function getOrCreateWorkspace(userId: string): Promise<string> {
   // Always check DB (JWT may be stale from an older session)
   const freshUser = await db.user.findUnique({ where: { id: userId }, select: { workspaceId: true, name: true, email: true } });
   if (freshUser?.workspaceId) return freshUser.workspaceId;
@@ -48,10 +46,7 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  const workspaceId = await resolveWorkspaceId(
-    session.user.id,
-    (session.user as { workspaceId?: string }).workspaceId
-  );
+  const workspaceId = await resolveWorkspaceId(session.user.id);
 
   // Se tem workspace, retorna as integrações vinculadas a ele
   if (workspaceId) {
@@ -98,10 +93,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Garante que o usuário tem workspace (cria se necessário)
-  const workspaceId = await getOrCreateWorkspace(
-    session.user.id,
-    (session.user as { workspaceId?: string }).workspaceId
-  );
+  const workspaceId = await getOrCreateWorkspace(session.user.id);
 
   // Verifica se já existe integração global com esse adAccountId
   let integration = await db.integration.findFirst({ where: { adAccountId } });
