@@ -138,3 +138,53 @@ model MetricsCache {
   @@unique([workspaceId, platform, cacheKey])
   @@index([expiresAt])
 }
+
+model PageView {
+  id        String   @id @default(cuid())
+  path      String
+  userId    String?
+  sessionId String
+  ip        String?
+  country   String?
+  userAgent String?
+  referrer  String?
+  createdAt DateTime @default(now())
+
+  @@index([path])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([sessionId])
+}
+
+model ErrorLog {
+  id            String   @id @default(cuid())
+  path          String
+  statusCode    Int?
+  errorType     String
+  errorMessage  String
+  stackTrace    String?
+  userId        String?
+  sessionId     String?
+  ip            String?
+  resolved      Boolean  @default(false)
+  fixSuggestion String?
+  createdAt     DateTime @default(now())
+
+  @@index([path])
+  @@index([createdAt])
+  @@index([resolved])
+}
+
+model ActiveSession {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  userId    String?
+  ip        String?
+  country   String?
+  path      String?
+  userAgent String?
+  lastSeen  DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([lastSeen])
+}

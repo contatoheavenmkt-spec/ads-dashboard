@@ -4,12 +4,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, CreditCard, DollarSign,
-  Link2, Settings, LogOut,
+  Link2, Settings, LogOut, BarChart2,
 } from "lucide-react";
 import { DashfyLogoIcon } from "@/components/logo/logo";
 
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/admin/accounts", label: "Contas", icon: Users },
   { href: "/admin/subscriptions", label: "Assinaturas", icon: CreditCard },
   { href: "/admin/finance", label: "Financeiro", icon: DollarSign },

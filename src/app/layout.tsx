@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { Tracker } from "@/components/tracking/tracker";
 import "./globals.css";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" className={geist.variable} suppressHydrationWarning>
       <body className="bg-gray-50 text-gray-900 antialiased" suppressHydrationWarning>
         <Providers>
+          <Tracker />
           {children}
         </Providers>
       </body>
