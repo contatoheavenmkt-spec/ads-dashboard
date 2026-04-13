@@ -5,13 +5,12 @@ import { getStoredMetaToken } from "@/lib/meta-token";
 import { getAdCreatives } from "@/lib/meta-api";
 
 async function resolveMetaToken(sessionUserId: string | undefined, workspaceId: string | null) {
-  let userId = sessionUserId;
-  if (!userId && workspaceId) {
+  if (workspaceId) {
     const ws = await db.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } });
-    userId = ws?.ownerId ?? undefined;
+    if (ws?.ownerId) return getStoredMetaToken(ws.ownerId);
   }
-  if (!userId) return null;
-  return getStoredMetaToken(userId);
+  if (!sessionUserId) return null;
+  return getStoredMetaToken(sessionUserId);
 }
 
 export async function GET(req: NextRequest) {

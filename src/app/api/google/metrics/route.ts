@@ -213,14 +213,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Resolve userId: se tem sessão usa ela; caso contrário usa ownerId do workspace (acesso público/mobile)
-  let resolvedUserId = session?.user?.id;
-  if (!resolvedUserId && workspaceIdParam) {
+  // Resolve userId: usa sempre o ownerId do workspace quando disponível.
+  // Isso garante que clientes/usuários sem token próprio vejam os dados do dono do workspace.
+  let resolvedUserId: string | undefined;
+  if (workspaceIdParam) {
     const ws = await db.workspace.findUnique({
       where: { id: workspaceIdParam },
       select: { ownerId: true },
     });
-    resolvedUserId = ws?.ownerId ?? undefined;
+    resolvedUserId = ws?.ownerId ?? session?.user?.id;
+  } else {
+    resolvedUserId = session?.user?.id;
   }
 
   const tokenInfo = await getValidToken(resolvedUserId ?? "");

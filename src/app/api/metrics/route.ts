@@ -17,20 +17,21 @@ const EMPTY = {
   accountIds: [],
 };
 
-// Resolve qual userId usar para buscar tokens.
-// Em acesso público (sem sessão), usa o ownerId do workspace.
+// Resolve o userId para buscar tokens.
+// Quando workspaceId é fornecido, usa SEMPRE o ownerId do workspace —
+// o token pertence ao dono, não ao visualizador (cliente/público).
 async function resolveUserId(
   sessionUserId: string | undefined,
   workspaceId: string | null,
 ): Promise<string | null> {
-  if (sessionUserId) return sessionUserId;
-  if (!workspaceId) return null;
-
-  const ws = await db.workspace.findUnique({
-    where: { id: workspaceId },
-    select: { ownerId: true },
-  });
-  return ws?.ownerId ?? null;
+  if (workspaceId) {
+    const ws = await db.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { ownerId: true },
+    });
+    if (ws?.ownerId) return ws.ownerId;
+  }
+  return sessionUserId ?? null;
 }
 
 export async function GET(req: NextRequest) {
