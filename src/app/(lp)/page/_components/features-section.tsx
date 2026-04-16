@@ -264,7 +264,7 @@ export function FeaturesSection() {
             </p>
           </div>
 
-          <div className="relative -mr-56 sm:mr-0 px-2 sm:px-4 overflow-hidden">
+          <div className="relative px-2 sm:px-4 overflow-hidden">
             <div className="relative mx-auto max-w-6xl rounded-2xl sm:rounded-3xl border border-gray-700/30 p-1.5 sm:p-2 shadow-2xl shadow-black/40">
               <BeforeAfterSlider />
             </div>

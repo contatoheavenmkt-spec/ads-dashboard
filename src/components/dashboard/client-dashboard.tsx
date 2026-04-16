@@ -278,10 +278,10 @@ export function ClientDashboard({
     ];
 
     return (
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* Top KPIs */}
-        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(200px, 1fr))` }}>
+        <div className="grid gap-3 sm:gap-4" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(150px, 1fr))` }}>
           {kpis.map((k) => (
             <KpiCard
               key={k.title}
@@ -295,10 +295,10 @@ export function ClientDashboard({
         </div>
 
         {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[400px]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
           {/* Funnel */}
-          <div className="glass-panel rounded-2xl p-6 lg:col-span-3 flex flex-col relative">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 text-center">Funil de Conversão</h2>
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-3 flex flex-col relative">
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 sm:mb-6 text-center">Funil de Conversão</h2>
             <FunnelChart data={{
               impressions: t?.impressions ?? 0,
               clicks: t?.clicks ?? 0,
@@ -309,11 +309,11 @@ export function ClientDashboard({
           </div>
 
           {/* Line Chart */}
-          <div className="glass-panel rounded-2xl p-6 lg:col-span-6 flex flex-col">
-            <div className="flex justify-between items-center mb-6">
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-6 flex flex-col">
+            <div className="flex justify-between items-center mb-4 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Performance ao Longo do Tempo</h2>
             </div>
-            <div className="flex-1 w-full min-h-[300px]">
+            <div className="flex-1 w-full min-h-[220px] sm:min-h-[300px]">
               <PerformanceChart
                 data={metaData?.timeSeries ?? []}
                 metrics={["spend", "revenue"]}
@@ -330,8 +330,8 @@ export function ClientDashboard({
           </div>
 
           {/* Donut */}
-          <div className="glass-panel rounded-2xl p-6 lg:col-span-3 flex flex-col">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 text-center">Top Campanhas</h2>
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-3 flex flex-col">
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 sm:mb-6 text-center">Top Campanhas</h2>
             <TopCampaignsDonut
               campaigns={metaData?.campaigns ?? []}
               conversionLabel={t && t.purchases > 0 ? "VENDAS" : t && t.messages > 0 ? "CONVERSAS" : "CONVERSÕES"}
@@ -383,10 +383,10 @@ export function ClientDashboard({
     }
 
     return (
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* KPIs */}
-        <div className={`grid gap-4 ${t && t.revenue > 0 ? "grid-cols-1 md:grid-cols-3 lg:grid-cols-5" : "grid-cols-1 md:grid-cols-3 lg:grid-cols-3"}`}>
+        <div className={`grid gap-3 sm:gap-4 ${t && t.revenue > 0 ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-3"}`}>
           <KpiCard
             title="Investimento"
             value={formatCurrency(t?.spend ?? 0)}
@@ -424,10 +424,10 @@ export function ClientDashboard({
         </div>
 
         {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[400px]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
           {/* Funnel */}
-          <div className="glass-panel rounded-2xl p-6 lg:col-span-3 flex flex-col relative">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 text-center">Funil de Conversão</h2>
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-3 flex flex-col relative">
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 sm:mb-6 text-center">Funil de Conversão</h2>
             <FunnelChart data={{
               impressions: t?.impressions ?? 0,
               clicks: t?.clicks ?? 0,
@@ -438,11 +438,11 @@ export function ClientDashboard({
           </div>
 
           {/* Line Chart */}
-          <div className="glass-panel rounded-2xl p-6 lg:col-span-6 flex flex-col">
-            <div className="flex justify-between items-center mb-6">
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-6 flex flex-col">
+            <div className="flex justify-between items-center mb-4 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Performance ao Longo do Tempo</h2>
             </div>
-            <div className="flex-1 w-full min-h-[300px]">
+            <div className="flex-1 w-full min-h-[220px] sm:min-h-[300px]">
               <PerformanceChart
                 data={googleData?.timeSeries ?? []}
                 metrics={t && t.revenue > 0 ? ["spend", "revenue"] : ["spend", "clicks"]}
@@ -465,8 +465,8 @@ export function ClientDashboard({
           </div>
 
           {/* Top Campaigns Donut */}
-          <div className="glass-panel rounded-2xl p-6 lg:col-span-3 flex flex-col">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 text-center">Top Campanhas</h2>
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-3 flex flex-col">
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 sm:mb-6 text-center">Top Campanhas</h2>
             <TopCampaignsDonut
               campaigns={googleData?.campaigns ?? []}
               conversionLabel={t && t.revenue > 0 ? "Vendas" : "Conversões"}
@@ -610,10 +610,10 @@ export function ClientDashboard({
     }));
 
     return (
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
           <KpiCard
             title="Sessões"
             value={formatNumber(t?.sessions ?? 0)}
@@ -651,10 +651,10 @@ export function ClientDashboard({
         </div>
 
         {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[400px]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
           {/* Funnel (Sessões → Engajadas → Conversões) */}
-          <div className="glass-panel rounded-2xl p-6 lg:col-span-3 flex flex-col relative">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 text-center">Funil de Audiência</h2>
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-3 flex flex-col relative">
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 sm:mb-6 text-center">Funil de Audiência</h2>
             <FunnelChart data={{
               impressions: t?.sessions ?? 0,
               clicks: t?.engagedSessions ?? 0,
@@ -669,11 +669,11 @@ export function ClientDashboard({
           </div>
 
           {/* Line Chart */}
-          <div className="glass-panel rounded-2xl p-6 lg:col-span-6 flex flex-col">
-            <div className="flex justify-between items-center mb-6">
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-6 flex flex-col">
+            <div className="flex justify-between items-center mb-4 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Audiência ao Longo do Tempo</h2>
             </div>
-            <div className="flex-1 w-full min-h-[300px]">
+            <div className="flex-1 w-full min-h-[220px] sm:min-h-[300px]">
               <PerformanceChart
                 data={chartSeries}
                 metrics={["spend", "clicks"]}
@@ -781,8 +781,8 @@ export function ClientDashboard({
               {ga4Data?.events?.length ?? 0} EVENTOS RASTREADOS
             </span>
           </div>
-          <div className="glass-panel rounded-xl overflow-hidden flex flex-col border-none shadow-2xl">
-            <table className="w-full text-left text-sm whitespace-nowrap">
+          <div className="glass-panel rounded-xl overflow-hidden flex flex-col border-none shadow-2xl overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap min-w-[500px]">
               <thead className="text-[11px] uppercase tracking-wider text-slate-400 bg-slate-800/50 border-b border-slate-700/50">
                 <tr>
                   <th className="px-4 py-4 font-semibold">#</th>
@@ -856,10 +856,10 @@ export function ClientDashboard({
     const ga4Share = 100 - metaShare - googleShare;
 
     return (
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* KPIs Consolidados */}
-        <div className={`grid gap-4 ${totalRevenue > 0 ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 md:grid-cols-2 lg:grid-cols-4"}`}>
+        <div className={`grid gap-3 sm:gap-4 ${totalRevenue > 0 ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 md:grid-cols-2 lg:grid-cols-4"}`}>
           <KpiCard title="Investimento Total" value={formatCurrency(totalSpend)} sparklineColor="#3b82f6" sparklineData={mergedSeries.map(d => d.spend)} />
           {totalRevenue > 0 && (
             <KpiCard title="Faturamento Total" value={formatCurrency(totalRevenue)} sparklineColor="#10b981" sparklineData={mergedSeries.map(d => d.revenue)} />
@@ -1045,7 +1045,7 @@ export function ClientDashboard({
     const aData = demographics.age.map(a => Math.round((a.impressions / totalAI) * 100));
 
     return (
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* ═══ Row 1: Gauge | Line | Gênero | Faixa Etária (Meta only) ═══ */}
         {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
