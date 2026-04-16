@@ -294,12 +294,12 @@ export function ClientDashboard({
           ))}
         </div>
 
-        {/* Charts Row — mobile: [Funnel|Donut] then [Line]; desktop: [Funnel|Line|Donut] */}
-        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-6">
-          {/* Wrapper: 2-col on mobile → invisible at lg (contents) */}
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:contents">
+        {/* Charts Row — mobile: [Funnel|Donut] stacked above [Line]; desktop: side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
+          {/* Funnel + Donut: always side by side */}
+          <div className="flex gap-3 sm:gap-4">
             {/* Funnel */}
-            <div className="glass-panel rounded-2xl p-3 sm:p-6 lg:col-span-3 lg:order-1 flex flex-col relative min-h-[190px] lg:min-h-0">
+            <div className="glass-panel rounded-2xl p-3 sm:p-6 flex-1 flex flex-col relative min-h-[190px]">
               <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Funil de Conversão</h2>
               <FunnelChart data={{
                 impressions: t?.impressions ?? 0,
@@ -310,7 +310,7 @@ export function ClientDashboard({
               }} />
             </div>
             {/* Donut */}
-            <div className="glass-panel rounded-2xl p-3 sm:p-6 lg:col-span-3 lg:order-3 flex flex-col min-h-[190px] lg:min-h-0">
+            <div className="glass-panel rounded-2xl p-3 sm:p-6 flex-1 flex flex-col min-h-[190px]">
               <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Top Campanhas</h2>
               <TopCampaignsDonut
                 campaigns={metaData?.campaigns ?? []}
@@ -318,8 +318,8 @@ export function ClientDashboard({
               />
             </div>
           </div>
-          {/* Line Chart — full-width on mobile; center col on desktop */}
-          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-6 lg:order-2 flex flex-col">
+          {/* Line Chart */}
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
             <div className="flex justify-between items-center mb-3 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Performance ao Longo do Tempo</h2>
             </div>
@@ -424,11 +424,12 @@ export function ClientDashboard({
           />
         </div>
 
-        {/* Charts Row — mobile: [Funnel|Donut] then [Line]; desktop: [Funnel|Line|Donut] */}
-        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-6">
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:contents">
+        {/* Charts Row — mobile: [Funnel|Donut] stacked above [Line]; desktop: side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
+          {/* Funnel + Donut: always side by side */}
+          <div className="flex gap-3 sm:gap-4">
             {/* Funnel */}
-            <div className="glass-panel rounded-2xl p-3 sm:p-6 lg:col-span-3 lg:order-1 flex flex-col relative min-h-[190px] lg:min-h-0">
+            <div className="glass-panel rounded-2xl p-3 sm:p-6 flex-1 flex flex-col relative min-h-[190px]">
               <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Funil de Conversão</h2>
               <FunnelChart data={{
                 impressions: t?.impressions ?? 0,
@@ -439,7 +440,7 @@ export function ClientDashboard({
               }} />
             </div>
             {/* Donut */}
-            <div className="glass-panel rounded-2xl p-3 sm:p-6 lg:col-span-3 lg:order-3 flex flex-col min-h-[190px] lg:min-h-0">
+            <div className="glass-panel rounded-2xl p-3 sm:p-6 flex-1 flex flex-col min-h-[190px]">
               <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Top Campanhas</h2>
               <TopCampaignsDonut
                 campaigns={googleData?.campaigns ?? []}
@@ -448,7 +449,7 @@ export function ClientDashboard({
             </div>
           </div>
           {/* Line Chart */}
-          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-6 lg:order-2 flex flex-col">
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
             <div className="flex justify-between items-center mb-3 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Performance ao Longo do Tempo</h2>
             </div>
@@ -651,11 +652,12 @@ export function ClientDashboard({
           />
         </div>
 
-        {/* Charts Row — mobile: [Funnel|Donut] then [Line]; desktop: [Funnel|Line|Donut] */}
-        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-6">
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:contents">
+        {/* Charts Row — mobile: [Funnel|Donut] stacked above [Line]; desktop: side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
+          {/* Funnel + Donut: always side by side */}
+          <div className="flex gap-3 sm:gap-4">
             {/* Funnel */}
-            <div className="glass-panel rounded-2xl p-3 sm:p-6 lg:col-span-3 lg:order-1 flex flex-col relative min-h-[190px] lg:min-h-0">
+            <div className="glass-panel rounded-2xl p-3 sm:p-6 flex-1 flex flex-col relative min-h-[190px]">
               <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Funil de Audiência</h2>
               <FunnelChart data={{
                 impressions: t?.sessions ?? 0,
@@ -670,13 +672,13 @@ export function ClientDashboard({
               }} />
             </div>
             {/* Top Events Donut */}
-            <div className="glass-panel rounded-2xl p-3 sm:p-6 lg:col-span-3 lg:order-3 flex flex-col min-h-[190px] lg:min-h-0">
+            <div className="glass-panel rounded-2xl p-3 sm:p-6 flex-1 flex flex-col min-h-[190px]">
               <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Top Eventos</h2>
               <TopCampaignsDonut campaigns={eventsAsCampaigns} />
             </div>
           </div>
           {/* Line Chart */}
-          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-6 lg:order-2 flex flex-col">
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
             <div className="flex justify-between items-center mb-3 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Audiência ao Longo do Tempo</h2>
             </div>
