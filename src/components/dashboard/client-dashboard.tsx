@@ -278,10 +278,10 @@ export function ClientDashboard({
     ];
 
     return (
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 pb-8 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* Top KPIs */}
-        <div className="grid gap-3 sm:gap-4" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(150px, 1fr))` }}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
           {kpis.map((k) => (
             <KpiCard
               key={k.title}
@@ -384,7 +384,7 @@ export function ClientDashboard({
     }
 
     return (
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 pb-8 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* KPIs */}
         <div className={`grid gap-3 sm:gap-4 ${t && t.revenue > 0 ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-3"}`}>
@@ -611,7 +611,7 @@ export function ClientDashboard({
     }));
 
     return (
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 pb-8 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
@@ -857,7 +857,7 @@ export function ClientDashboard({
     const ga4Share = 100 - metaShare - googleShare;
 
     return (
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 pb-8 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* KPIs Consolidados */}
         <div className={`grid gap-3 sm:gap-4 ${totalRevenue > 0 ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 md:grid-cols-2 lg:grid-cols-4"}`}>
@@ -1046,7 +1046,7 @@ export function ClientDashboard({
     const aData = demographics.age.map(a => Math.round((a.impressions / totalAI) * 100));
 
     return (
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 pb-8 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* ═══ Row 1: Gauge | Line | Gênero | Faixa Etária (Meta only) ═══ */}
         {hasMeta && <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-6">

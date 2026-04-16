@@ -226,7 +226,7 @@ export function FunnelChart({ data }: { data: FunnelData }) {
 
       {/* Bottom stats */}
       <div
-        className="grid grid-cols-3 gap-1.5 mt-3 pt-3 border-t border-slate-700/40"
+        className="grid grid-cols-3 gap-1 sm:gap-1.5 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-slate-700/40"
         style={{
           opacity:    visible ? 1 : 0,
           transition: "opacity 0.5s ease 650ms",
@@ -235,12 +235,12 @@ export function FunnelChart({ data }: { data: FunnelData }) {
         {bottomStats.map((s, i) => (
           <div
             key={i}
-            className="flex flex-col items-center justify-center bg-slate-800/60 rounded-lg py-2 border border-slate-700/30 gap-0.5"
+            className="flex flex-col items-center justify-center bg-slate-800/60 rounded-lg py-1.5 sm:py-2 border border-slate-700/30 gap-0.5 min-w-0"
           >
-            <span className="text-[7px] font-bold text-slate-500 uppercase tracking-wider text-center leading-tight px-1">
+            <span className="text-[6px] sm:text-[7px] font-bold text-slate-500 uppercase tracking-wider text-center leading-tight px-0.5 sm:px-1 truncate w-full">
               {s.label}
             </span>
-            <span className="text-[11px] font-black text-blue-400">{s.value}</span>
+            <span className="text-[10px] sm:text-[11px] font-black text-blue-400">{s.value}</span>
           </div>
         ))}
       </div>
