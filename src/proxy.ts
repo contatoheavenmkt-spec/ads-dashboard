@@ -25,6 +25,7 @@ export default auth((req) => {
   const isAuthPage = nextUrl.pathname.startsWith("/login") || nextUrl.pathname.startsWith("/cadastro");
   const isPublicClient = nextUrl.pathname.startsWith("/cliente");
   const isPublicPage =
+    nextUrl.pathname.startsWith("/page") ||
     nextUrl.pathname.startsWith("/privacy") ||
     nextUrl.pathname.startsWith("/terms") ||
     nextUrl.pathname.startsWith("/about") ||
