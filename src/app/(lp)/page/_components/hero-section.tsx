@@ -121,12 +121,12 @@ export function HeroSection() {
                       GARANTIR OFERTA
                     </span>
                   </a>
-                  <Link
-                    href="/cadastro"
+                  <a
+                    href="#pricing"
                     className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full border-2 border-cyan-400/50 bg-transparent px-8 py-4 font-semibold text-cyan-400 transition-all duration-300 hover:border-cyan-400 hover:bg-cyan-400/10 hover:shadow-lg hover:shadow-cyan-400/20 hover:scale-105"
                   >
                     <span className="relative">Testar 7 dias grátis</span>
-                  </Link>
+                  </a>
                 </AnimatedGroup>
               </div>
             </div>
@@ -314,24 +314,24 @@ function HeroHeader() {
                 >
                   Login
                 </Link>
-                <Link
-                  href="/cadastro"
+                <a
+                  href="#pricing"
                   className={cn(
                     "inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700",
                     isScrolled && "lg:hidden"
                   )}
                 >
                   Começar agora
-                </Link>
-                <Link
-                  href="/cadastro"
+                </a>
+                <a
+                  href="#pricing"
                   className={cn(
                     "hidden items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700",
                     isScrolled ? "lg:inline-flex" : "hidden"
                   )}
                 >
                   Começar agora
-                </Link>
+                </a>
               </div>
             </div>
           </div>
