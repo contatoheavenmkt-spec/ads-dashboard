@@ -3,7 +3,19 @@ import { PLANS, type PlanKey } from "@/lib/subscription";
 
 // ─── Client (server-side only) ────────────────────────────────────
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+// Lazy init — evita crash no build quando STRIPE_SECRET_KEY não está configurado
+let _stripe: Stripe | null = null;
+export const stripe: Stripe = new Proxy({} as Stripe, {
+  get(_target, prop) {
+    if (!_stripe) {
+      if (!process.env.STRIPE_SECRET_KEY) {
+        throw new Error("STRIPE_SECRET_KEY não configurado");
+      }
+      _stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    }
+    return (_stripe as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});
 
 // ─── Price IDs (configure in .env) ───────────────────────────────
 // STRIPE_PRICE_START=price_xxx

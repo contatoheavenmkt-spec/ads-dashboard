@@ -145,8 +145,9 @@ export function Sidebar() {
   const currentItems = isDashboard ? dashboardItems : saasItems;
 
   return (
+    <>
     <aside className={cn(
-      "w-20 lg:w-24 flex flex-col items-center py-6 border-r flex-shrink-0 z-20 transition-all duration-300 shadow-2xl h-screen",
+      "hidden md:flex w-20 lg:w-24 flex-col items-center py-6 border-r flex-shrink-0 z-20 transition-all duration-300 shadow-2xl h-screen",
       variant === "dark"
         ? "border-slate-800/80 bg-slate-950"
         : "border-gray-200 bg-gray-900"
@@ -252,5 +253,57 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+
+    {/* Mobile bottom navigation */}
+    <nav className={cn(
+      "md:hidden fixed bottom-0 inset-x-0 z-50 border-t flex items-center justify-around h-16 px-1",
+      variant === "dark"
+        ? "border-slate-800/80 bg-slate-950"
+        : "border-gray-200 bg-gray-900"
+    )}>
+      {currentItems.map(({ href, label, icon: Icon, color, activeColor, platform, isSvgIcon }) => {
+        const active = pathname === href || (href !== "/" && pathname.startsWith(href) && href !== "/dashboard");
+        const isPlatformIcon = platform !== undefined;
+        return (
+          <Link
+            key={href}
+            href={href}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 py-1 gap-0.5 rounded-xl transition-all",
+              active
+                ? variant === "dark" ? "text-blue-400" : "text-blue-500"
+                : variant === "dark" ? "text-slate-500" : "text-gray-400"
+            )}
+          >
+            {isPlatformIcon ? (
+              <div style={{ filter: active ? "none" : "grayscale(1) brightness(0.5)" }}>
+                <Icon active={active} />
+              </div>
+            ) : isSvgIcon ? (
+              <Icon active={active} />
+            ) : (
+              <Icon className={cn("w-5 h-5", active ? (activeColor || "text-blue-400") : (color || "opacity-60"))} />
+            )}
+            <span className={cn(
+              "text-[8px] font-bold uppercase tracking-wide",
+              active ? (activeColor || (variant === "dark" ? "text-blue-400" : "text-blue-500")) : "text-slate-500"
+            )}>
+              {label}
+            </span>
+          </Link>
+        );
+      })}
+      <button
+        onClick={() => signOut({ callbackUrl: "/login" })}
+        className={cn(
+          "flex flex-col items-center justify-center flex-1 py-1 gap-0.5 rounded-xl transition-all",
+          variant === "dark" ? "text-slate-500 active:text-red-400" : "text-gray-400"
+        )}
+      >
+        <LogOut className="w-5 h-5 opacity-70" />
+        <span className="text-[8px] font-bold uppercase tracking-wide text-slate-500">Sair</span>
+      </button>
+    </nav>
+    </>
   );
 }

@@ -66,8 +66,8 @@ export default function OnboardingPage() {
           <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
             <iframe
               className="absolute inset-0 w-full h-full"
-              src="https://www.youtube.com/embed/dQw4w9WgXcQ"
-              title="Tutorial Dashfy"
+              src="https://www.youtube.com/embed/daxUwwbUBWc"
+              title="Onboarding Dashfy"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />

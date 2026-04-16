@@ -97,7 +97,8 @@ export function ClientSidebar({ platforms, view, onViewChange, onLogout }: Clien
   ] : navItems;
 
   return (
-    <aside className="w-20 lg:w-24 flex flex-col items-center py-6 border-r border-slate-800/80 bg-slate-950 flex-shrink-0 z-20 shadow-2xl">
+    <>
+    <aside className="hidden md:flex w-20 lg:w-24 flex-col items-center py-6 border-r border-slate-800/80 bg-slate-950 flex-shrink-0 z-20 shadow-2xl">
       {/* Logo Dashfy — sempre visível no topo do sidebar */}
       <div className="mb-4 shrink-0">
         <DashfyLogoIcon size={52} />
@@ -175,5 +176,48 @@ export function ClientSidebar({ platforms, view, onViewChange, onLogout }: Clien
         </div>
       )}
     </aside>
+
+    {/* Mobile bottom navigation */}
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 border-t border-slate-800/80 bg-slate-950 flex items-center justify-around h-16 px-1">
+      {items.map(({ id, label, icon, platform }) => {
+        const active = view === id;
+        const isPlatformIcon = !!platform;
+        return (
+          <button
+            key={id}
+            onClick={() => onViewChange(id)}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 py-1 gap-0.5 rounded-xl transition-all",
+              active ? "text-blue-400" : "text-slate-500"
+            )}
+          >
+            <div
+              className="transition-all"
+              style={isPlatformIcon ? { filter: active ? "none" : "grayscale(1) brightness(0.5)" } : undefined}
+            >
+              {React.isValidElement(icon)
+                ? React.cloneElement(icon as React.ReactElement<{ active?: boolean }>, { active })
+                : icon}
+            </div>
+            <span className={cn(
+              "text-[8px] font-bold uppercase tracking-wide",
+              active ? "text-blue-400" : "text-slate-500"
+            )}>
+              {label}
+            </span>
+          </button>
+        );
+      })}
+      {onLogout && (
+        <button
+          onClick={onLogout}
+          className="flex flex-col items-center justify-center flex-1 py-1 gap-0.5 rounded-xl transition-all text-slate-500 active:text-red-400"
+        >
+          <LogOut className="w-5 h-5 opacity-70" />
+          <span className="text-[8px] font-bold uppercase tracking-wide text-slate-500">Sair</span>
+        </button>
+      )}
+    </nav>
+    </>
   );
 }

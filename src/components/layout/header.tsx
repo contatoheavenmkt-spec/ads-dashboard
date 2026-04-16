@@ -297,12 +297,12 @@ export function Header({
             {/* Campanhas */}
             <div className="relative">
               <button type="button" onClick={(e) => { e.stopPropagation(); setCampsOpen(!campsOpen); setAccOpen(false); setDaysOpen(false); }}
-                className={cn("hidden md:flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-colors active:scale-95",
+                className={cn("flex items-center gap-2 px-2 md:px-3 py-2 rounded-lg border text-xs font-medium transition-colors active:scale-95",
                   campsOpen ? "bg-slate-700 border-slate-600 text-white" : "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700"
                 )}>
-                <Layers size={14} className={cn("transition-opacity", campsOpen ? "opacity-100" : "opacity-50")} />
-                <span className="max-w-[100px] truncate">{selectedCampaign ? selectedCampaign.name : "Campanhas"}</span>
-                <ChevronDown size={14} className={cn("transition-transform opacity-30", campsOpen ? "rotate-180" : "")} />
+                <Layers size={14} className={cn("transition-opacity shrink-0", campsOpen ? "opacity-100" : "opacity-50")} />
+                <span className="hidden md:inline max-w-[100px] truncate">{selectedCampaign ? selectedCampaign.name : "Campanhas"}</span>
+                <ChevronDown size={14} className={cn("hidden md:block transition-transform opacity-30", campsOpen ? "rotate-180" : "")} />
               </button>
               {campsOpen && (
                 <div className="absolute right-0 mt-3 w-72 bg-slate-950/98 backdrop-blur-xl rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] py-2 z-50 border border-slate-700/50 animate-in fade-in zoom-in duration-200">
@@ -346,12 +346,12 @@ export function Header({
             {/* Período */}
             <div className="relative">
               <button type="button" onClick={(e) => { e.stopPropagation(); setDaysOpen(!daysOpen); setAccOpen(false); setCampsOpen(false); }}
-                className={cn("hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap active:scale-95",
+                className={cn("flex items-center gap-2 px-2 md:px-3 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap active:scale-95",
                   daysOpen ? "bg-slate-700 border-slate-600 text-white" : "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700"
                 )}>
-                <Calendar size={14} className={cn("transition-opacity", daysOpen ? "opacity-100" : "opacity-50")} />
-                {mounted ? currentPeriodLabel : "..."}
-                <ChevronDown size={14} className={cn("transition-transform opacity-30", daysOpen ? "rotate-180" : "")} />
+                <Calendar size={14} className={cn("transition-opacity shrink-0", daysOpen ? "opacity-100" : "opacity-50")} />
+                <span className="hidden lg:inline">{mounted ? currentPeriodLabel : "..."}</span>
+                <ChevronDown size={14} className={cn("hidden lg:block transition-transform opacity-30", daysOpen ? "rotate-180" : "")} />
               </button>
               {daysOpen && (
                 <div className="absolute right-0 mt-3 w-48 bg-slate-950/98 backdrop-blur-xl rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] py-2 z-50 border border-slate-700/50 animate-in fade-in zoom-in duration-200">

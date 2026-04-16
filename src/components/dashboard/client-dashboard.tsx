@@ -1379,7 +1379,7 @@ export function ClientDashboard({
   // ─── Main render ──────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-screen bg-slate-950">
+    <div className="flex h-screen bg-slate-950 pb-16 md:pb-0">
       {/* Sidebar */}
       <ClientSidebar
         platforms={platforms}
@@ -1392,7 +1392,7 @@ export function ClientDashboard({
       <div className="flex-1 flex flex-col min-h-0">
 
         {/* Header */}
-        <header className="px-6 py-4 flex items-center justify-between border-b border-slate-700/50 bg-slate-900/40 backdrop-blur-md flex-shrink-0 z-30 relative">
+        <header className="px-3 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/50 bg-slate-900/40 backdrop-blur-md flex-shrink-0 z-30 relative">
           <div className="flex items-center gap-3">
             {logo && (
               <img
@@ -1424,7 +1424,7 @@ export function ClientDashboard({
                 <button
                   onClick={(e) => { e.stopPropagation(); setCampaignOpen(!campaignOpen); setDaysOpen(false); }}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap active:scale-95 max-w-[180px]",
+                    "flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap active:scale-95 sm:max-w-[180px]",
                     campaignOpen
                       ? "bg-slate-700 border-slate-600 text-white"
                       : selectedCampaign
@@ -1433,8 +1433,8 @@ export function ClientDashboard({
                   )}
                 >
                   <Layers size={13} className="opacity-60 shrink-0" />
-                  <span className="truncate">{selectedCampaign ? selectedCampaign.name : "Todas as campanhas"}</span>
-                  <ChevronDown size={13} className={cn("opacity-30 shrink-0 transition-transform", campaignOpen ? "rotate-180" : "")} />
+                  <span className="hidden sm:inline truncate">{selectedCampaign ? selectedCampaign.name : "Campanhas"}</span>
+                  <ChevronDown size={13} className={cn("hidden sm:block opacity-30 shrink-0 transition-transform", campaignOpen ? "rotate-180" : "")} />
                 </button>
                 {campaignOpen && (
                   <div className="absolute right-0 mt-3 w-64 bg-slate-950 border border-slate-700/60 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] py-2 z-[100]">
@@ -1479,15 +1479,15 @@ export function ClientDashboard({
               <button
                 onClick={(e) => { e.stopPropagation(); setDaysOpen(!daysOpen); setCampaignOpen(false); }}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap active:scale-95",
+                  "flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap active:scale-95",
                   daysOpen
                     ? "bg-slate-700 border-slate-600 text-white"
                     : "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700"
                 )}
               >
-                <Calendar size={13} className="opacity-60" />
-                {currentPeriodLabel}
-                <ChevronDown size={13} className={cn("opacity-30 transition-transform", daysOpen ? "rotate-180" : "")} />
+                <Calendar size={13} className="opacity-60 shrink-0" />
+                <span className="hidden sm:inline">{currentPeriodLabel}</span>
+                <ChevronDown size={13} className={cn("hidden sm:block opacity-30 transition-transform", daysOpen ? "rotate-180" : "")} />
               </button>
               {daysOpen && (
                 <div className="absolute right-0 mt-3 w-48 bg-slate-950 border border-slate-700/60 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] py-2 z-[100]">

@@ -86,7 +86,7 @@ export function PlanGuard({ children }: { children: React.ReactNode }) {
     setCheckingOut(plan);
     setCheckoutError(null);
     try {
-      const res = await fetch("/api/stripe/create-checkout-session", {
+      const res = await fetch("/api/cakto/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
@@ -230,7 +230,7 @@ export function PlanGuard({ children }: { children: React.ReactNode }) {
             </div>
 
             <p className="text-center text-[10px] text-slate-600 pb-5">
-              Pagamentos processados com segurança via Stripe · Cancele a qualquer momento
+              Pagamentos processados com segurança via Cakto · PIX e cartão · Cancele a qualquer momento
             </p>
           </div>
         </div>

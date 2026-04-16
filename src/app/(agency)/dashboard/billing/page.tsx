@@ -26,7 +26,7 @@ interface SubscriptionInfo {
   connectedCount: number;
   daysRemaining: number | null;
   isActive: boolean;
-  stripeSubscriptionId?: string;
+  externalSubscriptionId?: string;
 }
 
 // ─── Plan definitions for UI ──────────────────────────────────────
@@ -99,49 +99,27 @@ function BillingContent() {
   const [sub, setSub] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState<string | null>(null);
-  const [openingPortal, setOpeningPortal] = useState(false);
-  const [verifying, setVerifying] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
-    const sessionId = searchParams.get("session_id");
-
-    // Se voltou do Stripe com session_id, verifica e ativa antes de carregar
-    if (successParam && sessionId) {
-      setVerifying(true);
-      fetch(`/api/stripe/verify-session?session_id=${sessionId}`)
-        .then((r) => r.json())
-        .then(() => {
-          // Após verificar, busca subscription atualizada
-          return fetch("/api/subscription").then((r) => (r.ok ? r.json() : null));
-        })
-        .then((data) => { setSub(data); })
-        .catch(() => {})
-        .finally(() => { setVerifying(false); setLoading(false); });
-      return;
-    }
-
     fetch("/api/subscription")
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        setSub(data);
-        setLoading(false);
-      })
+      .then((data) => { setSub(data); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [successParam, searchParams]);
+  }, [successParam]);
 
   async function handleSubscribe(plan: PlanKey) {
     setCheckingOut(plan);
     setCheckoutError(null);
     try {
-      const res = await fetch("/api/stripe/create-checkout-session", {
+      const res = await fetch("/api/cakto/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) {
-        setCheckoutError(data.error || "Erro ao criar sessão de pagamento.");
+        setCheckoutError(data.error || "Erro ao gerar link de pagamento.");
         return;
       }
       window.location.href = data.url;
@@ -152,27 +130,10 @@ function BillingContent() {
     }
   }
 
-  async function handlePortal() {
-    setOpeningPortal(true);
-    try {
-      const res = await fetch("/api/stripe/create-portal-session", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || "Erro ao abrir portal de cobrança.");
-        return;
-      }
-      window.location.href = data.url;
-    } catch {
-      alert("Erro de conexão. Tente novamente.");
-    } finally {
-      setOpeningPortal(false);
-    }
-  }
-
   const currentPlan = sub?.plan as PlanKey | undefined;
   const isTrialing = sub?.status === "trialing";
   const isExpired = sub && !sub.isActive;
-  const hasPaidStripe = sub?.status === "active" && sub.plan !== "trial";
+  const hasPaidPlan = sub?.status === "active" && sub.plan !== "trial";
 
   const formatDate = (iso: string | null) =>
     iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
@@ -197,12 +158,9 @@ function BillingContent() {
           </div>
         )}
 
-        {loading || verifying ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-            {verifying && (
-              <p className="text-sm text-slate-400 animate-pulse">Ativando seu plano...</p>
-            )}
           </div>
         ) : (
           <>
@@ -243,17 +201,15 @@ function BillingContent() {
                   </div>
                 </div>
 
-                {/* Portal link for active paid subscribers */}
-                {hasPaidStripe && (
-                  <button
-                    type="button"
-                    onClick={handlePortal}
-                    disabled={openingPortal}
-                    className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
+                {/* Link para suporte/cancelamento */}
+                {hasPaidPlan && (
+                  <a
+                    href="mailto:suporte@dashfy.com.br?subject=Gerenciar assinatura"
+                    className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold transition-all"
                   >
-                    {openingPortal ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
+                    <ExternalLink size={14} />
                     Gerenciar assinatura
-                  </button>
+                  </a>
                 )}
               </div>
             )}
@@ -356,7 +312,7 @@ function BillingContent() {
 
             {/* Fine print */}
             <p className="text-center text-[11px] text-slate-600 pb-2">
-              Pagamentos processados com segurança via Stripe · Cancele a qualquer momento · Sem fidelidade
+              Pagamentos processados com segurança via Cakto · PIX e cartão · Cancele a qualquer momento · Sem fidelidade
             </p>
           </>
         )}
