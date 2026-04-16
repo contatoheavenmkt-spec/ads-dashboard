@@ -1397,30 +1397,31 @@ export function ClientDashboard({
       <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
 
         {/* Header */}
-        <header className="px-3 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/50 bg-slate-900/40 backdrop-blur-md flex-shrink-0 z-30 relative">
-          <div className="flex items-center gap-3 min-w-0">
+        <header className="px-3 sm:px-6 py-2 sm:py-4 flex items-center justify-between gap-2 border-b border-slate-700/50 bg-slate-900/40 backdrop-blur-md flex-shrink-0 z-30 relative">
+          {/* Workspace identity */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {logo && (
               <img
                 src={logo}
                 alt={workspaceName}
-                className="w-10 h-10 rounded-xl object-cover border border-slate-700 shadow-lg shrink-0"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover border border-slate-700 shadow-lg shrink-0"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
             )}
             <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-tight text-slate-100 leading-none truncate">{workspaceName}</h1>
-              <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">Dashboard de Performance</p>
+              <h1 className="text-sm sm:text-base font-bold tracking-tight text-slate-100 leading-none truncate">{workspaceName}</h1>
+              <p className="text-[9px] text-slate-500 mt-0.5 uppercase tracking-widest hidden sm:block">Dashboard de Performance</p>
             </div>
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center gap-3">
+          {/* Controls — always on same row */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               onClick={handleDownload}
-              className="p-2 rounded-lg border bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 transition-all active:scale-95"
+              className="p-1.5 sm:p-2 rounded-lg border bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 transition-all active:scale-95"
               title="Exportar CSV"
             >
-              <Download size={15} />
+              <Download size={14} />
             </button>
 
             {/* Campaign selector — visible only on meta/detalhes views */}
@@ -1429,7 +1430,7 @@ export function ClientDashboard({
                 <button
                   onClick={(e) => { e.stopPropagation(); setCampaignOpen(!campaignOpen); setDaysOpen(false); }}
                   className={cn(
-                    "flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap active:scale-95 sm:max-w-[180px]",
+                    "flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-2 rounded-lg border text-xs font-medium transition-colors active:scale-95",
                     campaignOpen
                       ? "bg-slate-700 border-slate-600 text-white"
                       : selectedCampaign
@@ -1437,16 +1438,16 @@ export function ClientDashboard({
                         : "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700"
                   )}
                 >
-                  <Layers size={13} className="opacity-60 shrink-0" />
-                  <span className="hidden sm:inline truncate">{selectedCampaign ? selectedCampaign.name : "Campanhas"}</span>
-                  <ChevronDown size={13} className={cn("hidden sm:block opacity-30 shrink-0 transition-transform", campaignOpen ? "rotate-180" : "")} />
+                  <Layers size={14} className="opacity-60 shrink-0" />
+                  <span className="hidden sm:inline truncate max-w-[120px]">{selectedCampaign ? selectedCampaign.name : "Campanhas"}</span>
+                  <ChevronDown size={12} className={cn("hidden sm:block opacity-30 shrink-0 transition-transform", campaignOpen ? "rotate-180" : "")} />
                 </button>
                 {campaignOpen && (
-                  <div className="absolute right-0 mt-3 w-64 bg-slate-950 border border-slate-700/60 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] py-2 z-[100]">
+                  <div className="absolute right-0 mt-2 w-56 sm:w-64 max-h-[55vh] overflow-y-auto bg-slate-950 border border-slate-700/60 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] py-2 z-[100]">
                     <button
                       onClick={() => { setSelectedCampaign(null); setCampaignOpen(false); }}
                       className={cn(
-                        "w-full text-left px-4 py-2 text-xs font-medium transition-colors flex items-center justify-between",
+                        "w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center justify-between",
                         !selectedCampaign ? "bg-blue-600/20 text-blue-400" : "text-slate-300 hover:bg-slate-800 hover:text-white"
                       )}
                     >
@@ -1459,19 +1460,16 @@ export function ClientDashboard({
                         key={c.id}
                         onClick={() => { setSelectedCampaign({ id: c.id, name: c.name }); setCampaignOpen(false); }}
                         className={cn(
-                          "w-full text-left px-4 py-2 text-xs font-medium transition-colors flex items-center justify-between gap-2",
+                          "w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center justify-between gap-2",
                           selectedCampaign?.id === c.id ? "bg-blue-600/20 text-blue-400" : "text-slate-300 hover:bg-slate-800 hover:text-white"
                         )}
                       >
                         <span className="truncate">{c.name}</span>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full border uppercase",
-                            c.status === "ACTIVE"
-                              ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-                              : "text-slate-500 bg-slate-800 border-slate-700"
-                          )}>{c.status === "ACTIVE" ? "Ativa" : "Inativa"}</span>
-                          {selectedCampaign?.id === c.id && <Check size={12} />}
-                        </div>
+                        <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full border uppercase shrink-0",
+                          c.status === "ACTIVE"
+                            ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                            : "text-slate-500 bg-slate-800 border-slate-700"
+                        )}>{c.status === "ACTIVE" ? "Ativa" : "Inativa"}</span>
                       </button>
                     ))}
                   </div>
@@ -1484,24 +1482,24 @@ export function ClientDashboard({
               <button
                 onClick={(e) => { e.stopPropagation(); setDaysOpen(!daysOpen); setCampaignOpen(false); }}
                 className={cn(
-                  "flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap active:scale-95",
+                  "flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-2 rounded-lg border text-xs font-medium transition-colors active:scale-95",
                   daysOpen
                     ? "bg-slate-700 border-slate-600 text-white"
                     : "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700"
                 )}
               >
-                <Calendar size={13} className="opacity-60 shrink-0" />
+                <Calendar size={14} className="opacity-60 shrink-0" />
                 <span className="hidden sm:inline">{currentPeriodLabel}</span>
-                <ChevronDown size={13} className={cn("hidden sm:block opacity-30 transition-transform", daysOpen ? "rotate-180" : "")} />
+                <ChevronDown size={12} className={cn("hidden sm:block opacity-30 transition-transform", daysOpen ? "rotate-180" : "")} />
               </button>
               {daysOpen && (
-                <div className="absolute right-0 mt-3 w-48 bg-slate-950 border border-slate-700/60 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] py-2 z-[100]">
+                <div className="absolute right-0 mt-2 w-44 bg-slate-950 border border-slate-700/60 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] py-2 z-[100]">
                   {PERIOD_OPTIONS.map(opt => (
                     <button
                       key={opt.days}
                       onClick={() => { setDays(opt.days); setDaysOpen(false); }}
                       className={cn(
-                        "w-full text-left px-4 py-2 text-xs font-medium transition-colors flex items-center justify-between",
+                        "w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center justify-between",
                         days === opt.days ? "bg-blue-600/20 text-blue-400" : "text-slate-300 hover:bg-slate-800 hover:text-white"
                       )}
                     >
