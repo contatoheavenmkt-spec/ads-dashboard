@@ -24,8 +24,8 @@ export function GaugeChart({
   const rotation = (percentage * 180) - 90; // -90 to 90 degrees
 
   return (
-    <div className="flex flex-col items-center justify-center relative py-2">
-      <svg width="180" height="100" viewBox="0 0 180 100" className="overflow-visible">
+    <div className="flex flex-col items-center justify-center relative py-2 w-full">
+      <svg width="100%" height="100" viewBox="0 0 180 100" className="overflow-visible" style={{ maxWidth: 180 }}>
         {/* Background Track */}
         <path
           d="M20 90 A 70 70 0 0 1 160 90"

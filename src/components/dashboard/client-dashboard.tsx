@@ -784,8 +784,9 @@ export function ClientDashboard({
               {ga4Data?.events?.length ?? 0} EVENTOS RASTREADOS
             </span>
           </div>
-          <div className="glass-panel rounded-xl overflow-hidden flex flex-col border-none shadow-2xl overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap min-w-[500px]">
+          <div className="glass-panel rounded-xl overflow-hidden flex flex-col border-none shadow-2xl">
+            <div className="overflow-x-auto no-scrollbar">
+              <table className="w-full text-left text-sm whitespace-nowrap min-w-[500px]">
               <thead className="text-[11px] uppercase tracking-wider text-slate-400 bg-slate-800/50 border-b border-slate-700/50">
                 <tr>
                   <th className="px-4 py-4 font-semibold">#</th>
@@ -813,7 +814,8 @@ export function ClientDashboard({
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -1382,7 +1384,7 @@ export function ClientDashboard({
   // ─── Main render ──────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-screen bg-slate-950 pb-16 md:pb-0">
+    <div className="flex h-screen bg-slate-950 pb-16 md:pb-0 overflow-hidden">
       {/* Sidebar */}
       <ClientSidebar
         platforms={platforms}
@@ -1392,11 +1394,11 @@ export function ClientDashboard({
       />
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
 
         {/* Header */}
         <header className="px-3 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/50 bg-slate-900/40 backdrop-blur-md flex-shrink-0 z-30 relative">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {logo && (
               <img
                 src={logo}
@@ -1405,8 +1407,8 @@ export function ClientDashboard({
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
             )}
-            <div>
-              <h1 className="text-base font-bold tracking-tight text-slate-100 leading-none">{workspaceName}</h1>
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-tight text-slate-100 leading-none truncate">{workspaceName}</h1>
               <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">Dashboard de Performance</p>
             </div>
           </div>
@@ -1514,7 +1516,7 @@ export function ClientDashboard({
         </header>
 
         {/* Content */}
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center flex-1">
               <div className="flex flex-col items-center gap-4">
