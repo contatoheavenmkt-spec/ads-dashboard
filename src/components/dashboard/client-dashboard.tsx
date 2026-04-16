@@ -475,17 +475,17 @@ export function ClientDashboard({
         </div>
 
         {/* Enriched Data Row: Keywords & Demographics */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
           {/* Keywords Table */}
           <div className="lg:col-span-7">
             <KeywordsTable keywords={googleData?.keywords ?? []} />
           </div>
 
           {/* Demographics */}
-          <div className="lg:col-span-5 flex flex-col gap-6">
+          <div className="lg:col-span-5 flex flex-col gap-4 sm:gap-6">
             {(googleData?.demographics.gender.length ?? 0) > 0 && (
-              <div className="glass-panel rounded-2xl p-6 flex flex-col">
-                <div className="flex items-center gap-2 mb-6">
+              <div className="glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <Users size={16} className="text-cyan-400" />
                   <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Demografia: Gênero</h3>
                 </div>
@@ -522,8 +522,8 @@ export function ClientDashboard({
             )}
 
             {(googleData?.demographics.age.length ?? 0) > 0 && (
-              <div className="glass-panel rounded-2xl p-6 flex flex-col">
-                <div className="flex items-center gap-2 mb-6">
+              <div className="glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <PieChartIcon size={16} className="text-cyan-400" />
                   <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Demografia: Idade</h3>
                 </div>
@@ -690,18 +690,18 @@ export function ClientDashboard({
           </div>
 
           {/* Top Events Donut */}
-          <div className="glass-panel rounded-2xl p-6 lg:col-span-3 flex flex-col">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 text-center">Top Eventos</h2>
+          <div className="glass-panel rounded-2xl p-4 sm:p-6 lg:col-span-3 flex flex-col">
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 sm:mb-6 text-center">Top Eventos</h2>
             <TopCampaignsDonut campaigns={eventsAsCampaigns} />
           </div>
         </div>
 
         {/* Demographics Row */}
         {((ga4Data?.demographics.gender.length ?? 0) > 0 || (ga4Data?.demographics.age.length ?? 0) > 0) && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
             {(ga4Data?.demographics.gender.length ?? 0) > 0 && (
-              <div className="lg:col-span-6 glass-panel rounded-2xl p-6 flex flex-col">
-                <div className="flex items-center gap-2 mb-6">
+              <div className="lg:col-span-6 glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <Users size={16} className="text-orange-500" />
                   <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Demografia: Gênero</h3>
                 </div>
@@ -738,8 +738,8 @@ export function ClientDashboard({
             )}
 
             {(ga4Data?.demographics.age.length ?? 0) > 0 && (
-              <div className="lg:col-span-6 glass-panel rounded-2xl p-6 flex flex-col">
-                <div className="flex items-center gap-2 mb-6">
+              <div className="lg:col-span-6 glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <PieChartIcon size={16} className="text-orange-500" />
                   <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Demografia: Idade</h3>
                 </div>
@@ -870,10 +870,10 @@ export function ClientDashboard({
         </div>
 
         {/* Performance + Share */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
 
           {/* Combined Performance Chart */}
-          <div className="lg:col-span-7 glass-panel rounded-2xl p-6 flex flex-col">
+          <div className="lg:col-span-7 glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
             <div className="flex items-center gap-4 mb-4">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Performance Consolidada</h2>
               <div className="flex items-center gap-3 ml-auto">
@@ -894,7 +894,7 @@ export function ClientDashboard({
 
           {/* Share de Plataforma */}
           <div className="lg:col-span-5 flex flex-col gap-4">
-            <div className="glass-panel rounded-2xl p-6 flex flex-col items-center flex-1">
+            <div className="glass-panel rounded-2xl p-4 sm:p-6 flex flex-col items-center flex-1">
               <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest mb-4 w-full text-center">Share de Investimento</h3>
               <div className="w-full aspect-square relative max-w-[140px]">
                 <Pie
@@ -939,7 +939,7 @@ export function ClientDashboard({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
           {/* Meta */}
-          <button onClick={() => setView("meta")} className="glass-panel rounded-2xl p-6 flex flex-col gap-4 hover:border-blue-500/50 border border-transparent transition-all group text-left">
+          <button onClick={() => setView("meta")} className="glass-panel rounded-2xl p-4 sm:p-6 flex flex-col gap-4 hover:border-blue-500/50 border border-transparent transition-all group text-left">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img src="/icon-meta.png" alt="Meta Ads" className="w-6 h-6 object-contain" />
@@ -965,7 +965,7 @@ export function ClientDashboard({
           </button>
 
           {/* Google */}
-          <button onClick={() => setView("google")} className="glass-panel rounded-2xl p-6 flex flex-col gap-4 hover:border-cyan-500/50 border border-transparent transition-all group text-left">
+          <button onClick={() => setView("google")} className="glass-panel rounded-2xl p-4 sm:p-6 flex flex-col gap-4 hover:border-cyan-500/50 border border-transparent transition-all group text-left">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img src="/icon-google-ads.webp" alt="Google Ads" className="w-6 h-6 object-contain" />
@@ -991,7 +991,7 @@ export function ClientDashboard({
           </button>
 
           {/* GA4 */}
-          <button onClick={() => setView("ga4")} className="glass-panel rounded-2xl p-6 flex flex-col gap-4 hover:border-orange-500/50 border border-transparent transition-all group text-left">
+          <button onClick={() => setView("ga4")} className="glass-panel rounded-2xl p-4 sm:p-6 flex flex-col gap-4 hover:border-orange-500/50 border border-transparent transition-all group text-left">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img src="/icon-ga4.png" alt="Google Analytics 4" className="w-6 h-6 object-contain" />
@@ -1048,11 +1048,11 @@ export function ClientDashboard({
       <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* ═══ Row 1: Gauge | Line | Gênero | Faixa Etária (Meta only) ═══ */}
-        {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
 
           {/* Gauge + KPIs */}
           <div className="lg:col-span-3 flex flex-col gap-4">
-            <div className="glass-panel flex-1 rounded-2xl p-6 flex flex-col items-center justify-center">
+            <div className="glass-panel flex-1 rounded-2xl p-4 sm:p-6 flex flex-col items-center justify-center">
               <GaugeChart
                 value={convRate}
                 label="Taxa de Conversão"
@@ -1112,7 +1112,7 @@ export function ClientDashboard({
           </div>
 
           {/* Line Chart */}
-          <div className="lg:col-span-4 glass-panel rounded-2xl p-6 flex flex-col">
+          <div className="lg:col-span-4 glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-1 bg-blue-500 rounded"></div>
@@ -1135,7 +1135,7 @@ export function ClientDashboard({
           </div>
 
           {/* Gênero */}
-          <div className="lg:col-span-2 glass-panel rounded-2xl p-5 flex flex-col items-center">
+          <div className="lg:col-span-2 glass-panel rounded-2xl p-4 sm:p-5 flex flex-col items-center">
             <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest mb-3 w-full text-center">Gênero</h3>
             {gLabels.length > 0 ? (
               <>
@@ -1167,7 +1167,7 @@ export function ClientDashboard({
           </div>
 
           {/* Faixa Etária */}
-          <div className="lg:col-span-3 glass-panel rounded-2xl p-5 flex flex-col items-center">
+          <div className="lg:col-span-3 glass-panel rounded-2xl p-4 sm:p-5 flex flex-col items-center">
             <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest mb-3 w-full text-center">Faixa Etária</h3>
             {aLabels.length > 0 ? (
               <>
@@ -1201,9 +1201,9 @@ export function ClientDashboard({
         </div>}
 
         {/* ═══ Row 2: Anúncios Meta (FULL WIDTH) ═══ */}
-        {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-12 glass-panel rounded-2xl p-6 flex flex-col">
-            <div className="flex items-center justify-between mb-6">
+        {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+          <div className="lg:col-span-12 glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
               <div className="flex items-center gap-3">
                 <h3 className="text-sm font-black text-white/80 uppercase tracking-[0.2em]">Anúncios Ativos</h3>
                 <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 uppercase">Meta Ads</span>
@@ -1285,11 +1285,11 @@ export function ClientDashboard({
         </div>}
 
         {/* ═══ Row 3: Região & Mapa Geográfico (SPLIT, Meta only) ═══ */}
-        {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-4 h-[480px]">
+        {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+          <div className="lg:col-span-4 h-[280px] sm:h-[480px]">
             <RegionList data={regions} title="Alcance por Região" />
           </div>
-          <div className="lg:col-span-8 h-[480px]">
+          <div className="lg:col-span-8 h-[280px] sm:h-[480px]">
             <RegionMap data={regions} title="Inteligência Geográfica" />
           </div>
         </div>}
@@ -1302,17 +1302,17 @@ export function ClientDashboard({
         )}
 
         {/* ═══ Row 5: Painéis laterais — Google Ads + GA4 ═══ */}
-        {(hasGoogle || hasGA4) && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {(hasGoogle || hasGA4) && <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
 
           {/* Google Ads panel */}
-          {hasGoogle && <div className="lg:col-span-6 glass-panel rounded-2xl p-6 flex flex-col border border-cyan-500/10">
+          {hasGoogle && <div className="lg:col-span-6 glass-panel rounded-2xl p-4 sm:p-6 flex flex-col border border-cyan-500/10">
             <div className="flex items-center gap-2 mb-5">
               <div className="w-3 h-3 rounded-full bg-cyan-400"></div>
               <h3 className="text-sm font-bold text-slate-200">Google Ads</h3>
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
               {[
                 { l: "Investimento", v: formatCurrency(gt?.spend ?? 0) },
                 { l: "Conversões", v: formatNumber(gt?.conversions ?? 0) },
@@ -1342,14 +1342,14 @@ export function ClientDashboard({
           </div>}
 
           {/* GA4 panel */}
-          {hasGA4 && <div className="lg:col-span-6 glass-panel rounded-2xl p-6 flex flex-col border border-orange-500/10">
+          {hasGA4 && <div className="lg:col-span-6 glass-panel rounded-2xl p-4 sm:p-6 flex flex-col border border-orange-500/10">
             <div className="flex items-center gap-2 mb-5">
               <div className="w-3 h-3 rounded-full bg-orange-400"></div>
               <h3 className="text-sm font-bold text-slate-200">Google Analytics 4</h3>
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
               {[
                 { l: "Sessões", v: formatNumber(g4t?.sessions ?? 0) },
                 { l: "Usuários", v: formatNumber(g4t?.users ?? 0) },
