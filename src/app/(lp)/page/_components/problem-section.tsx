@@ -148,7 +148,7 @@ export function ProblemSection() {
                 ))}
                 <span className="word-animate-problem text-red-400" data-delay="1460">manualmente?</span>
               </div>
-              <div className="text-lg sm:text-xl md:text-2xl font-normal text-muted-foreground leading-relaxed tracking-tight">
+              <div className="text-lg sm:text-xl md:text-2xl font-normal text-slate-400 leading-relaxed tracking-tight">
                 {[
                   ["Exportar", 1650], ["dados,", 1740], ["montar", 1830], ["planilhas,", 1920],
                   ["formatar", 2010], ["gráficos...", 2100], ["toda", 2250], ["semana", 2340],
@@ -168,7 +168,7 @@ export function ProblemSection() {
 
           <div className="text-center mt-8">
             <div className="mb-3 w-10 sm:w-12 h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent mx-auto" />
-            <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-[.25em] text-muted-foreground/80">
+            <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-[.25em] text-slate-400/80">
               {[["Enquanto", 3500], ["isso,", 3680], ["seus", 3860], ["concorrentes", 4000]].map(([w, d]) => (
                 <span key={w} className="word-animate-problem" data-delay={String(d)}>{w} </span>
               ))}

@@ -61,7 +61,7 @@ export function HeroSection() {
 
             <div
               aria-hidden
-              className="absolute inset-0 -z-10 size-full [background:radial-gradient(125%_125%_at_50%_100%,transparent_0%,var(--background)_75%)]"
+              className="absolute inset-0 -z-10 size-full [background:radial-gradient(125%_125%_at_50%_100%,transparent_0%,#0F172A_75%)]"
             />
 
             <div className="mx-auto max-w-7xl px-6">
@@ -69,13 +69,13 @@ export function HeroSection() {
                 <AnimatedGroup variants={transitionVariants}>
                   <a
                     href="#pricing"
-                    className="hover:bg-background dark:hover:border-t-border bg-muted group mx-auto flex w-fit items-center gap-4 rounded-full border p-1 pl-4 shadow-md shadow-black/5 transition-all duration-300 dark:border-t-white/5 dark:shadow-zinc-950"
+                    className="hover:bg-slate-800/60 border-slate-700/60 bg-slate-800/40 group mx-auto flex w-fit items-center gap-4 rounded-full border p-1 pl-4 shadow-md shadow-black/5 transition-all duration-300"
                   >
-                    <span className="text-foreground text-sm">
+                    <span className="text-slate-200 text-sm">
                       +400 gestores já automatizaram seus relatórios com o Dashfy
                     </span>
-                    <span className="dark:border-background block h-4 w-0.5 border-l bg-white dark:bg-zinc-700" />
-                    <div className="bg-background group-hover:bg-muted size-6 overflow-hidden rounded-full duration-500">
+                    <span className="border-slate-600 block h-4 w-0.5 border-l bg-slate-600" />
+                    <div className="bg-slate-700 group-hover:bg-slate-600 size-6 overflow-hidden rounded-full duration-500">
                       <div className="flex w-12 -translate-x-1/2 duration-500 ease-in-out group-hover:translate-x-0">
                         <span className="flex size-6">
                           <ArrowRight className="m-auto size-3" />
@@ -144,12 +144,12 @@ export function HeroSection() {
               <div className="relative mt-8 overflow-hidden px-2 sm:mt-12 md:mt-20">
                 <div
                   aria-hidden
-                  className="bg-gradient-to-b to-background absolute inset-0 z-10 from-transparent from-35%"
+                  className="bg-gradient-to-b to-[#0F172A] absolute inset-0 z-10 from-transparent from-35%"
                 />
-                <div className="inset-shadow-2xs ring-background dark:inset-shadow-white/20 bg-background relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1">
+                <div className="bg-[#0F172A] border-slate-700/40 relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    className="bg-background relative rounded-2xl w-full h-auto object-contain"
+                    className="bg-[#0F172A] relative rounded-2xl w-full h-auto object-contain"
                     src="/lp/fb5c8476c8e93960c5fc9aae9744b14fb95d526e.png"
                     alt="Dashfy Dashboard"
                   />
@@ -235,7 +235,7 @@ function HeroHeader() {
           className={cn(
             "mx-auto mt-2 max-w-6xl px-6 transition-all duration-300 lg:px-12",
             isScrolled &&
-              "bg-background/50 max-w-4xl rounded-2xl border backdrop-blur-lg lg:px-5"
+              "bg-[#0F172A]/80 max-w-4xl rounded-2xl border border-slate-700/50 backdrop-blur-lg lg:px-5"
           )}
         >
           <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
@@ -274,7 +274,7 @@ function HeroHeader() {
                   <li key={item.name}>
                     <a
                       href={item.href}
-                      className="text-muted-foreground hover:text-accent-foreground block duration-150"
+                      className="text-slate-400 hover:text-white block duration-150"
                     >
                       {item.name}
                     </a>
@@ -285,7 +285,7 @@ function HeroHeader() {
 
             <div
               className={cn(
-                "bg-background mb-6 w-full flex-wrap items-center justify-end space-y-8 rounded-3xl border p-6 shadow-2xl shadow-zinc-300/20 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none dark:shadow-none dark:lg:bg-transparent",
+                "bg-[#0F172A] border-slate-700/60 mb-6 w-full flex-wrap items-center justify-end space-y-8 rounded-3xl border p-6 shadow-2xl shadow-black/40 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none",
                 menuState ? "flex" : "hidden lg:flex"
               )}
             >
@@ -295,7 +295,7 @@ function HeroHeader() {
                     <li key={item.name}>
                       <a
                         href={item.href}
-                        className="text-muted-foreground hover:text-accent-foreground block duration-150"
+                        className="text-slate-400 hover:text-white block duration-150"
                         onClick={() => setMenuState(false)}
                       >
                         {item.name}
