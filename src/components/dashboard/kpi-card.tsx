@@ -28,18 +28,18 @@ export function KpiCard({
   const isPositive = change !== undefined && change >= 0;
 
   return (
-    <div className="glass-panel rounded-xl p-5 flex flex-col justify-between h-36 relative overflow-hidden group">
+    <div className="glass-panel rounded-xl p-3 sm:p-5 flex flex-col justify-between h-24 sm:h-36 relative overflow-hidden group">
       <div className="relative z-10">
         <div className="flex justify-between items-start mb-1">
-          <h3 className="text-xs text-slate-400 font-medium uppercase tracking-wider">{title}</h3>
+          <h3 className="text-[9px] sm:text-xs text-slate-400 font-medium uppercase tracking-wider leading-tight">{title}</h3>
           {Icon && (
             <div className={cn("p-1.5 rounded-lg", iconBg || "bg-slate-800")}>
               <Icon size={14} className={iconColor || "text-slate-400"} />
             </div>
           )}
         </div>
-        <div className="flex items-baseline gap-2">
-          <span className="text-2xl lg:text-3xl font-bold text-slate-100">{value}</span>
+        <div className="flex items-baseline gap-1 sm:gap-2">
+          <span className="text-base sm:text-2xl lg:text-3xl font-bold text-slate-100 leading-tight">{value}</span>
           {change !== undefined && (
             <span className={cn(
               "text-[10px] flex items-center gap-0.5 font-bold px-1.5 py-0.5 rounded-full",

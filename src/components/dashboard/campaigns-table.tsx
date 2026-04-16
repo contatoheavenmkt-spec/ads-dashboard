@@ -58,7 +58,7 @@ export function CampaignsTable({ campaigns, limit, showExport }: CampaignsTableP
   return (
     <div className="glass-panel rounded-xl overflow-hidden flex flex-col border-none shadow-2xl">
       <div className="overflow-x-auto no-scrollbar">
-        <table className="w-full text-left text-sm whitespace-nowrap">
+        <table className="w-full text-left text-sm whitespace-nowrap min-w-[500px]">
           <thead className="text-[11px] uppercase tracking-wider text-slate-400 bg-slate-800/50 border-b border-slate-700/50">
             <tr>
               <th className="px-4 py-4 font-semibold" scope="col">#</th>
