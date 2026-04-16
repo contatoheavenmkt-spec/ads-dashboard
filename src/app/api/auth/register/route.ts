@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { createTrialSubscription } from "@/lib/subscription";
 import { createStripeCustomer } from "@/lib/stripe";
+import { PLANS, type PlanKey } from "@/lib/plans";
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,8 +34,26 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Inicia trial de 7 dias automaticamente
-    await createTrialSubscription(user.id);
+    // Verifica se há compra pendente para este email (Cakto webhook chegou antes do cadastro)
+    const pending = await db.pendingSubscription.findUnique({ where: { email } });
+    if (pending) {
+      const planDef = PLANS[pending.plan as PlanKey];
+      await db.subscription.create({
+        data: {
+          userId: user.id,
+          plan: pending.plan,
+          status: "active",
+          stripeSubscriptionId: pending.orderId,
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          accountsLimit: planDef?.accountsLimit ?? 3,
+        },
+      });
+      await db.pendingSubscription.delete({ where: { email } });
+      console.log(`[register] Plano ${pending.plan} ativado via compra pendente para ${email}`);
+    } else {
+      // Inicia trial de 7 dias automaticamente
+      await createTrialSubscription(user.id);
+    }
 
     // Cria cliente no Stripe (não bloqueia cadastro em caso de falha)
     if (process.env.STRIPE_SECRET_KEY) {

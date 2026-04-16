@@ -113,6 +113,14 @@ model WorkspaceIntegration {
   @@unique([workspaceId, integrationId])
 }
 
+model PendingSubscription {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  plan      String
+  orderId   String
+  createdAt DateTime @default(now())
+}
+
 model AdminLog {
   id          String   @id @default(cuid())
   action      String

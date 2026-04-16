@@ -102,15 +102,26 @@ export async function POST(req: NextRequest) {
       // ── Compra aprovada (one-time ou primeira cobrança de subscription) ─────
       case "purchase_approved":
       case "subscription_created": {
-        const userId = await findUserId(order);
-        if (!userId) {
-          console.warn(`[cakto/webhook] ${event}: usuário não encontrado. utm_content=${order.utm_content} email=${order.customer?.email}`);
-          break;
-        }
-
         const plan = planFromWebhookOrder(order);
         if (!plan) {
           console.warn(`[cakto/webhook] ${event}: plano não identificado. product=${order.product?.name} offer=${order.offer?.name}`);
+          break;
+        }
+
+        const userId = await findUserId(order);
+        if (!userId) {
+          // Usuário ainda não tem conta — salva para ativar no cadastro
+          const email = order.customer?.email as string | undefined;
+          if (email) {
+            await db.pendingSubscription.upsert({
+              where: { email },
+              update: { plan, orderId },
+              create: { email, plan, orderId },
+            });
+            console.log(`[cakto/webhook] ⏳ Pending salvo: email=${email} plan=${plan}`);
+          } else {
+            console.warn(`[cakto/webhook] ${event}: usuário não encontrado e sem email. utm_content=${order.utm_content}`);
+          }
           break;
         }
 
