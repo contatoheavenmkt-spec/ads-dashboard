@@ -294,10 +294,9 @@ export function ClientDashboard({
           ))}
         </div>
 
-        {/* Charts Row — desktop: [Funil | Linha | Donut]; mobile: [Funil|Donut] / [Linha] */}
-        <div className="grid grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-6">
-          {/* Funil — mobile: row1 col1; desktop: row1 cols1-3 */}
-          <div className="row-start-1 col-start-1 col-end-2 lg:col-end-4 glass-panel rounded-2xl p-3 sm:p-6 flex flex-col relative min-h-[190px]">
+        {/* Charts Row — desktop: [Funil|Linha|Donut]; mobile: [Funil|Donut]/[Linha] */}
+        <div className="charts-row gap-3 sm:gap-4 lg:gap-6">
+          <div className="[grid-area:funil] glass-panel rounded-2xl p-3 sm:p-6 flex flex-col relative min-h-[190px] lg:min-h-0">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Funil de Conversão</h2>
             <FunnelChart data={{
               impressions: t?.impressions ?? 0,
@@ -307,16 +306,14 @@ export function ClientDashboard({
               conversionLabel: t && t.purchases > 0 ? "Vendas" : t && t.messages > 0 ? "Conversas" : t && t.leads > 0 ? "Leads" : "Conversões"
             }} />
           </div>
-          {/* Donut — mobile: row1 col2; desktop: row1 cols10-12 */}
-          <div className="row-start-1 col-start-2 col-end-3 lg:col-start-10 lg:col-end-13 glass-panel rounded-2xl p-3 sm:p-6 flex flex-col min-h-[190px]">
+          <div className="[grid-area:donut] glass-panel rounded-2xl p-3 sm:p-6 flex flex-col min-h-[190px] lg:min-h-0">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Top Campanhas</h2>
             <TopCampaignsDonut
               campaigns={metaData?.campaigns ?? []}
               conversionLabel={t && t.purchases > 0 ? "VENDAS" : t && t.messages > 0 ? "CONVERSAS" : "CONVERSÕES"}
             />
           </div>
-          {/* Linha — mobile: row2 full; desktop: row1 cols4-9 */}
-          <div className="row-start-2 col-start-1 col-end-3 lg:row-start-1 lg:col-start-4 lg:col-end-10 glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
+          <div className="[grid-area:linha] glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
             <div className="flex justify-between items-center mb-3 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Performance ao Longo do Tempo</h2>
             </div>
@@ -421,10 +418,9 @@ export function ClientDashboard({
           />
         </div>
 
-        {/* Charts Row — desktop: [Funil | Linha | Donut]; mobile: [Funil|Donut] / [Linha] */}
-        <div className="grid grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-6">
-          {/* Funil — mobile: row1 col1; desktop: row1 cols1-3 */}
-          <div className="row-start-1 col-start-1 col-end-2 lg:col-end-4 glass-panel rounded-2xl p-3 sm:p-6 flex flex-col relative min-h-[190px]">
+        {/* Charts Row — desktop: [Funil|Linha|Donut]; mobile: [Funil|Donut]/[Linha] */}
+        <div className="charts-row gap-3 sm:gap-4 lg:gap-6">
+          <div className="[grid-area:funil] glass-panel rounded-2xl p-3 sm:p-6 flex flex-col relative min-h-[190px] lg:min-h-0">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Funil de Conversão</h2>
             <FunnelChart data={{
               impressions: t?.impressions ?? 0,
@@ -434,16 +430,14 @@ export function ClientDashboard({
               conversionLabel: t && t.revenue > 0 ? "Vendas" : "Conversões",
             }} />
           </div>
-          {/* Donut — mobile: row1 col2; desktop: row1 cols10-12 */}
-          <div className="row-start-1 col-start-2 col-end-3 lg:col-start-10 lg:col-end-13 glass-panel rounded-2xl p-3 sm:p-6 flex flex-col min-h-[190px]">
+          <div className="[grid-area:donut] glass-panel rounded-2xl p-3 sm:p-6 flex flex-col min-h-[190px] lg:min-h-0">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Top Campanhas</h2>
             <TopCampaignsDonut
               campaigns={googleData?.campaigns ?? []}
               conversionLabel={t && t.revenue > 0 ? "Vendas" : "Conversões"}
             />
           </div>
-          {/* Linha — mobile: row2 full; desktop: row1 cols4-9 */}
-          <div className="row-start-2 col-start-1 col-end-3 lg:row-start-1 lg:col-start-4 lg:col-end-10 glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
+          <div className="[grid-area:linha] glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
             <div className="flex justify-between items-center mb-3 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Performance ao Longo do Tempo</h2>
             </div>
@@ -646,10 +640,9 @@ export function ClientDashboard({
           />
         </div>
 
-        {/* Charts Row — desktop: [Funil | Linha | Donut]; mobile: [Funil|Donut] / [Linha] */}
-        <div className="grid grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-6">
-          {/* Funil — mobile: row1 col1; desktop: row1 cols1-3 */}
-          <div className="row-start-1 col-start-1 col-end-2 lg:col-end-4 glass-panel rounded-2xl p-3 sm:p-6 flex flex-col relative min-h-[190px]">
+        {/* Charts Row — desktop: [Funil|Linha|Donut]; mobile: [Funil|Donut]/[Linha] */}
+        <div className="charts-row gap-3 sm:gap-4 lg:gap-6">
+          <div className="[grid-area:funil] glass-panel rounded-2xl p-3 sm:p-6 flex flex-col relative min-h-[190px] lg:min-h-0">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Funil de Audiência</h2>
             <FunnelChart data={{
               impressions: t?.sessions ?? 0,
@@ -663,13 +656,11 @@ export function ClientDashboard({
               rateLabel2: "Conv",
             }} />
           </div>
-          {/* Donut — mobile: row1 col2; desktop: row1 cols10-12 */}
-          <div className="row-start-1 col-start-2 col-end-3 lg:col-start-10 lg:col-end-13 glass-panel rounded-2xl p-3 sm:p-6 flex flex-col min-h-[190px]">
+          <div className="[grid-area:donut] glass-panel rounded-2xl p-3 sm:p-6 flex flex-col min-h-[190px] lg:min-h-0">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Top Eventos</h2>
             <TopCampaignsDonut campaigns={eventsAsCampaigns} />
           </div>
-          {/* Linha — mobile: row2 full; desktop: row1 cols4-9 */}
-          <div className="row-start-2 col-start-1 col-end-3 lg:row-start-1 lg:col-start-4 lg:col-end-10 glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
+          <div className="[grid-area:linha] glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
             <div className="flex justify-between items-center mb-3 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Audiência ao Longo do Tempo</h2>
             </div>

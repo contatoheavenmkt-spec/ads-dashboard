@@ -61,6 +61,20 @@ html {
   }
 }
 
+/* Charts row: mobile [Funil|Donut]/[Linha], desktop [Funil|Linha|Donut] */
+.charts-row {
+  display: grid;
+  grid-template-areas: 'funil donut' 'linha linha';
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (min-width: 1024px) {
+  .charts-row {
+    grid-template-areas: 'funil linha donut';
+    grid-template-columns: 3fr 6fr 3fr;
+  }
+}
+
 @layer utilities {
   .glass-panel {
     background: rgba(30, 41, 59, 0.7); /* slate-800 with opacity */
