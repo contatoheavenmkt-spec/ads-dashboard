@@ -67,6 +67,10 @@ html {
   grid-template-areas: 'funil donut' 'linha linha';
   grid-template-columns: 1fr 1fr;
 }
+/* min-width:0 prevents grid items from expanding beyond their fr share */
+.charts-row > * {
+  min-width: 0;
+}
 
 @media (min-width: 1024px) {
   .charts-row {
