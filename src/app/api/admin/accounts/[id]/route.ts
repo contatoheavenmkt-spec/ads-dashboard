@@ -37,7 +37,7 @@ export async function GET(
   });
 
   // Nunca retornar password hash
-  const { password: _pw, ...safeUser } = user as any;
+  const { password: _pw, ...safeUser } = user;
   return NextResponse.json({ ...safeUser, adminLogs: logs });
 }
 
@@ -59,11 +59,12 @@ export async function PATCH(
   const ip = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? undefined;
 
   // Update user fields
-  const userUpdate: any = {};
-  if (name !== undefined) userUpdate.name = name;
-  if (role !== undefined) userUpdate.role = role;
-  if (onboardingCompleted !== undefined) userUpdate.onboardingCompleted = onboardingCompleted;
-  if (forcePasswordChange !== undefined) userUpdate.forcePasswordChange = forcePasswordChange;
+  const userUpdate = {
+    ...(name !== undefined && { name }),
+    ...(role !== undefined && { role }),
+    ...(onboardingCompleted !== undefined && { onboardingCompleted }),
+    ...(forcePasswordChange !== undefined && { forcePasswordChange }),
+  };
 
   if (Object.keys(userUpdate).length > 0) {
     await db.user.update({ where: { id }, data: userUpdate });
@@ -72,12 +73,13 @@ export async function PATCH(
   // Update subscription fields
   if (plan !== undefined || status !== undefined || trialEndsAt !== undefined || currentPeriodEnd !== undefined) {
     const planDef = plan ? PLANS[plan] : null;
-    const subUpdate: any = {};
-    if (plan !== undefined) subUpdate.plan = plan;
-    if (status !== undefined) subUpdate.status = status;
-    if (trialEndsAt !== undefined) subUpdate.trialEndsAt = trialEndsAt ? new Date(trialEndsAt) : null;
-    if (currentPeriodEnd !== undefined) subUpdate.currentPeriodEnd = currentPeriodEnd ? new Date(currentPeriodEnd) : null;
-    if (planDef) subUpdate.accountsLimit = planDef.accountsLimit;
+    const subUpdate = {
+      ...(plan !== undefined && { plan }),
+      ...(status !== undefined && { status }),
+      ...(trialEndsAt !== undefined && { trialEndsAt: trialEndsAt ? new Date(trialEndsAt) : null }),
+      ...(currentPeriodEnd !== undefined && { currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd) : null }),
+      ...(planDef && { accountsLimit: planDef.accountsLimit }),
+    };
 
     await db.subscription.upsert({
       where: { userId: id },

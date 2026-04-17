@@ -8,29 +8,32 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  // Resolve workspaceId do banco (token JWT pode estar em cache)
-  const user = await db.user.findUnique({
-    where: { id: session.user.id },
-    select: { workspaceId: true },
-  });
-  const workspaceId = user?.workspaceId ?? (session.user as { workspaceId?: string }).workspaceId;
+  try {
+    const user = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { workspaceId: true },
+    });
+    const workspaceId = user?.workspaceId ?? (session.user as { workspaceId?: string }).workspaceId;
 
-  if (!workspaceId) {
-    return NextResponse.json([]);
-  }
+    if (!workspaceId) {
+      return NextResponse.json([]);
+    }
 
-  // Retorna APENAS integrações do workspace do usuário logado
-  const workspaceIntegrations = await db.workspaceIntegration.findMany({
-    where: { workspaceId },
-    include: { integration: true },
-  });
-
-  const integrations = workspaceIntegrations
-    .map((wi) => wi.integration)
-    .sort((a, b) => {
-      if (a.platform !== b.platform) return a.platform.localeCompare(b.platform);
-      return a.name.localeCompare(b.name);
+    const workspaceIntegrations = await db.workspaceIntegration.findMany({
+      where: { workspaceId },
+      include: { integration: true },
     });
 
-  return NextResponse.json(integrations);
+    const integrations = workspaceIntegrations
+      .map((wi) => wi.integration)
+      .sort((a, b) => {
+        if (a.platform !== b.platform) return a.platform.localeCompare(b.platform);
+        return a.name.localeCompare(b.name);
+      });
+
+    return NextResponse.json(integrations);
+  } catch (err: any) {
+    console.error("[accounts/GET] Erro:", err?.message ?? err);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  }
 }

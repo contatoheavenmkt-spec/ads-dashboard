@@ -232,7 +232,6 @@ export function RegionMap({ data }: RegionBaseProps) {
       const heatPoints: [number, number, number][] = [];
       data.forEach((r) => {
         const coords = findCoords(r.name);
-        console.log(`[mapa] "${r.name}" →`, coords ? "✓" : "sem coordenada");
         if (coords) {
           const intensity = r.value / maxVal;
           heatPoints.push([coords[0], coords[1], intensity]);

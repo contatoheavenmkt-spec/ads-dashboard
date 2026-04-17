@@ -31,19 +31,24 @@ export async function GET(req: NextRequest) {
     where.subscription = { ...(where.subscription ?? {}), status };
   }
 
-  const [users, total] = await Promise.all([
-    db.user.findMany({
-      where,
-      include: {
-        subscription: true,
-        _count: { select: { metaConnections: true, googleConnections: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      skip: offset,
-    }),
-    db.user.count({ where }),
-  ]);
+  try {
+    const [users, total] = await Promise.all([
+      db.user.findMany({
+        where,
+        include: {
+          subscription: true,
+          _count: { select: { metaConnections: true, googleConnections: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+      db.user.count({ where }),
+    ]);
 
-  return NextResponse.json({ users, total, limit, offset });
+    return NextResponse.json({ users, total, limit, offset });
+  } catch (err: any) {
+    console.error("[admin/accounts/GET] Erro:", err?.message ?? err);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  }
 }

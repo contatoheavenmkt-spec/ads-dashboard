@@ -3,7 +3,33 @@
     "allow": [
       "Bash(find \"c:\\\\Users\\\\tutif\\\\Desktop\\\\ads-dashboard\\\\src\\\\app\\\\\\(agency\\)\\\\dashboard\" -type f)",
       "Bash(curl -s \"http://localhost:3000/api/google/metrics?days=7\")",
-      "Bash(curl -s -o /dev/null -w %{http_code} http://localhost:3000/api/ga4/metrics?days=7)"
+      "Bash(curl -s -o /dev/null -w %{http_code} http://localhost:3000/api/ga4/metrics?days=7)",
+      "Bash(curl -s 'https://api.cakto.com.br/public_api/offers/?limit=20' -H 'Authorization: Bearer gZKs2zq6NYobxi7RJQ5xsc2A63iswn')",
+      "Bash(python3 -c ':*)",
+      "Bash(curl -s 'https://api.cakto.com.br/public_api/webhook/?limit=10' -H 'Authorization: Bearer gZKs2zq6NYobxi7RJQ5xsc2A63iswn')",
+      "Bash(curl -s -X POST 'https://api.cakto.com.br/public_api/webhook/event_test/44652/?event_id=3' -H 'Authorization: Bearer gZKs2zq6NYobxi7RJQ5xsc2A63iswn')",
+      "Bash(curl -s -X POST 'https://api.cakto.com.br/public_api/webhook/event_test/44652/?event_id=purchase_approved' -H 'Authorization: Bearer gZKs2zq6NYobxi7RJQ5xsc2A63iswn')",
+      "Bash(curl -s 'https://api.cakto.com.br/public_api/webhook/event_history/?limit=5&ordering=-sentAt' -H 'Authorization: Bearer gZKs2zq6NYobxi7RJQ5xsc2A63iswn')",
+      "Bash(gh repo:*)",
+      "Read(//tmp/lp-dashfy/src/app/**)",
+      "Read(//c/tmp/lp-dashfy/src/app/**)",
+      "Read(//mnt/c/Users/tutif/Desktop/ads-dashboard/**)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); deps={**d.get\\('dependencies',{}\\),**d.get\\('devDependencies',{}\\)}; [print\\(k,v\\) for k,v in deps.items\\(\\) if any\\(x in k for x in ['framer','tsparticles','number-flow','motion']\\)]\")",
+      "Bash(cp /tmp/lp-dashfy/src/assets/*.png \"c:/Users/tutif/Desktop/ads-dashboard/public/lp/\")",
+      "Bash(cp /tmp/lp-dashfy/src/assets/*.jpg \"c:/Users/tutif/Desktop/ads-dashboard/public/lp/\")",
+      "Bash(grep -n \"before\\\\|after\\\\|slider\\\\|compare\\\\|bolinha\\\\|circle\\\\|split\" c:/Users/tutif/Desktop/ads-dashboard/src/app/\\\\\\(lp\\\\\\)/page/_components/*.tsx -i)",
+      "Read(//tmp/original-dashfy/src/app/components/**)",
+      "Read(//c/tmp/original-dashfy/src/app/components/**)",
+      "Bash(wc -l /tmp/original-dashfy/src/app/components/*.tsx)",
+      "Bash(grep -n \"to-background\\\\|from-background\\\\|bg-background\\\\|to-\\\\[#0F172A\\\\]\" c:/Users/tutif/Desktop/ads-dashboard/src/app/\\\\\\(lp\\\\\\)/page/_components/*.tsx)",
+      "Bash(grep -n \"to-background\\\\|bg-background\\\\|from-background\\\\|var\\(--background\\)\\\\|bg-muted\\\\|text-foreground\\\\|text-muted\" c:/Users/tutif/Desktop/ads-dashboard/src/app/\\\\\\(lp\\\\\\)/page/_components/*.tsx)",
+      "Bash(git commit -m ':*)",
+      "Read(//root/project/node_modules/tailwindcss/**)",
+      "WebFetch(domain:dashfys.com.br)",
+      "Bash(grep -l '\"use client\"' /c/Users/tutif/Desktop/ads-dashboard/src/app/*/*/page.tsx /c/Users/tutif/Desktop/ads-dashboard/src/app/**/page.tsx)"
+    ],
+    "additionalDirectories": [
+      "\\tmp\\lp-dashfy\\src\\app\\components"
     ]
   }
 }

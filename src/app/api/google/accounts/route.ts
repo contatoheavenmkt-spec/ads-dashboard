@@ -8,35 +8,22 @@ const REQUIRED_SCOPE = "https://www.googleapis.com/auth/adwords";
 // ─── Token management ──────────────────────────────────────────────
 
 async function getValidToken(userId: string): Promise<{ accessToken: string; scopes: string[] } | null> {
-  console.log("[google/accounts] === GETTING VALID TOKEN ===");
-
   const conn = await db.googleConnection.findFirst({ where: { userId }, orderBy: { connectedAt: "desc" } });
-  if (!conn) {
-    console.log("[google/accounts] ❌ No Google connection found in DB");
-    return null;
-  }
-
-  console.log("[google/accounts] Connection found for:", conn.email);
-  console.log("[google/accounts] Refresh token present:", !!conn.refreshToken);
-  console.log("[google/accounts] Scopes stored:", conn.scopes);
+  if (!conn) return null;
 
   const connScopes = (conn.scopes ?? "").split(" ");
-  const hasScope = connScopes.includes(REQUIRED_SCOPE);
-  console.log("[google/accounts] Has required scope:", hasScope);
-
-  if (!hasScope) {
-    console.error("[google/accounts] ❌ Token missing required scope:", connScopes);
+  if (!connScopes.includes(REQUIRED_SCOPE)) {
+    console.error("[google/accounts] Token sem escopo adwords:", connScopes);
     return null;
   }
 
-  // Force refresh if expiresAt is missing/invalid OR token is expired
+  // Refresh se expirado ou sem data de expiração
   const expiresAt = conn.expiresAt instanceof Date ? conn.expiresAt : null;
   const isExpired = !expiresAt || isNaN(expiresAt.getTime()) || expiresAt <= new Date();
 
   if (isExpired) {
-    console.log("[google/accounts] Token expired or invalid expiresAt, refreshing...");
     if (!conn.refreshToken) {
-      console.error("[google/accounts] ❌ No refresh token available");
+      console.error("[google/accounts] Sem refresh token disponível");
       return null;
     }
     const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -51,10 +38,9 @@ async function getValidToken(userId: string): Promise<{ accessToken: string; sco
     });
     const data = await res.json();
     if (data.error) {
-      console.error("[google/accounts] ❌ Token refresh failed:", data.error, data.error_description);
+      console.error("[google/accounts] Falha ao renovar token:", data.error, data.error_description);
       return null;
     }
-    console.log("[google/accounts] ✅ Token refreshed successfully");
 
     await db.googleConnection.update({
       where: { id: conn.id },
@@ -67,14 +53,12 @@ async function getValidToken(userId: string): Promise<{ accessToken: string; sco
     return { accessToken: data.access_token, scopes: connScopes };
   }
 
-  console.log("[google/accounts] ✅ Valid token obtained (not expired)");
   return { accessToken: conn.accessToken, scopes: connScopes };
 }
 
 // ─── GET handler ──────────────────────────────────────────────────
 
 export async function GET() {
-  console.log("\n[google/accounts] ========== GET /api/google/accounts ==========");
 
   const session = await auth();
   if (!session?.user?.id) {
@@ -100,9 +84,8 @@ export async function GET() {
     });
   }
 
-  // listAccessibleCustomers — NO login-customer-id header (causes 404 if included)
+  // listAccessibleCustomers — sem login-customer-id (causa 404 se incluído)
   const listUrl = `${GADS_API}/customers:listAccessibleCustomers`;
-  console.log("[google/accounts] Calling:", listUrl);
 
   let listRes;
   try {
@@ -119,10 +102,7 @@ export async function GET() {
     return NextResponse.json({ accounts: [], error: `Erro de conexão: ${err.message}` });
   }
 
-  console.log("[google/accounts] Response status:", listRes.status, listRes.statusText);
-
   const rawText = await listRes.text();
-  console.log("[google/accounts] Response body:", rawText.slice(0, 600));
 
   if (rawText.trim().startsWith("<!DOCTYPE") || rawText.includes("<html")) {
     console.error("[google/accounts] ❌ Got HTML instead of JSON");
@@ -155,8 +135,6 @@ export async function GET() {
 
     return NextResponse.json({ accounts: [], error: `Google Ads API: ${errorMsg}` });
   }
-
-  console.log("[google/accounts] ✅ resourceNames:", listData.resourceNames);
 
   const resourceNames: string[] = listData.resourceNames ?? [];
   const customerIds = resourceNames.map((r) => r.split("/")[1]);

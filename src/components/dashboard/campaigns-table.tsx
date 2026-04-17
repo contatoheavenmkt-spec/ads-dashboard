@@ -1,7 +1,7 @@
 "use client";
 
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
-import { Download, ExternalLink, Target, MousePointer, Eye, TrendingUp, Zap } from "lucide-react";
+import { Download, TrendingUp, Zap } from "lucide-react";
 
 interface Campaign {
   id: string;

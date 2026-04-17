@@ -40,13 +40,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
     }
 
-    let customerId = (user as any).stripeCustomerId as string | null ?? null;
+    let customerId = user.stripeCustomerId ?? null;
     if (!customerId) {
       console.log("[checkout] Criando Stripe customer para", user.email);
       customerId = await createStripeCustomer(user.id, user.email, user.name);
       await db.user.update({
         where: { id: user.id },
-        data: { stripeCustomerId: customerId } as any,
+        data: { stripeCustomerId: customerId },
       });
     }
 
