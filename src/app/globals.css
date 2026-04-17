@@ -61,21 +61,22 @@ html {
   }
 }
 
-/* Charts row: mobile [Funil|Donut]/[Linha], desktop [Funil|Linha|Donut] */
+/* Charts row: mobile stacked, desktop [Funil 3fr | Linha 6fr | Donut 3fr] */
 .charts-row {
   display: grid;
-  grid-template-areas: 'funil donut' 'linha linha';
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
+  gap: 1rem;
 }
-/* min-width:0 prevents grid items from expanding beyond their fr share */
+
+/* min-width:0 prevents grid items from overflowing their fr share */
 .charts-row > * {
   min-width: 0;
 }
 
 @media (min-width: 1024px) {
   .charts-row {
-    grid-template-areas: 'funil linha donut';
     grid-template-columns: 3fr 6fr 3fr;
+    gap: 1.5rem;
   }
 }
 

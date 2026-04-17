@@ -294,9 +294,9 @@ export function ClientDashboard({
           ))}
         </div>
 
-        {/* Charts Row — igual ao admin: grid-cols-1 mobile, grid-cols-12 desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-          <div className="lg:col-span-3 min-w-0 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col relative">
+        {/* Charts Row — CSS puro via .charts-row em globals.css */}
+        <div className="charts-row">
+          <div className="glass-panel rounded-2xl p-3 sm:p-5 flex flex-col relative">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Funil de Conversão</h2>
             <FunnelChart data={{
               impressions: t?.impressions ?? 0,
@@ -306,7 +306,7 @@ export function ClientDashboard({
               conversionLabel: t && t.purchases > 0 ? "Vendas" : t && t.messages > 0 ? "Conversas" : t && t.leads > 0 ? "Leads" : "Conversões"
             }} />
           </div>
-          <div className="lg:col-span-6 min-w-0 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
+          <div className="glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
             <div className="flex justify-between items-center mb-3 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Performance ao Longo do Tempo</h2>
             </div>
@@ -325,7 +325,7 @@ export function ClientDashboard({
               </div>
             </div>
           </div>
-          <div className="lg:col-span-3 min-w-0 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
+          <div className="glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Top Campanhas</h2>
             <TopCampaignsDonut
               campaigns={metaData?.campaigns ?? []}
@@ -418,9 +418,9 @@ export function ClientDashboard({
           />
         </div>
 
-        {/* Charts Row — igual ao admin */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-          <div className="lg:col-span-3 min-w-0 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col relative">
+        {/* Charts Row — CSS puro via .charts-row em globals.css */}
+        <div className="charts-row">
+          <div className="glass-panel rounded-2xl p-3 sm:p-5 flex flex-col relative">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Funil de Conversão</h2>
             <FunnelChart data={{
               impressions: t?.impressions ?? 0,
@@ -430,7 +430,7 @@ export function ClientDashboard({
               conversionLabel: t && t.revenue > 0 ? "Vendas" : "Conversões",
             }} />
           </div>
-          <div className="lg:col-span-6 min-w-0 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
+          <div className="glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
             <div className="flex justify-between items-center mb-3 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Performance ao Longo do Tempo</h2>
             </div>
@@ -455,7 +455,7 @@ export function ClientDashboard({
               </div>
             </div>
           </div>
-          <div className="lg:col-span-3 min-w-0 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
+          <div className="glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Top Campanhas</h2>
             <TopCampaignsDonut
               campaigns={googleData?.campaigns ?? []}
@@ -640,9 +640,9 @@ export function ClientDashboard({
           />
         </div>
 
-        {/* Charts Row — igual ao admin */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-          <div className="lg:col-span-3 min-w-0 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col relative">
+        {/* Charts Row — CSS puro via .charts-row em globals.css */}
+        <div className="charts-row">
+          <div className="glass-panel rounded-2xl p-3 sm:p-5 flex flex-col relative">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Funil de Audiência</h2>
             <FunnelChart data={{
               impressions: t?.sessions ?? 0,
@@ -656,7 +656,7 @@ export function ClientDashboard({
               rateLabel2: "Conv",
             }} />
           </div>
-          <div className="lg:col-span-6 min-w-0 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
+          <div className="glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
             <div className="flex justify-between items-center mb-3 sm:mb-6">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center w-full">Audiência ao Longo do Tempo</h2>
             </div>
@@ -675,7 +675,7 @@ export function ClientDashboard({
               </div>
             </div>
           </div>
-          <div className="lg:col-span-3 min-w-0 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
+          <div className="glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Top Eventos</h2>
             <TopCampaignsDonut campaigns={eventsAsCampaigns} />
           </div>
