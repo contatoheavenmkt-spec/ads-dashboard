@@ -281,7 +281,7 @@ export function ClientDashboard({
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 pb-8 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* Top KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid gap-3 sm:gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
           {kpis.map((k) => (
             <KpiCard
               key={k.title}
@@ -381,7 +381,7 @@ export function ClientDashboard({
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 pb-8 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* KPIs */}
-        <div className={`grid gap-3 sm:gap-4 ${t && t.revenue > 0 ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-3"}`}>
+        <div className="grid gap-3 sm:gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
           <KpiCard
             title="Investimento"
             value={formatCurrency(t?.spend ?? 0)}
@@ -603,7 +603,7 @@ export function ClientDashboard({
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 pb-8 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        <div className="grid gap-3 sm:gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
           <KpiCard
             title="Sessões"
             value={formatNumber(t?.sessions ?? 0)}
