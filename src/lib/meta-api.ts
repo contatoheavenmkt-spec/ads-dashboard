@@ -490,6 +490,58 @@ export async function getAgeBreakdown(
     .sort((a, b) => b.impressions - a.impressions);
 }
 
+// ─── Saldo (pré-pago) ────────────────────────────────────────────────────────
+
+export interface MetaAccountBalance {
+  /** "act_XXX" */
+  adAccountId: string;
+  name: string;
+  /** Conta é pré-pago? Determinado por `funding_source_details.type`. */
+  isPrepaid: boolean;
+  /** Saldo restante em reais (somente pré-pago). null pra contas pós-pago. */
+  balance: number | null;
+  /** Valor já gasto contra o saldo atual (pré-pago). */
+  amountSpent: number | null;
+  currency: string;
+}
+
+/**
+ * Lê o saldo de uma conta Meta. Só faz sentido pra contas pré-pagas — em
+ * contas pós-pagas (cartão/boleto faturado), o campo `balance` da API vem
+ * 0 ou inválido porque Meta nunca calculou um "saldo restante".
+ *
+ * Como detectar pré-pago: `funding_source_details.type` retorna
+ * "PREPAID_FUNDS" pra contas pré-pago. Outros valores (CREDIT_CARD,
+ * INVOICE, etc.) são pós-pago — devolvemos null em balance pra sinalizar
+ * que não dá pra alertar.
+ */
+export async function getAccountBalance(
+  adAccountId: string,
+  accessToken: string,
+): Promise<MetaAccountBalance> {
+  const fields = "name,balance,amount_spent,currency,funding_source_details";
+  const url = `${GRAPH_API}/${adAccountId}?fields=${fields}&access_token=${accessToken}`;
+
+  const res = await fetch(url, { cache: "no-store" });
+  const data = await res.json();
+  if (data.error) throw new Error(`Meta Balance [${adAccountId}]: ${data.error.message}`);
+
+  // balance e amount_spent vêm como string em centavos (ex.: "12345" = R$ 123,45)
+  const balanceCents = Number(data.balance ?? 0);
+  const spentCents = Number(data.amount_spent ?? 0);
+  const fundingType = data.funding_source_details?.type ?? "";
+  const isPrepaid = fundingType === "PREPAID_FUNDS";
+
+  return {
+    adAccountId,
+    name: String(data.name ?? ""),
+    isPrepaid,
+    balance: isPrepaid ? balanceCents / 100 : null,
+    amountSpent: isPrepaid ? spentCents / 100 : null,
+    currency: String(data.currency ?? "BRL"),
+  };
+}
+
 /**
  * Agregadores de insights
  */
