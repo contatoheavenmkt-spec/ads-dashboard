@@ -24,18 +24,29 @@ function nextPeriodEnd(): Date {
 /** Identifica o userId a partir dos dados do pedido.
  *  Estratégia 1: utm_content (passado na URL de checkout)
  *  Estratégia 2: email do cliente (normalizado)
+ *
+ *  Defesa em profundidade: se `utm_content` aponta para userId X, mas o email
+ *  do cliente está em userId Y, recusa o match por utm_content (poderia ser
+ *  forjado a partir de logs vazados). Só aceita utm_content quando o email
+ *  bate ou quando não há email no payload.
  */
 async function findUserId(order: any): Promise<string | null> {
   const utmUserId = order.utm_content as string | undefined;
+  const email = normalizeEmail(order.customer?.email);
+
   if (utmUserId) {
     const user = await db.user.findUnique({
       where: { id: utmUserId },
-      select: { id: true },
+      select: { id: true, email: true },
     });
-    if (user) return user.id;
+    if (user) {
+      // Se há email no payload, confirma que bate com o user — bloqueia ataque
+      // de "usar utm_content de outro usuário" caso esse valor vaze em logs.
+      if (!email || user.email === email) return user.id;
+      console.warn(`[cakto/webhook] utm_content=${utmUserId} não bate com email=${email} — ignorado`);
+    }
   }
 
-  const email = normalizeEmail(order.customer?.email);
   if (email) {
     const user = await db.user.findUnique({
       where: { email },
@@ -77,24 +88,24 @@ async function activateSubscription(
 // ─── Webhook handler ──────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  // Falha fechada em produção: sem secret configurado, recusa.
+  // Falha fechada SEMPRE — incluindo dev. Antes aceitava sem secret em dev,
+  // mas em VPS rodando com NODE_ENV ausente isso virou um buraco grande
+  // (qualquer um postava { event: purchase_approved, utm_content: <userId> }
+  // e ativava plano premium sem pagar). Agora secret é obrigatório.
   const webhookSecret = process.env.CAKTO_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    if (process.env.NODE_ENV === "production") {
-      console.error("[cakto/webhook] CAKTO_WEBHOOK_SECRET não configurado em produção — recusando");
-      return NextResponse.json({ error: "Webhook secret not configured" }, { status: 503 });
-    }
-    console.warn("[cakto/webhook] CAKTO_WEBHOOK_SECRET ausente em dev — aceitando sem verificação");
-  } else {
-    const receivedSecret =
-      req.headers.get("x-cakto-secret") ??
-      req.headers.get("x-webhook-secret") ??
-      req.headers.get("authorization")?.replace("Bearer ", "");
+    console.error("[cakto/webhook] CAKTO_WEBHOOK_SECRET não configurado — recusando");
+    return NextResponse.json({ error: "Webhook secret not configured" }, { status: 503 });
+  }
 
-    if (!safeEqual(receivedSecret, webhookSecret)) {
-      console.warn("[cakto/webhook] Secret inválido — requisição rejeitada");
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const receivedSecret =
+    req.headers.get("x-cakto-secret") ??
+    req.headers.get("x-webhook-secret") ??
+    req.headers.get("authorization")?.replace("Bearer ", "");
+
+  if (!safeEqual(receivedSecret, webhookSecret)) {
+    console.warn("[cakto/webhook] Secret inválido — requisição rejeitada");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   let body: any;

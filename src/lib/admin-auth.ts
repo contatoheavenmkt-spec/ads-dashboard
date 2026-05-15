@@ -7,7 +7,7 @@
  * chamado em route handlers (Node.js runtime).
  */
 
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import type { NextRequest, NextResponse } from "next/server";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -49,7 +49,8 @@ export function verifyAdminToken(token: string): boolean {
     if (!payload.startsWith("admin:")) return false;
 
     const expectedSig = createHmac("sha256", adminSecret()).update(payload).digest("hex");
-    if (sig !== expectedSig) return false;
+    if (sig.length !== expectedSig.length) return false;
+    if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return false;
 
     const ts = parseInt(payload.slice("admin:".length), 10);
     if (isNaN(ts) || Date.now() - ts > TTL_MS) return false;
