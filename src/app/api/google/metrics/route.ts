@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { getCachedMetrics, setCachedMetrics } from "@/lib/metrics-cache";
+import { getInsightsDateRange } from "@/lib/meta-api";
 import { requireMetricsAccess } from "@/lib/workspace-access";
 
 const GADS_API = "https://googleads.googleapis.com/v22";
@@ -234,12 +235,9 @@ export async function GET(req: NextRequest) {
   const envLoginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.replace(/-/g, "");
   const loginCustomerId = envLoginCustomerId || customerId.replace(/-/g, "");
   const days = parseInt(req.nextUrl.searchParams.get("days") ?? "30");
-  const today = new Date();
-  const startDate = new Date(today);
-  startDate.setDate(startDate.getDate() - days);
-  const fmt = (d: Date) => d.toISOString().split("T")[0];
-  const dateFrom = fmt(startDate);
-  const dateTo = fmt(today);
+  // Compartilha o mesmo helper do Meta: janela inclui hoje (sem off-by-one)
+  // e usa fuso BR para casar com o que o cliente vê no Google Ads UI.
+  const { since: dateFrom, until: dateTo } = getInsightsDateRange(days);
   const campaignId = req.nextUrl.searchParams.get("campaignId");
 
   // ── 1. Time Series ────────────────────────────────────────────

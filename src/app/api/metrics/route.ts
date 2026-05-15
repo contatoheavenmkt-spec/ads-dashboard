@@ -100,9 +100,11 @@ export async function GET(req: NextRequest) {
   const timeSeries = await getAccountsInsights(accountIds, token, days);
   const totals = aggregateInsights(timeSeries);
 
-  // Campanhas (concatena de todas as contas)
+  // Campanhas (concatena de todas as contas) — respeita o período do filtro.
+  // Antes usava `last_30d` hardcoded e a tabela mostrava 30d mesmo quando
+  // o usuário escolhia "Últimos 7 dias", divergindo dos totais.
   const campaignResults = await Promise.allSettled(
-    accountIds.map((id) => getAccountCampaigns(id, token)),
+    accountIds.map((id) => getAccountCampaigns(id, token, days)),
   );
   const campaigns = campaignResults
     .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof getAccountCampaigns>>> => r.status === "fulfilled")

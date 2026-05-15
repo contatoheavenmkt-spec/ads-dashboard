@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getStoredMetaToken } from "@/lib/meta-token";
+import { getInsightsDateRange } from "@/lib/meta-api";
 import { requireMetricsAccess } from "@/lib/workspace-access";
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";
@@ -10,16 +11,14 @@ async function getRegionBreakdown(
   accessToken: string,
   days: number
 ): Promise<{ name: string; value: number }[]> {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const sinceStr = since.toISOString().split("T")[0];
-  const untilStr = new Date().toISOString().split("T")[0];
+  const { since, until } = getInsightsDateRange(days);
 
   async function fetchBreakdown(breakdown: string) {
     const url =
       `${GRAPH_API}/${adAccountId}/insights` +
       `?fields=reach,impressions&breakdowns=${breakdown}` +
-      `&time_range={"since":"${sinceStr}","until":"${untilStr}"}` +
+      `&time_range={"since":"${since}","until":"${until}"}` +
+      `&use_account_attribution_setting=true` +
       `&limit=200` +
       `&access_token=${accessToken}`;
     const res = await fetch(url, { cache: "no-store" });

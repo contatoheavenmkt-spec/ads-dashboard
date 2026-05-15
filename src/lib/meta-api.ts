@@ -3,6 +3,40 @@
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
+// Fuso usado para calcular o intervalo de datas. Meta interpreta a string
+// de data no fuso da conta de anúncios; como nossas contas são BR, fixamos
+// aqui. Gerar com `toISOString()` (UTC) puro causa off-by-one entre 21h-00h
+// no horário local.
+const ACCOUNT_TIMEZONE = "America/Sao_Paulo";
+
+/**
+ * Intervalo de datas (YYYY-MM-DD) no fuso da conta para uma janela de
+ * `days` dias **incluindo hoje**. Para days=1 retorna o mesmo dia em
+ * since/until (apenas hoje).
+ */
+export function getInsightsDateRange(days: number): { since: string; until: string } {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: ACCOUNT_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const until = fmt.format(new Date());
+  // Parsar `until` (YYYY-MM-DD) e subtrair (days - 1) dias usando UTC midnight
+  // para evitar surpresas com DST. O resultado é uma data calendário BR.
+  const [y, m, d] = until.split("-").map(Number);
+  const ref = new Date(Date.UTC(y, m - 1, d));
+  ref.setUTCDate(ref.getUTCDate() - Math.max(0, days - 1));
+  const since = ref.toISOString().split("T")[0];
+  return { since, until };
+}
+
+// Anexado a toda chamada `/insights`. Sem isso, Meta usa o default da request
+// (varia entre contas) e o número de conversões diverge do que o cliente vê
+// no Ads Manager. Com `use_account_attribution_setting=true`, herda o que o
+// usuário configurou na própria conta.
+const ATTRIBUTION_PARAM = "use_account_attribution_setting=true";
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface MetaAdAccount {
@@ -55,16 +89,44 @@ export interface MetaCampaign {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function parseActions(
+/**
+ * Lê UMA action específica (não soma várias). Retorna o valor da primeira
+ * action cujo type bate. Se a primária não existir, tenta os fallbacks na ordem.
+ *
+ * Por que não somar? Porque no Meta a action `purchase` JÁ É a agregação de
+ * `offsite_conversion.fb_pixel_purchase` + `onsite_conversion.purchase` + outras
+ * origens. Somar inflaria a métrica 2-3x e divergiria do que o Ads Manager mostra.
+ */
+function readAction(
   actions: Array<{ action_type: string; value: string }> | undefined,
-  types: string | string[]
+  primary: string,
+  fallbacks: string[] = [],
 ): number {
-  if (!actions) return 0;
-  const filterTypes = Array.isArray(types) ? types : [types];
-  return actions
-    .filter((a) => filterTypes.includes(a.action_type))
-    .reduce((acc, a) => acc + Number(a.value ?? 0), 0);
+  if (!actions || actions.length === 0) return 0;
+  const tryType = (type: string) => {
+    const found = actions.find((a) => a.action_type === type);
+    return found ? Number(found.value ?? 0) : null;
+  };
+  const main = tryType(primary);
+  if (main !== null && !isNaN(main)) return main;
+  for (const fb of fallbacks) {
+    const v = tryType(fb);
+    if (v !== null && !isNaN(v)) return v;
+  }
+  return 0;
 }
+
+// Aliases canônicos usados em todo o módulo. Trocar aqui se a Meta mudar o nome.
+const ACTION_PURCHASE = "purchase";
+const ACTION_PURCHASE_FALLBACKS = ["omni_purchase", "offsite_conversion.fb_pixel_purchase", "onsite_conversion.purchase"];
+
+const ACTION_LEAD = "lead";
+const ACTION_LEAD_FALLBACKS = ["omni_lead", "onsite_conversion.lead", "on-site_conversion.lead"];
+
+// Para mensagens, usamos "conversa iniciada" como a métrica de conversão.
+// As outras (welcome viewed, first reply) são eventos do funil, não conversões.
+const ACTION_MESSAGE = "onsite_conversion.messaging_conversation_started_7d";
+const ACTION_MESSAGE_FALLBACKS = ["messaging_conversation_started_7d", "on-site_conversion.messaging_conversation_started_7d"];
 
 // ─── Ad Accounts ──────────────────────────────────────────────────────────────
 
@@ -105,17 +167,15 @@ export async function getAccountInsights(
   accessToken: string,
   days: number = 30
 ): Promise<MetaInsightDay[]> {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const sinceStr = since.toISOString().split("T")[0];
-  const untilStr = new Date().toISOString().split("T")[0];
+  const { since, until } = getInsightsDateRange(days);
 
   const fields = "spend,impressions,reach,clicks,actions,action_values";
   const url =
     `${GRAPH_API}/${adAccountId}/insights` +
     `?fields=${fields}` +
     `&time_increment=1` +
-    `&time_range={"since":"${sinceStr}","until":"${untilStr}"}` +
+    `&time_range={"since":"${since}","until":"${until}"}` +
+    `&${ATTRIBUTION_PARAM}` +
     `&limit=90` +
     `&access_token=${accessToken}`;
 
@@ -133,15 +193,9 @@ export async function getAccountInsights(
     action_values?: Array<{ action_type: string; value: string }>;
     date_start: string;
   }>).map((row) => {
-    const purchases = parseActions(row.actions, ["purchase", "offsite_conversion.fb_pixel_purchase", "onsite_conversion.purchase"]);
-    const leads = parseActions(row.actions, ["lead", "on-site_conversion.lead", "onsite_conversion.lead"]);
-    const messages = parseActions(row.actions, [
-      "messaging_conversation_started_7d",
-      "onsite_conversion.messaging_conversation_started_7d",
-      "on-site_conversion.messaging_conversation_started_7d",
-      "onsite_conversion.messaging_welcome_message_viewed_7d",
-      "messaging_first_reply_7d"
-    ]);
+    const purchases = readAction(row.actions, ACTION_PURCHASE, ACTION_PURCHASE_FALLBACKS);
+    const leads = readAction(row.actions, ACTION_LEAD, ACTION_LEAD_FALLBACKS);
+    const messages = readAction(row.actions, ACTION_MESSAGE, ACTION_MESSAGE_FALLBACKS);
 
     return {
       date: row.date_start,
@@ -153,7 +207,7 @@ export async function getAccountInsights(
       leads,
       messages,
       conversions: purchases + leads + messages,
-      revenue: parseActions(row.action_values, ["purchase", "offsite_conversion.fb_pixel_purchase", "onsite_conversion.purchase"]),
+      revenue: readAction(row.action_values, ACTION_PURCHASE, ACTION_PURCHASE_FALLBACKS),
     };
   });
 }
@@ -163,17 +217,15 @@ export async function getCampaignInsights(
   accessToken: string,
   days: number = 30
 ): Promise<MetaInsightDay[]> {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const sinceStr = since.toISOString().split("T")[0];
-  const untilStr = new Date().toISOString().split("T")[0];
+  const { since, until } = getInsightsDateRange(days);
 
   const fields = "spend,impressions,reach,clicks,actions,action_values";
   const url =
     `${GRAPH_API}/${campaignId}/insights` +
     `?fields=${fields}` +
     `&time_increment=1` +
-    `&time_range={"since":"${sinceStr}","until":"${untilStr}"}` +
+    `&time_range={"since":"${since}","until":"${until}"}` +
+    `&${ATTRIBUTION_PARAM}` +
     `&limit=90` +
     `&access_token=${accessToken}`;
 
@@ -191,15 +243,9 @@ export async function getCampaignInsights(
     action_values?: Array<{ action_type: string; value: string }>;
     date_start: string;
   }>).map((row) => {
-    const purchases = parseActions(row.actions, ["purchase", "offsite_conversion.fb_pixel_purchase", "onsite_conversion.purchase"]);
-    const leads = parseActions(row.actions, ["lead", "on-site_conversion.lead", "onsite_conversion.lead"]);
-    const messages = parseActions(row.actions, [
-      "messaging_conversation_started_7d",
-      "onsite_conversion.messaging_conversation_started_7d",
-      "on-site_conversion.messaging_conversation_started_7d",
-      "onsite_conversion.messaging_welcome_message_viewed_7d",
-      "messaging_first_reply_7d"
-    ]);
+    const purchases = readAction(row.actions, ACTION_PURCHASE, ACTION_PURCHASE_FALLBACKS);
+    const leads = readAction(row.actions, ACTION_LEAD, ACTION_LEAD_FALLBACKS);
+    const messages = readAction(row.actions, ACTION_MESSAGE, ACTION_MESSAGE_FALLBACKS);
 
     return {
       date: row.date_start,
@@ -211,7 +257,7 @@ export async function getCampaignInsights(
       leads,
       messages,
       conversions: purchases + leads + messages,
-      revenue: parseActions(row.action_values, ["purchase", "offsite_conversion.fb_pixel_purchase", "onsite_conversion.purchase", "purchase_value"]),
+      revenue: readAction(row.action_values, ACTION_PURCHASE, ACTION_PURCHASE_FALLBACKS),
     };
   });
 }
@@ -220,13 +266,22 @@ export async function getCampaignInsights(
 
 export async function getAccountCampaigns(
   adAccountId: string,
-  accessToken: string
+  accessToken: string,
+  days: number = 30
 ): Promise<MetaCampaign[]> {
+  const { since, until } = getInsightsDateRange(days);
   const insightFields = "spend,impressions,clicks,actions,action_values";
-  const fields = `id,name,status,objective,insights.date_preset(last_30d){${insightFields}}`;
+  // Sub-field parameters do Graph API seguem o padrão `field.param(value)`.
+  // time_range respeita o filtro do usuário (antes era last_30d hardcoded);
+  // use_account_attribution_setting herda a janela de atribuição que o cliente
+  // tem configurada no Ads Manager (sem isso, o número de conversões diverge).
+  const insightParams =
+    `time_range({"since":"${since}","until":"${until}"})` +
+    `.use_account_attribution_setting(true)`;
+  const fields = `id,name,status,objective,insights.${insightParams}{${insightFields}}`;
   const url =
     `${GRAPH_API}/${adAccountId}/campaigns` +
-    `?fields=${fields}&limit=50&access_token=${accessToken}`;
+    `?fields=${encodeURIComponent(fields)}&limit=50&access_token=${accessToken}`;
 
   const res = await fetch(url, { cache: "no-store" });
   const data = await res.json();
@@ -244,20 +299,14 @@ export async function getAccountCampaigns(
     const spend = Number(ins?.spend ?? 0);
     const impressions = Number(ins?.impressions ?? 0);
     const clicks = Number(ins?.clicks ?? 0);
-    const purchases = parseActions(ins?.actions, ["purchase", "offsite_conversion.fb_pixel_purchase", "onsite_conversion.purchase"]);
-    const leads = parseActions(ins?.actions, ["lead", "on-site_conversion.lead", "onsite_conversion.lead"]);
-    const messages = parseActions(ins?.actions, [
-      "messaging_conversation_started_7d",
-      "onsite_conversion.messaging_conversation_started_7d",
-      "on-site_conversion.messaging_conversation_started_7d",
-      "onsite_conversion.messaging_welcome_message_viewed_7d",
-      "messaging_first_reply_7d"
-    ]);
-    
+    const purchases = readAction(ins?.actions, ACTION_PURCHASE, ACTION_PURCHASE_FALLBACKS);
+    const leads = readAction(ins?.actions, ACTION_LEAD, ACTION_LEAD_FALLBACKS);
+    const messages = readAction(ins?.actions, ACTION_MESSAGE, ACTION_MESSAGE_FALLBACKS);
+
     // Se tiver mensagens, ou se o objetivo for MESSAGES/ENGAGEMENT
     const isMessaging = messages > 0 || c.objective === "MESSAGES" || c.objective === "OUTCOME_MESSAGING" || c.objective === "OUTCOME_ENGAGEMENT";
     const conversions = purchases + leads + messages;
-    const revenue = parseActions(ins?.action_values, ["purchase", "offsite_conversion.fb_pixel_purchase", "onsite_conversion.purchase"]);
+    const revenue = readAction(ins?.action_values, ACTION_PURCHASE, ACTION_PURCHASE_FALLBACKS);
 
     return {
       id: c.id,
@@ -334,8 +383,15 @@ export async function getAdCreatives(
   accessToken: string,
   days: number = 30
 ): Promise<MetaAdCreative[]> {
+  const { since, until } = getInsightsDateRange(days);
   const insightFields = "impressions,clicks,spend,actions";
-  const fields = `id,name,status,creative{thumbnail_url,image_url},insights.date_preset(last_${days}d){${insightFields}}`;
+  // date_preset só aceita valores enumerados (last_7d/last_30d/...), então
+  // values arbitrários como 15 quebravam silenciosamente. time_range aceita
+  // qualquer janela e ainda casa com o que o usuário escolhe na dash.
+  const insightParams =
+    `time_range({"since":"${since}","until":"${until}"})` +
+    `.use_account_attribution_setting(true)`;
+  const fields = `id,name,status,creative{thumbnail_url,image_url},insights.${insightParams}{${insightFields}}`;
   const url =
     `${GRAPH_API}/${adAccountId}/ads` +
     `?fields=${encodeURIComponent(fields)}&limit=30&access_token=${accessToken}`;
@@ -352,15 +408,9 @@ export async function getAdCreatives(
     insights?: { data: Array<{ impressions: string; clicks: string; spend: string; actions?: Array<{ action_type: string; value: string }> }> };
   }>).map((ad) => {
     const ins = ad.insights?.data?.[0];
-    const purchases = parseActions(ins?.actions, ["purchase", "offsite_conversion.fb_pixel_purchase", "onsite_conversion.purchase"]);
-    const leads = parseActions(ins?.actions, ["lead", "on-site_conversion.lead", "onsite_conversion.lead"]);
-    const messages = parseActions(ins?.actions, [
-      "messaging_conversation_started_7d",
-      "onsite_conversion.messaging_conversation_started_7d",
-      "on-site_conversion.messaging_conversation_started_7d",
-      "onsite_conversion.messaging_welcome_message_viewed_7d",
-      "messaging_first_reply_7d"
-    ]);
+    const purchases = readAction(ins?.actions, ACTION_PURCHASE, ACTION_PURCHASE_FALLBACKS);
+    const leads = readAction(ins?.actions, ACTION_LEAD, ACTION_LEAD_FALLBACKS);
+    const messages = readAction(ins?.actions, ACTION_MESSAGE, ACTION_MESSAGE_FALLBACKS);
 
     const isMessaging = messages > 0;
     const conversions = purchases + leads + messages;
@@ -395,13 +445,12 @@ export async function getGenderBreakdown(
   accessToken: string,
   days: number = 30
 ): Promise<DemographicBreakdown[]> {
-  const since = new Date(); since.setDate(since.getDate() - days);
-  const sinceStr = since.toISOString().split("T")[0];
-  const untilStr = new Date().toISOString().split("T")[0];
+  const { since, until } = getInsightsDateRange(days);
   const url =
     `${GRAPH_API}/${adAccountId}/insights` +
     `?fields=impressions,clicks&breakdowns=gender` +
-    `&time_range={"since":"${sinceStr}","until":"${untilStr}"}` +
+    `&time_range={"since":"${since}","until":"${until}"}` +
+    `&${ATTRIBUTION_PARAM}` +
     `&access_token=${accessToken}`;
 
   const res = await fetch(url, { cache: "no-store" });
@@ -420,13 +469,12 @@ export async function getAgeBreakdown(
   accessToken: string,
   days: number = 30
 ): Promise<DemographicBreakdown[]> {
-  const since = new Date(); since.setDate(since.getDate() - days);
-  const sinceStr = since.toISOString().split("T")[0];
-  const untilStr = new Date().toISOString().split("T")[0];
+  const { since, until } = getInsightsDateRange(days);
   const url =
     `${GRAPH_API}/${adAccountId}/insights` +
     `?fields=impressions,clicks&breakdowns=age` +
-    `&time_range={"since":"${sinceStr}","until":"${untilStr}"}` +
+    `&time_range={"since":"${since}","until":"${until}"}` +
+    `&${ATTRIBUTION_PARAM}` +
     `&access_token=${accessToken}`;
 
   const res = await fetch(url, { cache: "no-store" });
