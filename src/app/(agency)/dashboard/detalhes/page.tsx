@@ -6,7 +6,7 @@ import { GaugeChart } from "@/components/dashboard/gauge-chart";
 import { PerformanceChart } from "@/components/charts/performance-chart";
 import { RegionList, RegionMap } from "@/components/dashboard/region-heatmap";
 import { Pie } from "react-chartjs-2";
-import { formatNumber, formatCurrency } from "@/lib/utils";
+import { formatNumber, formatCurrency, resolveDays } from "@/lib/utils";
 import { Loader2, Search, Target, MousePointer2, Zap } from "lucide-react";
 import Link from "next/link";
 import { KeywordsTable } from "@/components/dashboard/keywords-table";
@@ -77,15 +77,16 @@ export default function DetalhesPage() {
     const metaAccountId = isGoogleSelected ? null : selectedAccount?.adAccountId ?? null;
     const googleAccountId = isGoogleSelected ? selectedAccount.adAccountId : null;
 
-    const metaParams = new URLSearchParams({ days: String(days) });
+    const effectiveDays = resolveDays(days);
+    const metaParams = new URLSearchParams({ days: String(effectiveDays) });
     if (metaAccountId) metaParams.set("adAccountId", metaAccountId);
     if (selectedCampaign && !isGoogleSelected) metaParams.set("campaignId", selectedCampaign.id);
 
-    const googleParams = new URLSearchParams({ days: String(days) });
+    const googleParams = new URLSearchParams({ days: String(effectiveDays) });
     if (googleAccountId) googleParams.set("adAccountId", googleAccountId);
     if (selectedCampaign && isGoogleSelected) googleParams.set("campaignId", selectedCampaign.id);
 
-    const ga4Params = new URLSearchParams({ days: String(days) });
+    const ga4Params = new URLSearchParams({ days: String(effectiveDays) });
     if (googleAccountId) ga4Params.set("adAccountId", googleAccountId);
 
     // Quando uma conta específica está selecionada, busca apenas dados da plataforma correspondente

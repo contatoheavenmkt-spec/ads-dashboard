@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PerformanceChart } from "@/components/charts/performance-chart";
-import { formatCurrency, formatNumber } from "@/lib/utils";
+import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
 import { Pie } from "react-chartjs-2";
 import { Loader2, TrendingUp, Zap } from "lucide-react";
 import Link from "next/link";
@@ -103,15 +103,16 @@ export default function DashboardOverviewPage() {
     const googleAccountId = selectedAccount?.platform === "google" ? selectedAccount.adAccountId : null;
 
     const force = refreshKey > 0;
-    const metaParams = new URLSearchParams({ days: String(days) });
+    const effectiveDays = resolveDays(days);
+    const metaParams = new URLSearchParams({ days: String(effectiveDays) });
     if (metaAccountId) metaParams.set("adAccountId", metaAccountId);
     if (force) metaParams.set("force", "1");
 
-    const googleParams = new URLSearchParams({ days: String(days) });
+    const googleParams = new URLSearchParams({ days: String(effectiveDays) });
     if (googleAccountId) googleParams.set("adAccountId", googleAccountId);
     if (force) googleParams.set("force", "1");
 
-    const ga4Params = new URLSearchParams({ days: String(days) });
+    const ga4Params = new URLSearchParams({ days: String(effectiveDays) });
     if (googleAccountId) ga4Params.set("adAccountId", googleAccountId);
 
     Promise.all([

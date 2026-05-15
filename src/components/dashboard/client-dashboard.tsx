@@ -10,7 +10,7 @@ import { GaugeChart } from "@/components/dashboard/gauge-chart";
 import { KeywordsTable } from "@/components/dashboard/keywords-table";
 import { RegionList, RegionMap } from "@/components/dashboard/region-heatmap";
 import { ClientSidebar, ClientView } from "@/components/layout/client-sidebar";
-import { formatCurrency, formatNumber } from "@/lib/utils";
+import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
 import {
   Loader2, LayoutDashboard, Calendar, ChevronDown, Check,
   Download, Users, PieChart as PieChartIcon,
@@ -40,10 +40,14 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointE
 const GENDER_COLORS = ["#3b82f6", "#93c5fd", "#1e40af"];
 const AGE_COLORS = ["#1e3a8a", "#1e40af", "#2563eb", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe"];
 
+// days = -1 é o sentinela "Este mês" — convertido via resolveDays() antes
+// do fetch. Sentinela permite manter o rótulo distinto quando o dia do mês
+// coincide com 7/15/30.
 const PERIOD_OPTIONS = [
   { label: "Hoje", days: 1 },
   { label: "Últimos 7 dias", days: 7 },
   { label: "Últimos 15 dias", days: 15 },
+  { label: "Este mês", days: -1 },
   { label: "Últimos 30 dias", days: 30 },
   { label: "Últimos 90 dias", days: 90 },
 ];
@@ -194,10 +198,11 @@ export function ClientDashboard({
     const needsDemographics = view === "detalhes" && hasMeta;
     const needsRegions = view === "detalhes" && hasMeta;
 
-    const metaParams = new URLSearchParams({ workspaceId, days: String(days) });
+    const effectiveDays = resolveDays(days);
+    const metaParams = new URLSearchParams({ workspaceId, days: String(effectiveDays) });
     if (selectedCampaign) metaParams.set("campaignId", selectedCampaign.id);
-    const googleParams = new URLSearchParams({ workspaceId, days: String(days) });
-    const ga4Params = new URLSearchParams({ workspaceId, days: String(days) });
+    const googleParams = new URLSearchParams({ workspaceId, days: String(effectiveDays) });
+    const ga4Params = new URLSearchParams({ workspaceId, days: String(effectiveDays) });
 
     Promise.all([
       needsMeta ? safeFetch(`/api/metrics?${metaParams}`) : Promise.resolve(null),

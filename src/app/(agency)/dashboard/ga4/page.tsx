@@ -6,7 +6,7 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PerformanceChart } from "@/components/charts/performance-chart";
 import { FunnelChart } from "@/components/charts/funnel-chart";
 import { TopCampaignsDonut } from "@/components/charts/top-campaigns-donut";
-import { formatNumber } from "@/lib/utils";
+import { formatNumber, resolveDays } from "@/lib/utils";
 import { Loader2, LayoutDashboard, Users, PieChart as PieChartIcon, Zap } from "lucide-react";
 import Link from "next/link";
 import { Pie } from "react-chartjs-2";
@@ -52,7 +52,7 @@ export default function GA4Page() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/ga4/metrics?days=${days}`)
+    fetch(`/api/ga4/metrics?days=${resolveDays(days)}`)
       .then(r => {
         if (!r.ok) return null;
         return r.json();

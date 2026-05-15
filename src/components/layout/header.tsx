@@ -45,10 +45,14 @@ interface HeaderProps {
   isRefreshing?: boolean;
 }
 
+// days = -1 é o sentinela "Este mês" — convertido para today.getDate() no
+// consumer antes de chamar a API. Permite manter label distinto quando o dia
+// do mês coincide com 7/15/30.
 const PERIOD_OPTIONS = [
   { label: "Hoje", days: 1 },
   { label: "Últimos 7 dias", days: 7 },
   { label: "Últimos 15 dias", days: 15 },
+  { label: "Este mês", days: -1 },
   { label: "Últimos 30 dias", days: 30 },
   { label: "Últimos 90 dias", days: 90 },
 ];

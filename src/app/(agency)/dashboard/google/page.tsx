@@ -7,7 +7,7 @@ import { PerformanceChart } from "@/components/charts/performance-chart";
 import { FunnelChart } from "@/components/charts/funnel-chart";
 import { TopCampaignsDonut } from "@/components/charts/top-campaigns-donut";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
-import { formatCurrency, formatNumber } from "@/lib/utils";
+import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
 import { Loader2, LayoutDashboard, Users, PieChart as PieChartIcon, Zap } from "lucide-react";
 import Link from "next/link";
 import { KeywordsTable } from "@/components/dashboard/keywords-table";
@@ -66,7 +66,7 @@ export default function GoogleAdsPage() {
   useEffect(() => {
     setLoading(true);
     const force = refreshKey > 0;
-    const params = new URLSearchParams({ days: String(days) });
+    const params = new URLSearchParams({ days: String(resolveDays(days)) });
     if (selectedAccount) params.set("adAccountId", selectedAccount.adAccountId);
     if (selectedCampaign) params.set("campaignId", selectedCampaign.id);
     if (force) params.set("force", "1");
