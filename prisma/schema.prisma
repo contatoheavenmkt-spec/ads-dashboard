@@ -22,6 +22,7 @@ model User {
   subscription         Subscription?
   metaConnections      MetaConnection[]
   googleConnections    GoogleConnection[]
+  pushSubscriptions    PushSubscription[]
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 }
@@ -181,6 +182,66 @@ model ErrorLog {
   @@index([path])
   @@index([createdAt])
   @@index([resolved])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  // Snapshot de user.role no momento da criação. Usado pra segmentar
+  // notificações (AGENCY recebe avisos de plano/integração; CLIENT recebe
+  // avisos de campanha/saldo/resumo). Atualizado se o user mudar de role.
+  role      String
+  // workspaceId snapshot — preenchido só pra users CLIENT, viabiliza
+  // disparar notificação "do workspace X" sem consultar User a cada vez.
+  workspaceId String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([role])
+  @@index([workspaceId])
+}
+
+model NotificationLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  workspaceId String?
+  type        String   // "campaign_active", "balance_low", "daily_digest", etc.
+  title       String
+  body        String
+  url         String?
+  // Chave de deduplicação por dia. Ex.: "campaign_active:cmp_123:2026-05-15".
+  // Antes de enviar checamos se já existe NotificationLog com esse dedupeKey
+  // pra evitar spammar o mesmo aviso a cada tick do cron.
+  dedupeKey   String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([dedupeKey])
+  @@index([createdAt])
+}
+
+model CampaignSnapshot {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  campaignId      String
+  // Snapshot do que o cron viu na última passada. Usado pra detectar
+  // mudança de status (ACTIVE→PAUSED, novo campaign aparecendo, etc.).
+  name            String
+  status          String
+  spend           Float    @default(0)
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@unique([workspaceId, campaignId])
+  @@index([workspaceId])
 }
 
 model ActiveSession {

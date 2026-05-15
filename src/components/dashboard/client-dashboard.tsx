@@ -10,6 +10,7 @@ import { GaugeChart } from "@/components/dashboard/gauge-chart";
 import { KeywordsTable } from "@/components/dashboard/keywords-table";
 import { RegionList, RegionMap } from "@/components/dashboard/region-heatmap";
 import { ClientSidebar, ClientView } from "@/components/layout/client-sidebar";
+import { NotificationOptIn } from "@/components/pwa/notification-opt-in";
 import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
 import {
   Loader2, LayoutDashboard, Calendar, ChevronDown, Check,
@@ -1521,6 +1522,7 @@ export function ClientDashboard({
         </div>
 
       </div>
+      <NotificationOptIn />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { PlanGuard } from "@/components/dashboard/plan-guard";
+import { NotificationOptIn } from "@/components/pwa/notification-opt-in";
 
 export default function AgencyLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -10,6 +11,7 @@ export default function AgencyLayout({ children }: { children: React.ReactNode }
           {children}
         </PlanGuard>
       </main>
+      <NotificationOptIn />
     </div>
   );
 }
