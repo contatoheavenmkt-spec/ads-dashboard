@@ -44,7 +44,9 @@ interface Workspace {
   slug: string;
   logo: string | null;
   publicAccess: boolean;
-  sharePassword: string | null;
+  // O backend não retorna mais o hash da senha (segurança).
+  // Apenas indica se existe uma senha definida.
+  hasPassword: boolean;
   integrations: Array<{ integration: Integration }>;
   clients: Client[];
 }
@@ -143,8 +145,10 @@ export default function WorkspaceDetailPage() {
       setName(ws.name);
       setLogo(ws.logo ?? "");
       setPublicAccess(ws.publicAccess);
-      setSharePassword(ws.sharePassword ?? "");
-      setUsePassword(!!ws.sharePassword);
+      // Backend não retorna a senha — só `hasPassword`. Input começa vazio:
+      // se o admin não digitar nada, a senha atual é preservada no save.
+      setSharePassword("");
+      setUsePassword(!!ws.hasPassword);
       setSelected(ws.integrations.map((i: { integration: Integration }) => i.integration.id));
       setClients(ws.clients ?? []);
     });
@@ -158,16 +162,27 @@ export default function WorkspaceDetailPage() {
 
   async function handleSave() {
     setSaving(true);
+
+    // Lógica do sharePassword:
+    //  - toggle desligado    → sharePassword: null (limpa a senha)
+    //  - toggle ligado + input vazio   → omitir o campo (mantém a senha atual)
+    //  - toggle ligado + input preenchido → manda a nova senha (backend faz hash)
+    const body: Record<string, unknown> = {
+      name,
+      logo: logo || null,
+      publicAccess,
+      integrationIds: selected,
+    };
+    if (!usePassword) {
+      body.sharePassword = null;
+    } else if (sharePassword.length > 0) {
+      body.sharePassword = sharePassword;
+    }
+
     await fetch(`/api/workspaces/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        logo: logo || null,
-        publicAccess,
-        sharePassword: usePassword && sharePassword ? sharePassword : null,
-        integrationIds: selected,
-      }),
+      body: JSON.stringify(body),
     });
     setSaving(false);
     router.push("/workspaces");
@@ -207,8 +222,8 @@ export default function WorkspaceDetailPage() {
       setName(ws.name);
       setLogo(ws.logo ?? "");
       setPublicAccess(ws.publicAccess);
-      setSharePassword(ws.sharePassword ?? "");
-      setUsePassword(!!ws.sharePassword);
+      setSharePassword("");
+      setUsePassword(!!ws.hasPassword);
       setSelected(ws.integrations.map((i: { integration: Integration }) => i.integration.id));
       setClients(ws.clients ?? []);
     }
@@ -375,9 +390,13 @@ export default function WorkspaceDetailPage() {
                 <DarkInput
                   value={sharePassword}
                   onChange={(e) => setSharePassword(e.target.value)}
-                  placeholder="Senha de acesso ao link"
+                  placeholder={workspace.hasPassword ? "(senha definida — digite para alterar)" : "Senha de acesso ao link"}
                 />
-                <p className="text-[10px] text-slate-500">O cliente precisará digitar esta senha ao acessar o link.</p>
+                <p className="text-[10px] text-slate-500">
+                  {workspace.hasPassword
+                    ? "Deixe em branco para manter a senha atual; digite para definir uma nova."
+                    : "O cliente precisará digitar esta senha ao acessar o link."}
+                </p>
               </div>
             )}
           </Section>
