@@ -38,6 +38,8 @@ export async function GET(req: NextRequest) {
       db.user.findMany({
         where,
         // select explícito — NUNCA expor o campo `password` (bcrypt hash).
+        // stripeCustomerId não é mais usado (sistema migrou para Cakto), mas
+        // a coluna ainda existe no DB — omitimos do retorno.
         select: {
           id: true,
           email: true,
@@ -46,7 +48,6 @@ export async function GET(req: NextRequest) {
           workspaceId: true,
           onboardingCompleted: true,
           forcePasswordChange: true,
-          stripeCustomerId: true,
           createdAt: true,
           updatedAt: true,
           subscription: true,

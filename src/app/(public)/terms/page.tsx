@@ -102,7 +102,7 @@ export default function TermsPage() {
           um dos planos pagos disponíveis.
         </p>
         <p>
-          Os pagamentos são processados pelo <strong className="text-slate-200">Stripe</strong> e
+          Os pagamentos são processados pela <strong className="text-slate-200">Cakto</strong> e
           cobrados mensalmente, conforme o plano escolhido. O cancelamento pode ser realizado a
           qualquer momento pelo painel de assinatura, sem multas ou fidelidade.
         </p>

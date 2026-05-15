@@ -20,10 +20,11 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 interface UserDetail {
   id: string; email: string; name: string | null; role: string;
   onboardingCompleted: boolean; forcePasswordChange: boolean;
-  stripeCustomerId: string | null; createdAt: string; updatedAt: string;
+  createdAt: string; updatedAt: string;
   subscription: {
     plan: string; status: string; trialEndsAt: string | null;
     currentPeriodEnd: string | null; accountsLimit: number;
+    // ID externo da Cakto (campo no DB ainda se chama stripeSubscriptionId).
     stripeSubscriptionId: string | null;
   } | null;
   metaConnections: { id: string; name: string | null; fbUserId: string; createdAt: string; expiresAt: string | null }[];

@@ -58,7 +58,7 @@ export default async function SubscriptionsPage() {
         <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-slate-800/50 border-b border-slate-700/50">
             <tr>
-              {["Usuário", "Plano", "Status", "Trial Até", "Período Até", "Stripe ID"].map((h) => (
+              {["Usuário", "Plano", "Status", "Trial Até", "Período Até", "Cakto Order ID"].map((h) => (
                 <th key={h} className="px-5 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">{h}</th>
               ))}
             </tr>

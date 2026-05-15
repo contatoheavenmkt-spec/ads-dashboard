@@ -56,7 +56,7 @@ export default function PrivacyPage() {
             { label: "Dados de integração OAuth", desc: "Tokens de acesso e refresh tokens fornecidos pelas plataformas Meta e Google, necessários para buscar métricas de anúncios com sua autorização." },
             { label: "Dados de métricas de anúncios", desc: "Informações de desempenho de campanhas (gasto, impressões, cliques, conversões, ROAS) obtidas diretamente via API das plataformas autorizadas." },
             { label: "Dados de uso", desc: "Informações sobre como você utiliza a plataforma, como páginas acessadas e ações realizadas, para melhorar a experiência." },
-            { label: "Dados de cobrança", desc: "Processados exclusivamente pelo Stripe. Não armazenamos dados de cartão de crédito em nossos servidores." },
+            { label: "Dados de cobrança", desc: "Processados exclusivamente pela Cakto. Não armazenamos dados de cartão de crédito em nossos servidores." },
           ].map((item) => (
             <li key={item.label} className="flex gap-2">
               <span className="text-blue-400 mt-0.5 shrink-0">•</span>
@@ -136,7 +136,7 @@ export default function PrivacyPage() {
         </p>
         <ul className="list-none space-y-1">
           {[
-            "Com o Stripe, para processamento de pagamentos de assinatura (apenas dados necessários para cobrança).",
+            "Com a Cakto, para processamento de pagamentos de assinatura (apenas dados necessários para cobrança).",
             "Com as APIs da Meta e Google, para buscar métricas das contas autorizadas por você.",
             "Por obrigação legal, caso exigido por autoridade competente.",
           ].map((item) => (

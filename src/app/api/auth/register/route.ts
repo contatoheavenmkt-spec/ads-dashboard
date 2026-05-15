@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { createTrialSubscription } from "@/lib/subscription";
-import { createStripeCustomer } from "@/lib/stripe";
 import { PLANS, type PlanKey } from "@/lib/plans";
 import { normalizeEmail } from "@/lib/email";
 
@@ -57,19 +56,6 @@ export async function POST(req: NextRequest) {
       console.log(`[register] Plano ${pending.plan} ativado via compra pendente para ${email}`);
     } else {
       await createTrialSubscription(user.id);
-    }
-
-    // Cria cliente no Stripe (não bloqueia cadastro em caso de falha)
-    if (process.env.STRIPE_SECRET_KEY) {
-      try {
-        const stripeCustomerId = await createStripeCustomer(user.id, email, name);
-        await db.user.update({
-          where: { id: user.id },
-          data: { stripeCustomerId } as any,
-        });
-      } catch (stripeErr: any) {
-        console.error("[register] Stripe customer creation failed:", stripeErr.message);
-      }
     }
 
     return NextResponse.json({ ok: true });

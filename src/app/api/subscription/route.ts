@@ -35,7 +35,9 @@ export async function GET() {
     connectedCount,
     daysRemaining: sub.status === "trialing" ? trialDaysRemaining(sub) : null,
     isActive: isPlanActive(sub),
-    stripeSubscriptionId: sub.stripeSubscriptionId,
+    // ID externo da Cakto (o nome do campo no DB ainda é stripeSubscriptionId
+    // por motivo histórico, mas hoje guarda o orderId da Cakto).
+    externalOrderId: sub.stripeSubscriptionId,
     plans: PLANS,
   });
 }
