@@ -15,7 +15,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = await req.json();
     const data: { resolved?: boolean; fixSuggestion?: string } = {};
     if (typeof body.resolved === "boolean") data.resolved = body.resolved;
-    if (typeof body.fixSuggestion === "string") data.fixSuggestion = body.fixSuggestion;
+    if (typeof body.fixSuggestion === "string") {
+      // Limita tamanho para evitar DB bloat por payload abusivo.
+      data.fixSuggestion = body.fixSuggestion.slice(0, 5000);
+    }
 
     const updated = await db.errorLog.update({ where: { id }, data });
     return NextResponse.json(updated);

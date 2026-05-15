@@ -1,10 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { rateLimit, getClientIp, gcRateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req.headers);
+
+    // Rate limit: 12 heartbeats / min por IP (≈ 1 a cada 5s) — protege flood.
+    gcRateLimit();
+    const rl = rateLimit(`hb:${ip}`, 12, 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json({ ok: true, throttled: true });
+    }
+
     const body = await req.json();
-    const { sessionId, path, userId } = body;
+    const sessionId = typeof body?.sessionId === "string" ? body.sessionId.slice(0, 100) : null;
+    const path = typeof body?.path === "string" ? body.path.slice(0, 500) : null;
+    const userId = typeof body?.userId === "string" ? body.userId.slice(0, 50) : null;
+
+    if (!sessionId) return NextResponse.json({ ok: true });
 
     await db.activeSession.upsert({
       where: { sessionId },

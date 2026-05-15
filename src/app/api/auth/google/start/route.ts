@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { createOAuthState } from "@/lib/meta-oauth";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
@@ -16,6 +17,9 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
+  // State assinado com HMAC + TTL — evita forjar/replay com userId de outra vítima.
+  const state = createOAuthState(session.user.id);
+
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
@@ -23,7 +27,7 @@ export async function GET() {
     scope: SCOPES,
     access_type: "offline",
     prompt: "consent",
-    state: session.user.id, // userId para o callback
+    state,
   });
 
   return NextResponse.redirect(`${GOOGLE_AUTH_URL}?${params}`);

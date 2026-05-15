@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateAdminRequest } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 import { PLANS } from "@/lib/plans";
+import { brDateKey } from "@/lib/email";
 
 export async function GET(req: NextRequest) {
   if (!validateAdminRequest(req)) {
@@ -63,10 +64,11 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "asc" },
   });
 
-  // Agrupa por data
+  // Agrupa por data no fuso BR (evita "deslocar" cadastros do fim do dia
+  // para o dia seguinte por causa do UTC).
   const growthMap: Record<string, number> = {};
   for (const u of recentRegistrations) {
-    const d = u.createdAt.toISOString().slice(0, 10);
+    const d = brDateKey(u.createdAt);
     growthMap[d] = (growthMap[d] ?? 0) + 1;
   }
   const growth = Object.entries(growthMap).map(([date, count]) => ({ date, count }));

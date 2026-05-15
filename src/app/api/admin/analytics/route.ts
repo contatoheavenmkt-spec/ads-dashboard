@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { verifyAdminToken, ADMIN_COOKIE } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 import { PLANS } from "@/lib/plans";
+import { brDateKey } from "@/lib/email";
 
 export async function GET(req: NextRequest) {
   try {
@@ -82,15 +83,15 @@ export async function GET(req: NextRequest) {
     const totalErrors = errorsPeriod;
     const errorRate = totalViewsPeriod > 0 ? (totalErrors / totalViewsPeriod) * 100 : 0;
 
-    // views by day
+    // views by day — usa fuso BR para o agrupamento (evita salto de dia em UTC).
     const dayMap = new Map<string, { views: number; sessions: Set<string> }>();
     for (let i = 0; i < days; i++) {
       const d = new Date(since.getTime() + i * 24 * 60 * 60 * 1000);
-      const key = d.toISOString().slice(0, 10);
-      dayMap.set(key, { views: 0, sessions: new Set() });
+      const key = brDateKey(d);
+      if (!dayMap.has(key)) dayMap.set(key, { views: 0, sessions: new Set() });
     }
     for (const v of viewsPeriod) {
-      const key = v.createdAt.toISOString().slice(0, 10);
+      const key = brDateKey(v.createdAt);
       const entry = dayMap.get(key);
       if (entry) {
         entry.views++;

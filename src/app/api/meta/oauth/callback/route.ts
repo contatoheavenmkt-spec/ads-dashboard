@@ -4,17 +4,24 @@ import { metaLoginConfig, verifyOAuthState } from "@/lib/meta-oauth";
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
+function safeText(s: string): string {
+  // Escapa caracteres que poderiam quebrar o HTML — a mensagem vem da Graph API
+  // e não é confiável.
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 function htmlClose(status: "success" | "error", message?: string) {
+  const msg = message ?? "Erro";
   const script =
     status === "success"
       ? `window.opener?.postMessage({ type: "META_AUTH_SUCCESS" }, "*"); window.close();`
-      : `window.opener?.postMessage({ type: "META_AUTH_ERROR", message: ${JSON.stringify(message ?? "Erro")} }, "*"); window.close();`;
+      : `window.opener?.postMessage({ type: "META_AUTH_ERROR", message: ${JSON.stringify(msg)} }, "*"); window.close();`;
 
   return new NextResponse(
     `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
       <script>${script}<\/script>
       <p style="font-family:sans-serif;padding:2rem;color:#555">
-        ${status === "success" ? "Conectado! Fechando..." : `Erro: ${message}`}
+        ${status === "success" ? "Conectado! Fechando..." : `Erro: ${safeText(msg)}`}
       </p>
     </body></html>`,
     { headers: { "Content-Type": "text/html" } }

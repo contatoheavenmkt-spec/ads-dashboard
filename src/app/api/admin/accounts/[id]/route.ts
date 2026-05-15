@@ -70,14 +70,26 @@ export async function PATCH(
     await db.user.update({ where: { id }, data: userUpdate });
   }
 
+  // Parse e valida Date (evita Invalid Date salvo no DB se string vier malformada).
+  function parseDate(v: unknown): Date | null | undefined {
+    if (v === null) return null;
+    if (v === undefined) return undefined;
+    if (typeof v !== "string" && !(v instanceof Date)) return undefined;
+    const d = new Date(v as string | Date);
+    if (isNaN(d.getTime())) return undefined; // ignora valor inválido
+    return d;
+  }
+
   // Update subscription fields
   if (plan !== undefined || status !== undefined || trialEndsAt !== undefined || currentPeriodEnd !== undefined) {
     const planDef = plan ? PLANS[plan] : null;
+    const parsedTrial = parseDate(trialEndsAt);
+    const parsedPeriod = parseDate(currentPeriodEnd);
     const subUpdate = {
       ...(plan !== undefined && { plan }),
       ...(status !== undefined && { status }),
-      ...(trialEndsAt !== undefined && { trialEndsAt: trialEndsAt ? new Date(trialEndsAt) : null }),
-      ...(currentPeriodEnd !== undefined && { currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd) : null }),
+      ...(parsedTrial !== undefined && { trialEndsAt: parsedTrial }),
+      ...(parsedPeriod !== undefined && { currentPeriodEnd: parsedPeriod }),
       ...(planDef && { accountsLimit: planDef.accountsLimit }),
     };
 

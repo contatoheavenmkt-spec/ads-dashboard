@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { db } from "@/lib/db";
 import { planFromWebhookOrder } from "@/lib/cakto";
 import { PLANS, type PlanKey } from "@/lib/plans";
+import { normalizeEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
+
+function safeEqual(a: string | null | undefined, b: string): boolean {
+  if (!a) return false;
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) return false;
+  return timingSafeEqual(ba, bb);
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -13,7 +23,7 @@ function nextPeriodEnd(): Date {
 
 /** Identifica o userId a partir dos dados do pedido.
  *  Estratégia 1: utm_content (passado na URL de checkout)
- *  Estratégia 2: email do cliente
+ *  Estratégia 2: email do cliente (normalizado)
  */
 async function findUserId(order: any): Promise<string | null> {
   const utmUserId = order.utm_content as string | undefined;
@@ -25,7 +35,7 @@ async function findUserId(order: any): Promise<string | null> {
     if (user) return user.id;
   }
 
-  const email = order.customer?.email as string | undefined;
+  const email = normalizeEmail(order.customer?.email);
   if (email) {
     const user = await db.user.findUnique({
       where: { email },
@@ -67,16 +77,21 @@ async function activateSubscription(
 // ─── Webhook handler ──────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  // Verificação do secret (configure CAKTO_WEBHOOK_SECRET no .env)
+  // Falha fechada em produção: sem secret configurado, recusa.
   const webhookSecret = process.env.CAKTO_WEBHOOK_SECRET;
-  if (webhookSecret) {
-    // Cakto envia o secret no header X-Cakto-Secret (confirme no dashboard deles)
+  if (!webhookSecret) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[cakto/webhook] CAKTO_WEBHOOK_SECRET não configurado em produção — recusando");
+      return NextResponse.json({ error: "Webhook secret not configured" }, { status: 503 });
+    }
+    console.warn("[cakto/webhook] CAKTO_WEBHOOK_SECRET ausente em dev — aceitando sem verificação");
+  } else {
     const receivedSecret =
       req.headers.get("x-cakto-secret") ??
       req.headers.get("x-webhook-secret") ??
       req.headers.get("authorization")?.replace("Bearer ", "");
 
-    if (receivedSecret !== webhookSecret) {
+    if (!safeEqual(receivedSecret, webhookSecret)) {
       console.warn("[cakto/webhook] Secret inválido — requisição rejeitada");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -89,9 +104,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  // A Cakto pode mandar o evento em body.event ou body.type
   const event = (body.event ?? body.type ?? "") as string;
-  // Dados do pedido podem estar aninhados em body.data ou diretamente no body
   const order = body.data ?? body;
   const orderId = (order.id ?? order.refId ?? "") as string;
 
@@ -108,10 +121,20 @@ export async function POST(req: NextRequest) {
           break;
         }
 
+        // Idempotência: se já existe subscription ativa com esse orderId externo, ignora.
+        if (orderId) {
+          const existing = await db.subscription.findFirst({
+            where: { stripeSubscriptionId: orderId },
+          });
+          if (existing && existing.status === "active") {
+            console.log(`[cakto/webhook] ⏩ Ignorado (já processado): orderId=${orderId}`);
+            break;
+          }
+        }
+
         const userId = await findUserId(order);
         if (!userId) {
-          // Usuário ainda não tem conta — salva para ativar no cadastro
-          const email = order.customer?.email as string | undefined;
+          const email = normalizeEmail(order.customer?.email);
           if (email) {
             await db.pendingSubscription.upsert({
               where: { email },
@@ -132,12 +155,10 @@ export async function POST(req: NextRequest) {
 
       // ── Renovação de assinatura bem-sucedida ──────────────────────────────
       case "subscription_renewed": {
-        // Tenta encontrar pelo ID externo armazenado
         let sub = orderId
           ? await db.subscription.findFirst({ where: { stripeSubscriptionId: orderId } })
           : null;
 
-        // Fallback: encontra pelo usuário
         if (!sub) {
           const userId = await findUserId(order);
           if (userId) sub = await db.subscription.findUnique({ where: { userId } });
@@ -145,6 +166,12 @@ export async function POST(req: NextRequest) {
 
         if (!sub) {
           console.warn(`[cakto/webhook] subscription_renewed: assinatura não encontrada para orderId=${orderId}`);
+          break;
+        }
+
+        // Idempotência: se já está ativa com período no futuro, ignora.
+        if (sub.status === "active" && sub.currentPeriodEnd && sub.currentPeriodEnd > new Date(Date.now() + 25 * 24 * 60 * 60 * 1000)) {
+          console.log(`[cakto/webhook] ⏩ Renovação já aplicada recentemente para userId=${sub.userId}`);
           break;
         }
 
@@ -194,7 +221,6 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        // Ignora eventos informativos (pix_gerado, boleto_gerado, etc.)
         console.log(`[cakto/webhook] Evento ignorado: ${event}`);
         break;
     }
@@ -203,6 +229,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 
-  // Cakto espera 200 em até 5 segundos — sempre retornar rápido
   return NextResponse.json({ received: true });
 }

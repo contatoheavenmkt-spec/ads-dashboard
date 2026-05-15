@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { rateLimit, getClientIp, gcRateLimit } from "@/lib/rate-limit";
 
 function getFixSuggestion(errorType: string, statusCode?: number): string {
   if (statusCode === 404) return "Verificar se a rota/recurso existe. Checar links e dynamic routes no App Router.";
@@ -13,30 +14,38 @@ function getFixSuggestion(errorType: string, statusCode?: number): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req.headers);
+
+    // Rate limit: 30 errors / min por IP — evita flood que enche ErrorLog.
+    gcRateLimit();
+    const rl = rateLimit(`err:${ip}`, 30, 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json({ ok: true, throttled: true });
+    }
+
     const body = await req.json();
-    const { path, errorType, errorMessage, statusCode, stackTrace, sessionId, userId } = body;
+    const path = typeof body?.path === "string" ? body.path.slice(0, 500) : "";
+    const errorType = typeof body?.errorType === "string" ? body.errorType.slice(0, 100) : "Unknown";
+    const errorMessage = typeof body?.errorMessage === "string" ? body.errorMessage.slice(0, 2000) : "";
+    const statusCode = typeof body?.statusCode === "number" ? body.statusCode : null;
+    const stackTrace = typeof body?.stackTrace === "string" ? body.stackTrace.slice(0, 5000) : null;
+    const sessionId = typeof body?.sessionId === "string" ? body.sessionId.slice(0, 100) : null;
+    const userId = typeof body?.userId === "string" ? body.userId.slice(0, 50) : null;
 
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip") ||
-      null;
-    const country =
-      req.headers.get("cf-ipcountry") ||
-      req.headers.get("x-vercel-ip-country") ||
-      "BR";
+    const ipForDb = ip === "unknown" ? null : ip;
 
-    const fixSuggestion = getFixSuggestion(errorType, statusCode);
+    const fixSuggestion = getFixSuggestion(errorType, statusCode ?? undefined);
 
     await db.errorLog.create({
       data: {
         path,
-        statusCode: statusCode ?? null,
+        statusCode,
         errorType,
         errorMessage,
-        stackTrace: stackTrace ?? null,
-        sessionId: sessionId ?? null,
-        userId: userId ?? null,
-        ip,
+        stackTrace,
+        sessionId,
+        userId,
+        ip: ipForDb,
         fixSuggestion,
       },
     });

@@ -72,9 +72,10 @@ function CadastroContent() {
       return;
     }
 
-    // Se veio de um plano pago, redireciona para página de planos
+    // Se veio de um plano pago, redireciona para o billing (que oferece checkout).
+    // (A rota /planos não existe — antes redirecionava para 404.)
     if (selectedPlan !== "trial") {
-      router.push(`/planos?plan=${selectedPlan}`);
+      router.push(`/dashboard/billing?plan=${selectedPlan}`);
     } else {
       router.push("/integracoes?tab=inicio");
     }

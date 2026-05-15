@@ -20,20 +20,29 @@ export async function DELETE(
   });
   const workspaceId = user?.workspaceId ?? (session.user as { workspaceId?: string }).workspaceId;
 
-  if (workspaceId) {
-    // Remove apenas o vínculo deste workspace com esta integração
-    await db.workspaceIntegration.deleteMany({
-      where: { workspaceId, integrationId: id },
-    });
+  if (!workspaceId) {
+    return NextResponse.json({ error: "Sem workspace" }, { status: 403 });
+  }
 
-    // Se não há mais nenhum workspace usando esta integração, deleta ela
-    const remaining = await db.workspaceIntegration.count({ where: { integrationId: id } });
-    if (remaining === 0) {
-      await db.integration.delete({ where: { id } });
-    }
-  } else {
-    // Sem workspace: deleta globalmente (fallback)
-    await db.integration.delete({ where: { id } });
+  // Valida ownership: só pode mexer em workspace próprio.
+  const workspace = await db.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { ownerId: true },
+  });
+  if (!workspace || workspace.ownerId !== session.user.id) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+  }
+
+  // Remove apenas o vínculo deste workspace com esta integração.
+  await db.workspaceIntegration.deleteMany({
+    where: { workspaceId, integrationId: id },
+  });
+
+  // Só deleta a Integration global se NENHUM workspace ainda a usar.
+  // Isso evita que outra agência que compartilhe o adAccountId perca a integração.
+  const remaining = await db.workspaceIntegration.count({ where: { integrationId: id } });
+  if (remaining === 0) {
+    await db.integration.delete({ where: { id } }).catch(() => {});
   }
 
   return NextResponse.json({ ok: true });

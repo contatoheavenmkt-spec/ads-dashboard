@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { auth } from "@/auth";
 import { getStoredMetaToken } from "@/lib/meta-token";
 import { getGenderBreakdown, getAgeBreakdown } from "@/lib/meta-api";
+import { requireMetricsAccess } from "@/lib/workspace-access";
 
 function mergeBreakdown(results: { label: string; impressions: number; clicks: number }[][]) {
   const map = new Map<string, { impressions: number; clicks: number }>();
@@ -22,23 +22,21 @@ function mergeBreakdown(results: { label: string; impressions: number; clicks: n
     .sort((a, b) => b.impressions - a.impressions);
 }
 
-async function resolveMetaToken(sessionUserId: string | undefined, workspaceId: string | null) {
-  if (workspaceId) {
-    const ws = await db.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } });
-    if (ws?.ownerId) return getStoredMetaToken(ws.ownerId);
-  }
-  if (!sessionUserId) return null;
-  return getStoredMetaToken(sessionUserId);
-}
-
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const days = parseInt(searchParams.get("days") ?? "30");
   const adAccountIdParam = searchParams.get("adAccountId");
   const workspaceId = searchParams.get("workspaceId");
 
-  const session = await auth();
-  const token = await resolveMetaToken(session?.user?.id, workspaceId);
+  const access = await requireMetricsAccess(req, workspaceId);
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status ?? 401 });
+  }
+
+  const userId = access.resolvedUserId;
+  if (!userId) return NextResponse.json({ gender: [], age: [] });
+
+  const token = await getStoredMetaToken(userId);
   if (!token) return NextResponse.json({ gender: [], age: [] });
 
   let accountIds: string[] = [];
@@ -55,21 +53,16 @@ export async function GET(req: NextRequest) {
         .filter((wi) => wi.integration.platform === "meta")
         .map((wi) => wi.integration.adAccountId);
     }
-  } else if (session?.user?.id) {
-    const user = await db.user.findUnique({
-      where: { id: session.user.id },
-      select: { workspaceId: true },
+  } else {
+    const userWs = await db.workspace.findMany({
+      where: { ownerId: userId },
+      include: { integrations: { include: { integration: true } } },
     });
-    const userWorkspaceId = user?.workspaceId ?? (session.user as { workspaceId?: string }).workspaceId;
-    if (userWorkspaceId) {
-      const wsIntegrations = await db.workspaceIntegration.findMany({
-        where: { workspaceId: userWorkspaceId },
-        include: { integration: { select: { adAccountId: true, platform: true } } },
-      });
-      accountIds = wsIntegrations
+    accountIds = userWs.flatMap((w) =>
+      w.integrations
         .filter((wi) => wi.integration.platform === "meta")
-        .map((wi) => wi.integration.adAccountId);
-    }
+        .map((wi) => wi.integration.adAccountId),
+    );
   }
 
   if (accountIds.length === 0) return NextResponse.json({ gender: [], age: [] });

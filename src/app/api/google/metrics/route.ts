@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { getCachedMetrics, setCachedMetrics } from "@/lib/metrics-cache";
+import { requireMetricsAccess } from "@/lib/workspace-access";
 
 const GADS_API = "https://googleads.googleapis.com/v22";
 const REQUIRED_SCOPE = "https://www.googleapis.com/auth/adwords";
@@ -39,6 +40,8 @@ async function getValidToken(userId: string): Promise<{ accessToken: string; sco
       data: {
         accessToken: data.access_token,
         expiresAt: new Date(Date.now() + data.expires_in * 1000),
+        // Google ocasionalmente rotaciona o refresh_token — quando vier, persiste.
+        ...(data.refresh_token ? { refreshToken: data.refresh_token } : {}),
       },
     });
     token = data.access_token;
@@ -187,9 +190,10 @@ export async function GET(req: NextRequest) {
   const workspaceIdParam = req.nextUrl.searchParams.get("workspaceId");
   const force = req.nextUrl.searchParams.get("force") === "1";
 
-  const session = await auth();
-  if (!workspaceIdParam && !session?.user?.id) {
-    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  // Autoriza ANTES de qualquer leitura de cache ou dados.
+  const access = await requireMetricsAccess(req, workspaceIdParam);
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status ?? 401 });
   }
 
   const customerId = await resolveCustomerId(req);
@@ -201,8 +205,8 @@ export async function GET(req: NextRequest) {
   }
 
   // Cache check
-  const cacheWsId = workspaceIdParam ?? customerId ?? null;
-  if (cacheWsId && !force) {
+  const cacheWsId = workspaceIdParam ?? `user:${access.resolvedUserId ?? "anon"}`;
+  if (!force) {
     const days0 = parseInt(req.nextUrl.searchParams.get("days") ?? "30");
     const camp0 = req.nextUrl.searchParams.get("campaignId");
     const cacheKey = `${days0}:${customerId}:${camp0 || "none"}`;
@@ -213,18 +217,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Resolve userId: usa sempre o ownerId do workspace quando disponível.
-  // Isso garante que clientes/usuários sem token próprio vejam os dados do dono do workspace.
-  let resolvedUserId: string | undefined;
-  if (workspaceIdParam) {
-    const ws = await db.workspace.findUnique({
-      where: { id: workspaceIdParam },
-      select: { ownerId: true },
-    });
-    resolvedUserId = ws?.ownerId ?? session?.user?.id;
-  } else {
-    resolvedUserId = session?.user?.id;
-  }
+  const resolvedUserId = access.resolvedUserId ?? undefined;
 
   const tokenInfo = await getValidToken(resolvedUserId ?? "");
   if (!tokenInfo) {
@@ -440,9 +433,21 @@ export async function GET(req: NextRequest) {
   // ── 5. Search Impression Share & Quality Score ────────────────
 
   let sis = 0;
-  let qs = 0;
+  const qs = 0;
   if (campRows.length > 0) {
-    sis = campRows.reduce((s, r) => s + (Number(r["metrics.search_impression_share"] ?? 0) * 100), 0) / campRows.length;
+    // Média ponderada por impressions (não-ponderada distorce quando campanhas
+    // têm volumes muito diferentes).
+    const totalImpressions = campRows.reduce((s, r) => s + Number(r["metrics.impressions"] ?? 0), 0);
+    if (totalImpressions > 0) {
+      sis =
+        campRows.reduce((s, r) => {
+          const imp = Number(r["metrics.impressions"] ?? 0);
+          const share = Number(r["metrics.search_impression_share"] ?? 0);
+          return s + share * imp;
+        }, 0) /
+        totalImpressions *
+        100;
+    }
   }
   totals.searchImpressionShare = Math.round(sis * 10) / 10;
   totals.qualityScoreAvg = Math.round(qs * 10) / 10;
@@ -452,7 +457,10 @@ export async function GET(req: NextRequest) {
     demographics: { gender: finalGender, age: finalAge },
   };
 
-  if (cacheWsId) {
+  // Só grava cache se tivermos dados reais, para não sobrescrever cache válido
+  // com payload vazio quando todas as queries GAQL falham.
+  const hasData = timeSeries.length > 0 || campaigns.length > 0;
+  if (hasData) {
     const cacheKey = `${days}:${customerId}:${campaignId || "none"}`;
     await setCachedMetrics(cacheWsId, "google", cacheKey, result);
   }

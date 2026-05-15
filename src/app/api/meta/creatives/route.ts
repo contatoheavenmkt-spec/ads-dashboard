@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { auth } from "@/auth";
 import { getStoredMetaToken } from "@/lib/meta-token";
 import { getAdCreatives } from "@/lib/meta-api";
-
-async function resolveMetaToken(sessionUserId: string | undefined, workspaceId: string | null) {
-  if (workspaceId) {
-    const ws = await db.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } });
-    if (ws?.ownerId) return getStoredMetaToken(ws.ownerId);
-  }
-  if (!sessionUserId) return null;
-  return getStoredMetaToken(sessionUserId);
-}
+import { requireMetricsAccess } from "@/lib/workspace-access";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -19,8 +10,15 @@ export async function GET(req: NextRequest) {
   const adAccountIdParam = searchParams.get("adAccountId");
   const workspaceIdParam = searchParams.get("workspaceId");
 
-  const session = await auth();
-  const token = await resolveMetaToken(session?.user?.id, workspaceIdParam);
+  const access = await requireMetricsAccess(req, workspaceIdParam);
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status ?? 401 });
+  }
+
+  const userId = access.resolvedUserId;
+  if (!userId) return NextResponse.json({ ads: [] });
+
+  const token = await getStoredMetaToken(userId);
   if (!token) return NextResponse.json({ ads: [] });
 
   let accountIds: string[] = [];
@@ -35,26 +33,20 @@ export async function GET(req: NextRequest) {
     accountIds = wsIntegrations
       .filter((wi) => wi.integration.platform === "meta")
       .map((wi) => wi.integration.adAccountId);
-    if (accountIds.length === 0) return NextResponse.json({ ads: [] });
-  } else if (session?.user?.id) {
-    const user = await db.user.findUnique({
-      where: { id: session.user.id },
-      select: { workspaceId: true },
-    });
-    const userWorkspaceId = user?.workspaceId ?? (session.user as { workspaceId?: string }).workspaceId;
-    if (userWorkspaceId) {
-      const wsIntegrations = await db.workspaceIntegration.findMany({
-        where: { workspaceId: userWorkspaceId },
-        include: { integration: { select: { adAccountId: true, platform: true } } },
-      });
-      accountIds = wsIntegrations
-        .filter((wi) => wi.integration.platform === "meta")
-        .map((wi) => wi.integration.adAccountId);
-    }
-    if (accountIds.length === 0) return NextResponse.json({ ads: [] });
   } else {
-    return NextResponse.json({ ads: [] });
+    // Sem workspaceId: pega integrações de workspaces do próprio dono.
+    const userWs = await db.workspace.findMany({
+      where: { ownerId: userId },
+      include: { integrations: { include: { integration: true } } },
+    });
+    accountIds = userWs.flatMap((w) =>
+      w.integrations
+        .filter((wi) => wi.integration.platform === "meta")
+        .map((wi) => wi.integration.adAccountId),
+    );
   }
+
+  if (accountIds.length === 0) return NextResponse.json({ ads: [] });
 
   const results = await Promise.allSettled(
     accountIds.map((id) => getAdCreatives(id, token, days))

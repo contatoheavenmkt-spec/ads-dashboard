@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { verifyOAuthState } from "@/lib/meta-oauth";
 
 function htmlResponse(html: string) {
   return new Response(html, { headers: { "Content-Type": "text/html" } });
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const error = searchParams.get("error");
-  const userId = searchParams.get("state"); // userId passado pelo start route
+  const state = searchParams.get("state");
 
   if (error) {
     return htmlResponse(`<script>
@@ -29,9 +30,11 @@ export async function GET(request: Request) {
     </script>`);
   }
 
+  // Verifica state assinado: extrai userId apenas se HMAC + TTL forem válidos.
+  const userId = state ? verifyOAuthState(state) : null;
   if (!userId) {
     return htmlResponse(`<script>
-      window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "Sessão inválida. Tente novamente." }, "*");
+      window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "Sessão inválida ou expirada. Tente novamente." }, "*");
       window.close();
     </script>`);
   }

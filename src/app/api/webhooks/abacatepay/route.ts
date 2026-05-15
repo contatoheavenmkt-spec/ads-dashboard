@@ -1,36 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { handlePaymentSuccess, type PlanKey, PLANS } from "@/lib/subscription";
 import { db } from "@/lib/db";
+
+function safeEqual(a: string | null | undefined, b: string): boolean {
+  if (!a) return false;
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) return false;
+  return timingSafeEqual(ba, bb);
+}
 
 /**
  * AbacatePay webhook — called when a payment is confirmed.
  *
- * Expected body (adapt to AbacatePay's actual payload):
- * {
- *   event: "BILLING_PAID" | "BILLING_EXPIRED" | "BILLING_CANCELED",
- *   data: {
- *     billing: {
- *       id: string,           // AbacatePay billing ID
- *       status: string,
- *       customer: {
- *         taxId: string       // CPF/CNPJ
- *       },
- *       metadata: {
- *         userId: string,     // your internal userId
- *         plan: string        // "start" | "plus" | "premium"
- *       }
- *     }
- *   }
- * }
- *
  * Set ABACATEPAY_WEBHOOK_SECRET in .env to verify requests.
+ * Em produção, o secret é obrigatório (sem ele, requisições são recusadas).
  */
 export async function POST(req: NextRequest) {
-  // Verify webhook secret
   const secret = process.env.ABACATEPAY_WEBHOOK_SECRET;
-  if (secret) {
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[webhook/abacatepay] ABACATEPAY_WEBHOOK_SECRET não configurado em produção — recusando");
+      return NextResponse.json({ error: "Webhook secret not configured" }, { status: 503 });
+    }
+    console.warn("[webhook/abacatepay] secret ausente em dev — aceitando sem verificação");
+  } else {
     const signature = req.headers.get("x-webhook-secret") ?? req.headers.get("authorization");
-    if (signature !== secret && signature !== `Bearer ${secret}`) {
+    if (!safeEqual(signature, secret) && !safeEqual(signature, `Bearer ${secret}`)) {
       console.warn("[webhook/abacatepay] Invalid secret");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -48,12 +45,10 @@ export async function POST(req: NextRequest) {
 
   console.log(`[webhook/abacatepay] event=${event}`, billing?.id);
 
-  // Only handle paid events
   if (event !== "BILLING_PAID" && body?.status !== "PAID") {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
-  // Extract userId and plan from metadata
   const userId: string | undefined =
     billing?.metadata?.userId ??
     billing?.customer?.metadata?.userId;
@@ -73,11 +68,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
   }
 
-  // Verify user exists
   const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!user) {
     console.error("[webhook/abacatepay] User not found:", userId);
     return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  // Idempotência: se já temos subscription ativa com esse billing.id externo, ignora.
+  const billingId = billing?.id as string | undefined;
+  if (billingId) {
+    const existing = await db.subscription.findFirst({
+      where: { stripeSubscriptionId: billingId },
+    });
+    if (existing && existing.status === "active") {
+      console.log(`[webhook/abacatepay] ⏩ Ignorado (já processado): billingId=${billingId}`);
+      return NextResponse.json({ ok: true, idempotent: true });
+    }
   }
 
   try {

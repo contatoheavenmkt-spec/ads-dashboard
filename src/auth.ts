@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { authConfig } from "./auth.config";
+import { normalizeEmail } from "@/lib/email";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -16,8 +17,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        const email = normalizeEmail(credentials.email as string);
+
         const user = await db.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email },
           include: { workspace: true },
         });
 
@@ -38,6 +41,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           workspaceId: user.workspaceId,
           workspaceSlug: user.workspace?.slug ?? null,
           onboardingCompleted: user.onboardingCompleted,
+          forcePasswordChange: user.forcePasswordChange,
         };
       },
     }),
@@ -54,6 +58,7 @@ declare module "next-auth" {
       workspaceId?: string;
       workspaceSlug?: string;
       onboardingCompleted: boolean;
+      forcePasswordChange: boolean;
     };
   }
 }

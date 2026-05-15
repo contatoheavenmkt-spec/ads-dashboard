@@ -29,6 +29,16 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
+server.log
+
+# local SQLite (legacy — projeto migrou para Postgres)
+*.db
+*.sqlite
+*.sqlite-journal
+*.sqlite3
+/prisma/*.db
+/prisma/*.db-journal
 
 # env files (can opt-in for committing if needed)
 .env*

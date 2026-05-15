@@ -4,10 +4,14 @@ import { db } from "@/lib/db";
 import { createTrialSubscription } from "@/lib/subscription";
 import { createStripeCustomer } from "@/lib/stripe";
 import { PLANS, type PlanKey } from "@/lib/plans";
+import { normalizeEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, password } = await req.json();
+    const body = await req.json();
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
+    const email = normalizeEmail(body?.email);
+    const password = typeof body?.password === "string" ? body.password : "";
 
     if (!name || !email || !password) {
       return NextResponse.json({ error: "Preencha todos os campos." }, { status: 400 });
@@ -34,7 +38,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Verifica se há compra pendente para este email (Cakto webhook chegou antes do cadastro)
+    // Verifica se há compra pendente para este email (webhook chegou antes do cadastro).
+    // Email já normalizado (lowercase), bate com o que o webhook salvou.
     const pending = await db.pendingSubscription.findUnique({ where: { email } });
     if (pending) {
       const planDef = PLANS[pending.plan as PlanKey];
@@ -51,7 +56,6 @@ export async function POST(req: NextRequest) {
       await db.pendingSubscription.delete({ where: { email } });
       console.log(`[register] Plano ${pending.plan} ativado via compra pendente para ${email}`);
     } else {
-      // Inicia trial de 7 dias automaticamente
       await createTrialSubscription(user.id);
     }
 

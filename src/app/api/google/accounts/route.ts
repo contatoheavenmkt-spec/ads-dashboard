@@ -47,6 +47,7 @@ async function getValidToken(userId: string): Promise<{ accessToken: string; sco
       data: {
         accessToken: data.access_token,
         expiresAt: new Date(Date.now() + data.expires_in * 1000),
+        ...(data.refresh_token ? { refreshToken: data.refresh_token } : {}),
       },
     });
 

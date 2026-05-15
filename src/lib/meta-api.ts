@@ -446,11 +446,15 @@ export async function getAgeBreakdown(
  * Agregadores de insights
  */
 export function aggregateInsights(days: MetaInsightDay[]) {
+  // Reach é número de pessoas únicas — somar entre dias conta a mesma pessoa
+  // várias vezes e infla o total. Como não temos o "reach único do período"
+  // sem fazer outra chamada, usamos MAX dos reach diários como aproximação
+  // (mais conservadora que a soma).
+  const maxReach = days.reduce((m, d) => Math.max(m, d.reach), 0);
   const totals = days.reduce(
     (acc, d) => ({
       spend: acc.spend + d.spend,
       impressions: acc.impressions + d.impressions,
-      reach: acc.reach + d.reach,
       clicks: acc.clicks + d.clicks,
       purchases: acc.purchases + d.purchases,
       leads: acc.leads + d.leads,
@@ -458,11 +462,12 @@ export function aggregateInsights(days: MetaInsightDay[]) {
       conversions: acc.conversions + d.conversions,
       revenue: acc.revenue + d.revenue,
     }),
-    { spend: 0, impressions: 0, reach: 0, clicks: 0, purchases: 0, leads: 0, messages: 0, conversions: 0, revenue: 0 }
+    { spend: 0, impressions: 0, clicks: 0, purchases: 0, leads: 0, messages: 0, conversions: 0, revenue: 0 }
   );
 
   return {
     ...totals,
+    reach: maxReach,
     cpc: totals.clicks > 0 ? totals.spend / totals.clicks : 0,
     cpa: totals.conversions > 0 ? totals.spend / totals.conversions : 0,
     roas: totals.spend > 0 ? totals.revenue / totals.spend : 0,

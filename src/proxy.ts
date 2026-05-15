@@ -34,27 +34,33 @@ export default auth((req) => {
     nextUrl.pathname.startsWith("/dashboard") ||
     nextUrl.pathname.startsWith("/integracoes") ||
     nextUrl.pathname.startsWith("/workspaces");
+  const isPasswordChange = nextUrl.pathname.startsWith("/account/change-password");
 
-  // Deixa rotas públicas passarem
   if (isPublicClient || isPublicPage) return NextResponse.next();
 
-  // Redireciona para login se não autenticado
   if (!isLoggedIn && !isAuthPage) {
     return NextResponse.redirect(new URL("/login", nextUrl));
   }
 
-  const role = session?.user?.role;
+  const role = (session?.user as { role?: string })?.role;
   const workspaceSlug = (session?.user as { workspaceSlug?: string })?.workspaceSlug;
+  const forcePasswordChange = !!(session?.user as { forcePasswordChange?: boolean })?.forcePasswordChange;
 
-  // Redireciona usuário já logado que tenta acessar /login
+  // Usuário com senha temporária só pode acessar a página de troca de senha.
+  if (isLoggedIn && forcePasswordChange && !isPasswordChange) {
+    return NextResponse.redirect(new URL("/account/change-password", nextUrl));
+  }
+
   if (isLoggedIn && isAuthPage) {
+    if (forcePasswordChange) {
+      return NextResponse.redirect(new URL("/account/change-password", nextUrl));
+    }
     if (role === "CLIENT" && workspaceSlug) {
       return NextResponse.redirect(new URL(`/workspace/${workspaceSlug}`, nextUrl));
     }
     return NextResponse.redirect(new URL("/dashboard", nextUrl));
   }
 
-  // Clientes não podem acessar rotas da agência
   if (isLoggedIn && role === "CLIENT" && isAgencyRoute) {
     if (workspaceSlug) {
       return NextResponse.redirect(new URL(`/workspace/${workspaceSlug}`, nextUrl));
@@ -62,7 +68,6 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/login", nextUrl));
   }
 
-  // Agência não pode acessar portal do cliente autenticado
   if (isLoggedIn && role === "AGENCY" && nextUrl.pathname.startsWith("/workspace/")) {
     return NextResponse.redirect(new URL("/dashboard", nextUrl));
   }

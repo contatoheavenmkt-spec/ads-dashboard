@@ -77,32 +77,69 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nome obrigatório" }, { status: 400 });
     }
 
-    const baseSlug = slugify(name);
-    let slug = baseSlug;
-    let counter = 1;
-
-    while (await db.workspace.findUnique({ where: { slug } })) {
-      slug = `${baseSlug}-${counter++}`;
+    // Valida logo (mesma regra do PUT): só /api/uploads/... ou https://.
+    let logoValue: string | null = null;
+    if (typeof logo === "string" && logo !== "") {
+      if (/^\/api\/uploads\/[\w.\-]+$/.test(logo) || /^https:\/\/[^\s<>"']+$/.test(logo)) {
+        logoValue = logo;
+      } else {
+        return NextResponse.json({ error: "URL de logo inválida" }, { status: 400 });
+      }
     }
 
-    const workspace = await db.workspace.create({
-      data: {
-        name,
-        slug,
-        logo: logo ?? null,
-        ownerId: session.user.id,
-        integrations: integrationIds?.length
-          ? {
-            create: (integrationIds as string[]).map((id: string) => ({
-              integrationId: id,
-            })),
-          }
-          : undefined,
-      },
-      include: {
-        integrations: { include: { integration: true } },
-      },
-    });
+    // Valida integrationIds: só aceita integrações que já pertencem a workspaces
+    // deste mesmo owner. Impede que A "anexe" uma Integration de B passando o id.
+    let validIntegrationIds: string[] = [];
+    if (Array.isArray(integrationIds) && integrationIds.length > 0) {
+      const owned = await db.workspaceIntegration.findMany({
+        where: {
+          integrationId: { in: integrationIds as string[] },
+          workspace: { ownerId: session.user.id },
+        },
+        select: { integrationId: true },
+      });
+      const ownedSet = new Set(owned.map((wi) => wi.integrationId));
+      validIntegrationIds = (integrationIds as string[]).filter((id) => ownedSet.has(id));
+    }
+
+    const baseSlug = slugify(name);
+
+    // Loop com retry — duas requisições simultâneas podem encontrar slug "livre"
+    // e racear na criação. Captura P2002 (unique constraint) e tenta o próximo sufixo.
+    let workspace = null;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt}`;
+      const exists = await db.workspace.findUnique({ where: { slug } });
+      if (exists) continue;
+
+      try {
+        workspace = await db.workspace.create({
+          data: {
+            name,
+            slug,
+            logo: logoValue,
+            ownerId: session.user.id,
+            integrations: validIntegrationIds.length
+              ? {
+                create: validIntegrationIds.map((integrationId) => ({ integrationId })),
+              }
+              : undefined,
+          },
+          include: {
+            integrations: { include: { integration: true } },
+          },
+        });
+        break;
+      } catch (e: any) {
+        // P2002 = unique constraint failed (corrida com outra requisição). Tenta o próximo.
+        if (e?.code === "P2002") continue;
+        throw e;
+      }
+    }
+
+    if (!workspace) {
+      return NextResponse.json({ error: "Não foi possível criar workspace" }, { status: 500 });
+    }
 
     return NextResponse.json(workspace, { status: 201 });
   } catch (err: any) {

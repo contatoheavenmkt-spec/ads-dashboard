@@ -14,7 +14,9 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 200);
   const offset = parseInt(searchParams.get("offset") ?? "0");
 
-  const where: any = { role: { not: undefined } };
+  // Sem filtro de role: lista todos os usuários (AGENCY/CLIENT).
+  // (O filtro antigo `role: { not: undefined }` era sempre verdadeiro no Prisma.)
+  const where: any = {};
 
   if (search) {
     where.OR = [
@@ -35,7 +37,18 @@ export async function GET(req: NextRequest) {
     const [users, total] = await Promise.all([
       db.user.findMany({
         where,
-        include: {
+        // select explícito — NUNCA expor o campo `password` (bcrypt hash).
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          workspaceId: true,
+          onboardingCompleted: true,
+          forcePasswordChange: true,
+          stripeCustomerId: true,
+          createdAt: true,
+          updatedAt: true,
           subscription: true,
           _count: { select: { metaConnections: true, googleConnections: true } },
         },
