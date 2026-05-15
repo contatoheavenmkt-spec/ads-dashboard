@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { LogOut } from "lucide-react";
+import { LogOut, Users } from "lucide-react";
 import React from "react";
 import { DashfyLogoIcon } from "@/components/logo/logo";
 
@@ -58,7 +58,7 @@ const GridIcon = ({ className }: { className?: string }) => (
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ClientView = "meta" | "google" | "ga4" | "overview" | "detalhes";
+export type ClientView = "meta" | "google" | "ga4" | "overview" | "detalhes" | "crm";
 
 interface NavItem {
   id: ClientView;
@@ -88,6 +88,7 @@ export function ClientSidebar({ platforms, view, onViewChange, onLogout }: Clien
     ...(hasGoogle ? [{ id: "google" as ClientView, label: "Google Ads", icon: <GoogleAdsIcon />, platform: "google" }] : []),
     ...(hasGA4 ? [{ id: "ga4" as ClientView, label: "GA4", icon: <GA4Icon />, platform: "ga4" }] : []),
     { id: "detalhes" as ClientView, label: "Detalhes", icon: <DetailsIcon /> },
+    { id: "crm" as ClientView, label: "CRM", icon: <Users className="w-6 h-6 mb-1" /> },
   ];
 
   // Se nenhuma plataforma conectada, mostra pelo menos Meta

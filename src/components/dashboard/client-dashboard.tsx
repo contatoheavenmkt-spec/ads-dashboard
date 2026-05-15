@@ -10,6 +10,7 @@ import { GaugeChart } from "@/components/dashboard/gauge-chart";
 import { KeywordsTable } from "@/components/dashboard/keywords-table";
 import { RegionList, RegionMap } from "@/components/dashboard/region-heatmap";
 import { ClientSidebar, ClientView } from "@/components/layout/client-sidebar";
+import { CrmView } from "@/components/dashboard/crm-view";
 import { NotificationOptIn } from "@/components/pwa/notification-opt-in";
 import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
 import {
@@ -1402,15 +1403,17 @@ export function ClientDashboard({
             </div>
           </div>
 
-          {/* Controls — always on same row */}
+          {/* Controls — always on same row. CRM não usa período/campanha/export. */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <button
-              onClick={handleDownload}
-              className="p-1.5 sm:p-2 rounded-lg border bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 transition-all active:scale-95"
-              title="Exportar CSV"
-            >
-              <Download size={14} />
-            </button>
+            {view !== "crm" && (
+              <button
+                onClick={handleDownload}
+                className="p-1.5 sm:p-2 rounded-lg border bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 transition-all active:scale-95"
+                title="Exportar CSV"
+              >
+                <Download size={14} />
+              </button>
+            )}
 
             {/* Campaign selector — visible only on meta/detalhes views */}
             {(view === "meta" || view === "detalhes") && metaData?.campaigns && metaData.campaigns.length > 0 && (
@@ -1465,7 +1468,8 @@ export function ClientDashboard({
               </div>
             )}
 
-            {/* Period selector */}
+            {/* Period selector — escondido no CRM (que não filtra por dia). */}
+            {view !== "crm" && (
             <div className="relative">
               <button
                 onClick={(e) => { e.stopPropagation(); setDaysOpen(!daysOpen); setCampaignOpen(false); }}
@@ -1498,6 +1502,7 @@ export function ClientDashboard({
                 </div>
               )}
             </div>
+            )}
           </div>
         </header>
 
@@ -1517,6 +1522,7 @@ export function ClientDashboard({
               {view === "ga4" && renderGA4()}
               {view === "overview" && renderOverview()}
               {view === "detalhes" && renderDetalhes()}
+              {view === "crm" && <CrmView workspaceId={workspaceId} />}
             </>
           )}
         </div>

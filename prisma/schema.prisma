@@ -71,6 +71,7 @@ model Workspace {
 
   integrations WorkspaceIntegration[]
   clients      User[]   @relation("MemberWorkspace")
+  leads        Lead[]
 }
 
 model MetaConnection {
@@ -182,6 +183,39 @@ model ErrorLog {
   @@index([path])
   @@index([createdAt])
   @@index([resolved])
+}
+
+model Lead {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Dados do lead
+  name        String
+  phone       String?
+  email       String?
+  source      String?  // "meta_messaging", "meta_lead_form", "google", "manual", etc.
+  campaignId  String?  // opcional — vincula à campanha que originou o lead
+  notes       String?
+
+  // Funil: "novo" → "contato" → "negociando" → "vendido" / "perdido"
+  status      String   @default("novo")
+
+  // Quem fechou (user do workspace que registrou a venda). Pode ser AGENCY
+  // ou CLIENT — qualquer membro do workspace pode marcar vendido.
+  closedByUserId String?
+  closedAt    DateTime?
+  saleValue   Float?
+
+  // Auditoria
+  createdByUserId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
+  @@index([campaignId])
 }
 
 model PushSubscription {
