@@ -1098,10 +1098,12 @@ export function ClientDashboard({
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 pb-8 sm:p-6 space-y-4 sm:space-y-6">
 
         {/* ═══ Row 1: Gauge | Line | Gênero | Faixa Etária (Meta only) ═══ */}
-        {hasMeta && <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-6">
+        {/* Mobile = 1 coluna (cada bloco full width — gráficos não ficam apertados).
+            sm (≥640px) = 2 colunas. lg (≥1024px) = 12 cols (3-4-2-3). */}
+        {hasMeta && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-6">
 
-          {/* Gauge + KPIs — mobile: col 1 */}
-          <div className="col-span-1 lg:col-span-3 flex flex-col gap-3 sm:gap-4">
+          {/* Gauge + KPIs */}
+          <div className="lg:col-span-3 flex flex-col gap-3 sm:gap-4">
             <div className="glass-panel flex-1 rounded-2xl p-3 sm:p-6 flex flex-col items-center justify-center">
               <GaugeChart
                 value={convRate}
@@ -1161,8 +1163,8 @@ export function ClientDashboard({
             </div>
           </div>
 
-          {/* Line Chart — mobile: col 2; desktop: col 2 (order) */}
-          <div className="col-span-1 lg:col-span-4 glass-panel rounded-2xl p-3 sm:p-6 flex flex-col">
+          {/* Line Chart */}
+          <div className="lg:col-span-4 glass-panel rounded-2xl p-3 sm:p-6 flex flex-col">
             <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 flex-wrap">
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-1 bg-blue-500 rounded"></div>
@@ -1184,8 +1186,8 @@ export function ClientDashboard({
             </div>
           </div>
 
-          {/* Gênero — mobile: col 1 */}
-          <div className="col-span-1 lg:col-span-2 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col items-center">
+          {/* Gênero */}
+          <div className="lg:col-span-2 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col items-center">
             <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest mb-3 w-full text-center">Gênero</h3>
             {gLabels.length > 0 ? (
               <>
@@ -1216,8 +1218,8 @@ export function ClientDashboard({
             )}
           </div>
 
-          {/* Faixa Etária — mobile: col 2 */}
-          <div className="col-span-1 lg:col-span-3 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col items-center">
+          {/* Faixa Etária */}
+          <div className="lg:col-span-3 glass-panel rounded-2xl p-3 sm:p-5 flex flex-col items-center">
             <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest mb-3 w-full text-center">Faixa Etária</h3>
             {aLabels.length > 0 ? (
               <>
@@ -1316,19 +1318,21 @@ export function ClientDashboard({
                   ))}
                 </div>
               ) : (
-                <div className="py-20 text-center text-slate-700 text-[10px] font-black uppercase tracking-[0.3em] opacity-40">
-                  Nenhum anúncio encontrado
+                <div className="py-12 sm:py-16 text-center">
+                  <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">
+                    Nenhum anúncio com impressões no período
+                  </p>
+                  <p className="text-slate-600 text-[10px] mt-2 max-w-md mx-auto leading-relaxed">
+                    Mostramos apenas anúncios ativos que rodaram no intervalo escolhido. Tente expandir o período no filtro acima.
+                  </p>
                 </div>
               )}
             </div>
 
             {creatives.length > 0 && (
-              <div className="mt-4 flex justify-between items-center text-[10px] font-bold text-white/10 uppercase tracking-[0.2em] border-t border-white/5 pt-4">
-                <span>Exibindo {Math.min(creatives.length, 7)} / {creatives.length} anúncios</span>
-                <div className="flex gap-6 pointer-events-auto">
-                  <button className="hover:text-white transition-colors cursor-pointer">&lt;</button>
-                  <button className="hover:text-white transition-colors cursor-pointer">&gt;</button>
-                </div>
+              <div className="mt-4 flex justify-between items-center text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] border-t border-white/5 pt-4">
+                <span>{creatives.length} {creatives.length === 1 ? "anúncio ativo" : "anúncios ativos"}</span>
+                <span className="hidden sm:inline text-white/20">↔ Arraste para ver mais</span>
               </div>
             )}
           </div>

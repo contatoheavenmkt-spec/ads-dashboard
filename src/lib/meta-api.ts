@@ -391,19 +391,32 @@ export async function getAdCreatives(
   const insightParams =
     `time_range({"since":"${since}","until":"${until}"})` +
     `.use_account_attribution_setting(true)`;
-  const fields = `id,name,status,creative{thumbnail_url,image_url},insights.${insightParams}{${insightFields}}`;
+  // `effective_status` reflete o estado real do anúncio (paused, archived,
+  // disapproved, etc.), diferente do `status` que é só o que o user setou.
+  // Filtramos pra ACTIVE — é o que faz sentido mostrar como "Anúncios Ativos".
+  const fields = `id,name,status,effective_status,creative{thumbnail_url,image_url},insights.${insightParams}{${insightFields}}`;
+  const filtering = encodeURIComponent(
+    JSON.stringify([{ field: "ad.effective_status", operator: "IN", value: ["ACTIVE"] }]),
+  );
+  // Limit 100 com filtering server-side: pega só ads ativos e depois ainda
+  // filtramos client-side por impressions > 0 (defesa em profundidade: ads
+  // recém-publicados podem estar ACTIVE sem impressões no período escolhido).
   const url =
     `${GRAPH_API}/${adAccountId}/ads` +
-    `?fields=${encodeURIComponent(fields)}&limit=30&access_token=${accessToken}`;
+    `?fields=${encodeURIComponent(fields)}` +
+    `&filtering=${filtering}` +
+    `&limit=100` +
+    `&access_token=${accessToken}`;
 
   const res = await fetch(url, { cache: "no-store" });
   const data = await res.json();
   if (data.error) throw new Error(`Meta Ads [${adAccountId}]: ${data.error.message}`);
 
-  return ((data.data ?? []) as Array<{
+  const mapped: MetaAdCreative[] = ((data.data ?? []) as Array<{
     id: string;
     name: string;
     status: string;
+    effective_status?: string;
     creative?: { thumbnail_url?: string; image_url?: string };
     insights?: { data: Array<{ impressions: string; clicks: string; spend: string; actions?: Array<{ action_type: string; value: string }> }> };
   }>).map((ad) => {
@@ -426,10 +439,17 @@ export async function getAdCreatives(
       leads,
       messages,
       conversions,
-      status: ad.status,
+      status: ad.effective_status ?? ad.status,
       isMessaging,
     };
   });
+
+  // Filtra ads sem impressões no período escolhido (recém-criados ou ativos
+  // mas que ainda não rodaram) e ordena por impressões desc — anúncio que
+  // está performando mais aparece primeiro.
+  return mapped
+    .filter((a) => a.impressions > 0)
+    .sort((a, b) => b.impressions - a.impressions);
 }
 
 // ─── Demographics ─────────────────────────────────────────────────────────────
