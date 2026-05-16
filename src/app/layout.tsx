@@ -16,13 +16,10 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "Dashfy",
   },
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/logo-icon.png", type: "image/png" },
-    ],
-    apple: "/logo-icon.png",
-  },
+  // `icons` removido propositadamente. Next 16 auto-detecta `src/app/icon.tsx`
+  // e `src/app/apple-icon.tsx` (geradores dinâmicos quadrados com a logo).
+  // Definir aqui sobrescreve a auto-detecção e o browser cai num favicon
+  // padrão (triângulo do Next que veio do create-next-app).
 };
 
 export const viewport: Viewport = {
