@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getStoredMetaToken } from "@/lib/meta-token";
 import { getInsightsDateRange } from "@/lib/meta-api";
-import { requireMetricsAccess } from "@/lib/workspace-access";
+import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
@@ -69,6 +69,11 @@ export async function GET(req: NextRequest) {
   let accountIds: string[] = [];
 
   if (adAccountIdParam) {
+    // ⚠️ Valida que o adAccount pertence a algum workspace do owner.
+    const ok = await isAdAccountAuthorized(adAccountIdParam, userId, workspaceId);
+    if (!ok) {
+      return NextResponse.json({ error: "Conta de anúncios não autorizada" }, { status: 403 });
+    }
     accountIds = [adAccountIdParam];
   } else if (workspaceId) {
     const workspace = await db.workspace.findUnique({

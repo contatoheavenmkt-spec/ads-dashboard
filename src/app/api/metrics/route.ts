@@ -8,7 +8,7 @@ import {
   getCampaignInsights,
 } from "@/lib/meta-api";
 import { getCachedMetrics, setCachedMetrics } from "@/lib/metrics-cache";
-import { requireMetricsAccess } from "@/lib/workspace-access";
+import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
 
 const EMPTY = {
   timeSeries: [],
@@ -34,10 +34,13 @@ export async function GET(req: NextRequest) {
 
   // Discriminador de cache: por workspace quando disponível, senão por usuário.
   // Inclui bmId para evitar servir dados de BM errado.
-  const cacheWsId = workspaceId ?? `user:${access.resolvedUserId ?? "anon"}`;
+  // Se não temos userId nem workspaceId (cenário improvável após
+  // requireMetricsAccess), desativamos o cache pra não criar bucket
+  // "anon" compartilhável entre usuários.
+  const cacheWsId = workspaceId ?? (access.resolvedUserId ? `user:${access.resolvedUserId}` : null);
   const cacheKey = `${days}:${bmId || "anybm"}:${adAccountId || "all"}:${campaignId || "none"}`;
 
-  if (!force) {
+  if (!force && cacheWsId) {
     const cached = await getCachedMetrics(cacheWsId, "meta", cacheKey);
     if (cached) {
       console.log("[metrics/meta] cache hit");
@@ -68,7 +71,22 @@ export async function GET(req: NextRequest) {
     accountIds = workspace.integrations
       .filter((wi) => wi.integration.platform === "meta")
       .map((wi) => wi.integration.adAccountId);
+    // Se o user passou adAccountId, restringe a esse — mas só se já estiver
+    // na lista do workspace. Antes não validava: passar adAccountId arbitrário
+    // pulava o filtro do workspace.
+    if (adAccountId) {
+      if (!accountIds.includes(adAccountId)) {
+        return NextResponse.json({ error: "Conta de anúncios não autorizada" }, { status: 403 });
+      }
+      accountIds = [adAccountId];
+    }
   } else if (adAccountId) {
+    // Sem workspaceId: precisa validar que esse adAccount pertence a algum
+    // workspace deste owner. Antes a rota aceitava direto.
+    const ok = await isAdAccountAuthorized(adAccountId, userId);
+    if (!ok) {
+      return NextResponse.json({ error: "Conta de anúncios não autorizada" }, { status: 403 });
+    }
     accountIds = [adAccountId];
   } else {
     // Sem workspaceId e sem adAccountId: lista todas as integrações Meta vinculadas
@@ -114,7 +132,7 @@ export async function GET(req: NextRequest) {
 
   // Só persiste cache se tivermos algum dado real, para não sobrescrever
   // cache válido anterior em falhas temporárias da Graph API.
-  if (timeSeries.length > 0 || campaigns.length > 0) {
+  if (cacheWsId && (timeSeries.length > 0 || campaigns.length > 0)) {
     await setCachedMetrics(cacheWsId, "meta", cacheKey, result);
   }
 

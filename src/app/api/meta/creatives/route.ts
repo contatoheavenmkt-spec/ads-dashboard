@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getStoredMetaToken } from "@/lib/meta-token";
 import { getAdCreatives } from "@/lib/meta-api";
-import { requireMetricsAccess } from "@/lib/workspace-access";
+import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -24,6 +24,13 @@ export async function GET(req: NextRequest) {
   let accountIds: string[] = [];
 
   if (adAccountIdParam) {
+    // ⚠️ Antes essa rota aceitava qualquer adAccountId direto da query,
+    // pulando a validação do workspace. Agora exige que a conta pertença
+    // a algum workspace deste owner.
+    const ok = await isAdAccountAuthorized(adAccountIdParam, userId, workspaceIdParam);
+    if (!ok) {
+      return NextResponse.json({ error: "Conta de anúncios não autorizada" }, { status: 403 });
+    }
     accountIds = [adAccountIdParam];
   } else if (workspaceIdParam) {
     const wsIntegrations = await db.workspaceIntegration.findMany({

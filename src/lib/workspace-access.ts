@@ -132,6 +132,45 @@ export async function canAccessWorkspaceAuthed(
   return { allowed: false, reason: "private", ownerId: ws.ownerId };
 }
 
+/**
+ * Garante que um `adAccountId` pertence a uma Integration vinculada a algum
+ * workspace do `ownerUserId` (ou ao `workspaceId` específico, se passado).
+ *
+ * Defesa contra abuso de query param: as rotas `/api/metrics`,
+ * `/api/google/metrics`, `/api/meta/*` aceitam `adAccountId` direto na URL
+ * e passavam pro Graph/GAQL sem validar — atacante autenticado podia ver
+ * insights de adAccountId de outro tenant usando o próprio token Meta/Google
+ * (se houvesse qualquer sobreposição de permissão na conta de origem).
+ */
+export async function isAdAccountAuthorized(
+  adAccountId: string,
+  ownerUserId: string,
+  workspaceId?: string | null,
+): Promise<boolean> {
+  if (workspaceId) {
+    const found = await db.workspaceIntegration.findFirst({
+      where: {
+        workspaceId,
+        workspace: { ownerId: ownerUserId },
+        integration: { adAccountId },
+      },
+      select: { id: true },
+    });
+    return !!found;
+  }
+  // Sem workspaceId: aceita se o adAccount existe em qualquer workspace do owner.
+  const found = await db.integration.findFirst({
+    where: {
+      adAccountId,
+      workspaceIntegrations: {
+        some: { workspace: { ownerId: ownerUserId } },
+      },
+    },
+    select: { id: true },
+  });
+  return !!found;
+}
+
 export interface MetricsAccessResult {
   ok: boolean;
   status?: number;

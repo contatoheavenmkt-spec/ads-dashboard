@@ -95,11 +95,39 @@ export async function POST(req: NextRequest) {
   // Garante que o usuário tem workspace (cria se necessário)
   const workspaceId = await getOrCreateWorkspace(session.user.id);
 
-  // Verifica se já existe integração global com esse adAccountId
-  let integration = await db.integration.findFirst({ where: { adAccountId } });
+  // ⚠️ Segurança: o modelo Integration é "global" por adAccountId, mas só pode
+  // ser reutilizado por workspaces do MESMO owner. Antes essa rota permitia
+  // que um AGENCY anexasse ao seu workspace uma Integration que pertencia a
+  // workspace de OUTRO owner (bastava conhecer o adAccountId, visível em
+  // prints do Ads Manager etc), causando vazamento de métricas + DoS por
+  // delete-after-detach. Bloqueamos isso aqui.
+  const existing = await db.integration.findFirst({
+    where: { adAccountId },
+    include: {
+      workspaceIntegrations: {
+        include: { workspace: { select: { ownerId: true } } },
+      },
+    },
+  });
 
-  if (!integration) {
-    // Cria nova integração
+  let integration;
+  if (existing) {
+    // Se a Integration já tem vínculos com workspaces, todos têm que ser do
+    // próprio owner. Senão, recusa — outro tenant criou essa integration.
+    const owners = new Set(
+      existing.workspaceIntegrations
+        .map((wi) => wi.workspace.ownerId)
+        .filter((id): id is string => !!id),
+    );
+    const isOnlyOwner = owners.size === 0 || (owners.size === 1 && owners.has(session.user.id));
+    if (!isOnlyOwner) {
+      return NextResponse.json(
+        { error: "Esta conta de anúncios já está conectada por outra agência. Reconecte via OAuth com sua própria conta." },
+        { status: 409 },
+      );
+    }
+    integration = existing;
+  } else {
     integration = await db.integration.create({
       data: {
         platform,

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { auth } from "@/auth";
 import { getCachedMetrics, setCachedMetrics } from "@/lib/metrics-cache";
 import { getInsightsDateRange } from "@/lib/meta-api";
-import { requireMetricsAccess } from "@/lib/workspace-access";
+import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
 
 const GADS_API = "https://googleads.googleapis.com/v22";
 const REQUIRED_SCOPE = "https://www.googleapis.com/auth/adwords";
@@ -119,12 +118,29 @@ function flattenFields(obj: any, prefix = ""): Record<string, any> {
 
 // ─── Resolve customerId ───────────────────────────────────────────
 
-async function resolveCustomerId(req: NextRequest): Promise<string | null> {
+/**
+ * Resolve qual customerId Google Ads usar — com validação de autorização.
+ * Antes essa função aceitava qualquer `adAccountId` da query sem checagem,
+ * permitindo que um user autenticado consultasse insights de qualquer
+ * customerId conhecido usando o próprio token Google (se houvesse
+ * sobreposição de permissão na conta).
+ *
+ * `authorizedUserId` é o dono dos dados (resolvido pelo requireMetricsAccess
+ * anterior). Quando `adAccountId` vem na query, validamos que ele pertence
+ * a alguma Integration de algum workspace desse owner.
+ */
+async function resolveCustomerId(req: NextRequest, authorizedUserId: string | null): Promise<string | null> {
   const adAccountId = req.nextUrl.searchParams.get("adAccountId");
-  if (adAccountId) return adAccountId;
+  const workspaceIdParam = req.nextUrl.searchParams.get("workspaceId");
+
+  if (adAccountId) {
+    if (!authorizedUserId) return null;
+    const ok = await isAdAccountAuthorized(adAccountId, authorizedUserId, workspaceIdParam);
+    if (!ok) return null;
+    return adAccountId;
+  }
 
   // workspaceId pode ser passado diretamente (ex: dash pública do cliente, sem sessão)
-  const workspaceIdParam = req.nextUrl.searchParams.get("workspaceId");
   if (workspaceIdParam) {
     const wsIntegrations = await db.workspaceIntegration.findMany({
       where: { workspaceId: workspaceIdParam },
@@ -135,25 +151,17 @@ async function resolveCustomerId(req: NextRequest): Promise<string | null> {
     return null; // workspace existe mas não tem conta Google
   }
 
-  const session = await auth();
-  if (!session?.user?.id) return null;
+  if (!authorizedUserId) return null;
 
-  const user = await db.user.findUnique({
-    where: { id: session.user.id },
-    select: { workspaceId: true },
+  // Pega a primeira integração Google de qualquer workspace do owner.
+  const wi = await db.workspaceIntegration.findFirst({
+    where: {
+      workspace: { ownerId: authorizedUserId },
+      integration: { platform: "google", status: "active" },
+    },
+    include: { integration: true },
   });
-  const workspaceId = user?.workspaceId ?? (session.user as { workspaceId?: string }).workspaceId ?? null;
-
-  if (workspaceId) {
-    const wsIntegrations = await db.workspaceIntegration.findMany({
-      where: { workspaceId },
-      include: { integration: true },
-    });
-    const googleIntegration = wsIntegrations.find((wi) => wi.integration.platform === "google" && wi.integration.status === "active");
-    if (googleIntegration) return googleIntegration.integration.adAccountId;
-  }
-
-  return null;
+  return wi?.integration.adAccountId ?? null;
 }
 
 // ─── Aggregation ──────────────────────────────────────────────────
@@ -197,7 +205,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: access.error }, { status: access.status ?? 401 });
   }
 
-  const customerId = await resolveCustomerId(req);
+  const customerId = await resolveCustomerId(req, access.resolvedUserId ?? null);
   if (!customerId) {
     return NextResponse.json({
       timeSeries: [], totals: { spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0, cpc: 0, cpa: 0, roas: 0, ctr: 0, searchImpressionShare: 0, qualityScoreAvg: 0 },
@@ -205,9 +213,10 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Cache check
-  const cacheWsId = workspaceIdParam ?? `user:${access.resolvedUserId ?? "anon"}`;
-  if (!force) {
+  // Cache check — só com discriminador válido (workspaceId OU userId).
+  // Sem nenhum dos dois, não cacheia pra evitar bucket "anon" compartilhável.
+  const cacheWsId = workspaceIdParam ?? (access.resolvedUserId ? `user:${access.resolvedUserId}` : null);
+  if (!force && cacheWsId) {
     const days0 = parseInt(req.nextUrl.searchParams.get("days") ?? "30");
     const camp0 = req.nextUrl.searchParams.get("campaignId");
     const cacheKey = `${days0}:${customerId}:${camp0 || "none"}`;
@@ -458,7 +467,7 @@ export async function GET(req: NextRequest) {
   // Só grava cache se tivermos dados reais, para não sobrescrever cache válido
   // com payload vazio quando todas as queries GAQL falham.
   const hasData = timeSeries.length > 0 || campaigns.length > 0;
-  if (hasData) {
+  if (hasData && cacheWsId) {
     const cacheKey = `${days}:${customerId}:${campaignId || "none"}`;
     await setCachedMetrics(cacheWsId, "google", cacheKey, result);
   }
