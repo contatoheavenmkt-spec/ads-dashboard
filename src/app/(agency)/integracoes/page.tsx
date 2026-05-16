@@ -299,6 +299,9 @@ export default function IntegracoesPage() {
   }
 
   const connectedAccountIds = new Set(integrations.map((i) => i.adAccountId));
+  // Mapeia adAccountId → integrationId pra permitir desconectar direto da
+  // listagem detalhada (sem precisar de um bloco separado no topo).
+  const integrationByAdAccount = new Map(integrations.map((i) => [i.adAccountId, i.id]));
 
   const accountStatusLabel = (status: number) => {
     if (status === 1) return null;
@@ -351,46 +354,10 @@ export default function IntegracoesPage() {
           </div>
         )}
 
-        {/* Contas ativas no dashboard */}
-        {!loadingIntegrations && integrations.length > 0 && (
-          <div className="glass-panel rounded-2xl p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-              <h2 className="text-xs font-black text-slate-200 uppercase tracking-widest">
-                Contas no Dashboard
-              </h2>
-              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                {integrations.length} ATIVAS
-              </span>
-            </div>
-            <div className="space-y-2">
-              {integrations.map((integration) => (
-                <div key={integration.id} className="flex items-center justify-between p-3 bg-slate-800/40 rounded-xl border border-slate-700/50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-blue-600/20 rounded-lg flex items-center justify-center border border-blue-500/20">
-                      <span className="text-xs font-black text-blue-400">{integration.platform === "google" ? "G" : "M"}</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-100">{integration.name}</p>
-                      <p className="text-[10px] text-slate-500">
-                        {integration.bmName ? `${integration.bmName} · ` : ""}{integration.adAccountId}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase">Ativo</span>
-                    <button
-                      onClick={() => disconnect(integration.id)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Bloco "Contas no Dashboard" antigo foi removido — a listagem
+            detalhada de Meta/Google abaixo já mostra status "No dashboard"
+            (verde) e botão de remover (lixeira) nas linhas conectadas,
+            sem precisar de uma seção duplicada no topo. */}
 
         {/* Meta Ads Section */}
         <div className="glass-panel rounded-2xl p-6 space-y-5">
@@ -500,6 +467,7 @@ export default function IntegracoesPage() {
                   <div className="p-3 space-y-2">
                     {bm.accounts.map((account) => {
                       const isConnected = connectedAccountIds.has(account.id);
+                      const integrationId = integrationByAdAccount.get(account.id);
                       const isLoading = connecting === account.id;
                       const statusLabel = accountStatusLabel(account.account_status);
                       return (
@@ -514,7 +482,18 @@ export default function IntegracoesPage() {
                             <p className="text-[10px] text-slate-500 mt-0.5">{account.id}</p>
                           </div>
                           {isConnected ? (
-                            <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase">No dashboard</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase">No dashboard</span>
+                              {integrationId && (
+                                <button
+                                  onClick={() => disconnect(integrationId)}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                                  title="Remover do dashboard"
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             <button
                               onClick={() => connect(account, bm)}
@@ -668,6 +647,7 @@ export default function IntegracoesPage() {
                     <div className="p-3 space-y-2">
                       {googleAccounts.map((account) => {
                         const isConnected = connectedAccountIds.has(account.customerId);
+                        const integrationId = integrationByAdAccount.get(account.customerId);
                         const isLoading = connectingGoogle === account.customerId;
                         return (
                           <div key={account.customerId} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-700/30 hover:border-slate-600/50 transition-colors">
@@ -683,7 +663,18 @@ export default function IntegracoesPage() {
                               </p>
                             </div>
                             {isConnected ? (
-                              <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase">No dashboard</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase">No dashboard</span>
+                                {integrationId && (
+                                  <button
+                                    onClick={() => disconnect(integrationId)}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                                    title="Remover do dashboard"
+                                  >
+                                    <Trash2 size={11} />
+                                  </button>
+                                )}
+                              </div>
                             ) : (
                               <button
                                 onClick={() => connectGoogle(account)}

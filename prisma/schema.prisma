@@ -69,6 +69,9 @@ model Workspace {
   // JSON com flags { showSpend, showRevenue, showMessages, ... }. null = auto
   // (mostra todas que têm dados, comportamento padrão antigo).
   visibleMetrics String?
+  // JSON array de origens (tags) customizadas pro CRM, ex: ["Meta", "Indicação"].
+  // null = usa os defaults: Meta, Google Ads, Indicação.
+  leadSources    String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

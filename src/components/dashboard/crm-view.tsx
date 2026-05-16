@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  Loader2, Plus, Search, Trash2, Phone, Mail, MessageCircle,
+  Loader2, Plus, Search, Trash2, Phone, Mail,
   CheckCircle2, XCircle, Clock, Send, X,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -54,6 +54,7 @@ export function CrmView({ workspaceId }: CrmViewProps) {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Lead | null>(null);
+  const [sources, setSources] = useState<string[]>([]);
 
   async function loadLeads() {
     setLoading(true);
@@ -63,9 +64,10 @@ export function CrmView({ workspaceId }: CrmViewProps) {
       if (search) params.set("q", search);
       const r = await fetch(`/api/workspaces/${workspaceId}/leads?${params}`);
       if (!r.ok) return;
-      const data = (await r.json()) as { leads: Lead[]; canDelete: boolean };
+      const data = (await r.json()) as { leads: Lead[]; canDelete: boolean; leadSources: string[] };
       setLeads(data.leads);
       setCanDelete(data.canDelete);
+      setSources(data.leadSources ?? []);
     } finally {
       setLoading(false);
     }
@@ -183,10 +185,10 @@ export function CrmView({ workspaceId }: CrmViewProps) {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-slate-400">
-                      {lead.source === "meta_messaging" ? (
-                        <span className="flex items-center gap-1 text-emerald-400"><MessageCircle size={11} /> WhatsApp</span>
-                      ) : lead.source ? (
-                        <span className="text-slate-400">{lead.source}</span>
+                      {lead.source ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 border border-slate-700 text-slate-300">
+                          {lead.source}
+                        </span>
                       ) : (
                         <span className="text-slate-600">—</span>
                       )}
@@ -232,6 +234,7 @@ export function CrmView({ workspaceId }: CrmViewProps) {
       {showCreate && (
         <LeadFormModal
           workspaceId={workspaceId}
+          sources={sources}
           onClose={() => setShowCreate(false)}
           onSaved={() => { setShowCreate(false); loadLeads(); }}
         />
@@ -239,6 +242,7 @@ export function CrmView({ workspaceId }: CrmViewProps) {
       {editing && (
         <LeadFormModal
           workspaceId={workspaceId}
+          sources={sources}
           lead={editing}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); loadLeads(); }}
@@ -259,12 +263,13 @@ function MetricBox({ label, value, accent }: { label: string; value: string; acc
 
 interface LeadFormModalProps {
   workspaceId: string;
+  sources: string[];
   lead?: Lead;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function LeadFormModal({ workspaceId, lead, onClose, onSaved }: LeadFormModalProps) {
+function LeadFormModal({ workspaceId, sources, lead, onClose, onSaved }: LeadFormModalProps) {
   const isEditing = !!lead;
   const [name, setName] = useState(lead?.name ?? "");
   const [phone, setPhone] = useState(lead?.phone ?? "");
@@ -362,11 +367,13 @@ function LeadFormModal({ workspaceId, lead, onClose, onSaved }: LeadFormModalPro
               className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
             >
               <option value="">— Selecione —</option>
-              <option value="meta_messaging">WhatsApp (Meta)</option>
-              <option value="meta_lead_form">Formulário Meta</option>
-              <option value="google">Google Ads</option>
-              <option value="manual">Cadastro manual</option>
-              <option value="other">Outro</option>
+              {/* Tags configuráveis pelo dono do workspace em /workspaces/[id].
+                  Default: Meta, Google Ads, Indicação. Sempre inclui "Outro"
+                  pra permitir cadastro com origem livre. */}
+              {sources.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+              <option value="Outro">Outro</option>
             </select>
           </Field>
 

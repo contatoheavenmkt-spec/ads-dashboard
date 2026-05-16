@@ -18,6 +18,8 @@ import {
   Loader2,
   Lock,
   Pencil,
+  Plus,
+  Tags,
   Trash2,
   Upload,
   UserMinus,
@@ -25,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { METRIC_DEFINITIONS, METRIC_CATEGORIES, type VisibleMetrics, type MetricKey } from "@/lib/visible-metrics";
+import { DEFAULT_LEAD_SOURCES } from "@/lib/lead-sources";
 
 interface Integration {
   id: string;
@@ -51,6 +54,9 @@ interface Workspace {
   hasPassword: boolean;
   // null = auto-detect (padrão); objeto = customização explícita por KPI.
   visibleMetrics: VisibleMetrics | null;
+  // Lista atual de origens (tags) pro CRM — sempre vem populada (defaults
+  // quando o workspace não customizou).
+  leadSources: string[];
   integrations: Array<{ integration: Integration }>;
   clients: Client[];
 }
@@ -125,6 +131,8 @@ export default function WorkspaceDetailPage() {
   // objeto com flags = customização explícita.
   const [customMetrics, setCustomMetrics] = useState(false);
   const [metricsState, setMetricsState] = useState<VisibleMetrics>({});
+  const [leadSourcesState, setLeadSourcesState] = useState<string[]>(DEFAULT_LEAD_SOURCES);
+  const [newSource, setNewSource] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -161,6 +169,7 @@ export default function WorkspaceDetailPage() {
       setClients(ws.clients ?? []);
       setCustomMetrics(ws.visibleMetrics !== null);
       setMetricsState(ws.visibleMetrics ?? {});
+      setLeadSourcesState(ws.leadSources ?? DEFAULT_LEAD_SOURCES);
     });
   }, [id]);
 
@@ -191,6 +200,9 @@ export default function WorkspaceDetailPage() {
 
     // visibleMetrics: null = volta pra auto; objeto = customização explícita.
     body.visibleMetrics = customMetrics ? metricsState : null;
+
+    // leadSources: array de strings. Backend reduz a null se igual ao default.
+    body.leadSources = leadSourcesState;
 
     await fetch(`/api/workspaces/${id}`, {
       method: "PUT",
@@ -543,6 +555,83 @@ export default function WorkspaceDetailPage() {
                   );
                 })}
               </div>
+            )}
+          </Section>
+
+          {/* Tags do CRM */}
+          <Section
+            icon={<Tags size={13} />}
+            title="Tags de origem do CRM"
+            badge={leadSourcesState.length === DEFAULT_LEAD_SOURCES.length &&
+              leadSourcesState.every((s, i) => s === DEFAULT_LEAD_SOURCES[i])
+              ? "Padrão"
+              : `${leadSourcesState.length} tag${leadSourcesState.length !== 1 ? "s" : ""}`}
+          >
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Origens disponíveis no dropdown &quot;Origem&quot; ao cadastrar um lead. O padrão é <strong>Meta</strong>, <strong>Google Ads</strong>, <strong>Indicação</strong>. Adicione tags próprias se a equipe usa outras fontes (ex.: TikTok, Boca a boca, Site).
+            </p>
+
+            <div className="flex flex-wrap gap-2 mt-3">
+              {leadSourcesState.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-blue-500/15 border border-blue-500/30 text-xs font-bold text-blue-300"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => setLeadSourcesState((prev) => prev.filter((t) => t !== tag))}
+                    className="p-1 rounded-full hover:bg-rose-500/20 hover:text-rose-300 transition-colors"
+                    title="Remover tag"
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            <div className="flex gap-2 mt-3">
+              <input
+                type="text"
+                value={newSource}
+                onChange={(e) => setNewSource(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  const t = newSource.trim();
+                  if (!t || leadSourcesState.includes(t)) return;
+                  setLeadSourcesState((prev) => [...prev, t]);
+                  setNewSource("");
+                }}
+                placeholder="Nova tag (ex.: TikTok)"
+                className="flex-1 px-3 py-2 bg-slate-800/60 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                maxLength={50}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const t = newSource.trim();
+                  if (!t || leadSourcesState.includes(t)) return;
+                  setLeadSourcesState((prev) => [...prev, t]);
+                  setNewSource("");
+                }}
+                disabled={!newSource.trim() || leadSourcesState.includes(newSource.trim())}
+                className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-1.5 transition-colors"
+              >
+                <Plus size={12} />
+                Adicionar
+              </button>
+            </div>
+
+            {(leadSourcesState.length !== DEFAULT_LEAD_SOURCES.length ||
+              !leadSourcesState.every((s, i) => s === DEFAULT_LEAD_SOURCES[i])) && (
+              <button
+                type="button"
+                onClick={() => setLeadSourcesState(DEFAULT_LEAD_SOURCES)}
+                className="mt-3 text-[10px] font-bold text-slate-500 hover:text-blue-400 uppercase tracking-wider transition-colors"
+              >
+                ↺ Restaurar padrão
+              </button>
             )}
           </Section>
 

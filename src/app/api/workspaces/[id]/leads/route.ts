@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { resolveCrmAccess, isValidStatus } from "@/lib/crm-access";
+import { parseLeadSources } from "@/lib/lead-sources";
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -29,13 +30,17 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     ];
   }
 
-  const leads = await db.lead.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: 500,
-  });
+  const [leads, ws] = await Promise.all([
+    db.lead.findMany({ where, orderBy: { createdAt: "desc" }, take: 500 }),
+    db.workspace.findUnique({ where: { id: workspaceId }, select: { leadSources: true } }),
+  ]);
 
-  return NextResponse.json({ leads, role: access.role, canDelete: access.canDelete });
+  return NextResponse.json({
+    leads,
+    role: access.role,
+    canDelete: access.canDelete,
+    leadSources: parseLeadSources(ws?.leadSources ?? null),
+  });
 }
 
 interface CreateLeadBody {

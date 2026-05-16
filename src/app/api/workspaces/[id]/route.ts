@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { hashSharePassword } from "@/lib/workspace-access";
 import { parseVisibleMetrics, serializeVisibleMetrics, type VisibleMetrics } from "@/lib/visible-metrics";
+import { parseLeadSources, serializeLeadSources } from "@/lib/lead-sources";
 
 async function requireOwnership(workspaceId: string) {
   const session = await auth();
@@ -35,6 +36,7 @@ export async function GET(
       logo: true,
       publicAccess: true,
       visibleMetrics: true,
+      leadSources: true,
       // sharePassword nunca é exposto na resposta — substituído por hasPassword.
       createdAt: true,
       updatedAt: true,
@@ -55,11 +57,12 @@ export async function GET(
     select: { sharePassword: true },
   });
 
-  const { visibleMetrics: rawMetrics, ...rest } = workspace;
+  const { visibleMetrics: rawMetrics, leadSources: rawLeadSources, ...rest } = workspace;
   return NextResponse.json({
     ...rest,
     hasPassword: !!wsRaw?.sharePassword,
     visibleMetrics: parseVisibleMetrics(rawMetrics),
+    leadSources: parseLeadSources(rawLeadSources),
   });
 }
 
@@ -74,7 +77,7 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const { name, logo, integrationIds, publicAccess, sharePassword, clearSharePassword, visibleMetrics } = body;
+  const { name, logo, integrationIds, publicAccess, sharePassword, clearSharePassword, visibleMetrics, leadSources } = body;
 
   // sharePassword:
   //  - clearSharePassword=true   → remove explicitamente
@@ -129,6 +132,15 @@ export async function PUT(
     visibleMetricsValue = serializeVisibleMetrics(visibleMetrics as VisibleMetrics);
   }
 
+  // leadSources: array de strings com origens (tags) customizadas pro CRM.
+  // Se igual ao default, é serializado como null pra não inflar o DB.
+  let leadSourcesValue: string | null | undefined = undefined;
+  if (Array.isArray(leadSources)) {
+    leadSourcesValue = serializeLeadSources(leadSources as string[]);
+  } else if (leadSources === null) {
+    leadSourcesValue = null;
+  }
+
   // Remove integrações antigas e recria
   await db.workspaceIntegration.deleteMany({ where: { workspaceId: id } });
 
@@ -140,6 +152,7 @@ export async function PUT(
       ...(typeof publicAccess === "boolean" ? { publicAccess } : {}),
       ...(sharePasswordValue !== undefined ? { sharePassword: sharePasswordValue } : {}),
       ...(visibleMetricsValue !== undefined ? { visibleMetrics: visibleMetricsValue } : {}),
+      ...(leadSourcesValue !== undefined ? { leadSources: leadSourcesValue } : {}),
       integrations: integrationsCreate?.length
         ? { create: integrationsCreate }
         : undefined,
