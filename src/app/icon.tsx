@@ -18,9 +18,11 @@ export default async function Icon() {
 
   return new ImageResponse(
     (
+      // Sem `background` — gera PNG com fundo transparente. O PNG da logo
+      // já tem alpha=0 nos cantos, então o favicon mostra só o "D" azul
+      // exatamente como aparece no sidebar (sobre qualquer cor de aba).
       <div
         style={{
-          background: "#ffffff",
           width: "100%",
           height: "100%",
           display: "flex",

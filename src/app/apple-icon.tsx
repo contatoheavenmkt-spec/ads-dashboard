@@ -16,9 +16,12 @@ export default async function AppleIcon() {
 
   return new ImageResponse(
     (
+      // iOS aplica máscara arredondada automaticamente e exige um fundo opaco
+      // (Apple não aceita PNG transparente como apple-touch-icon — fica
+      // preto na home screen). Usa o azul-marinho do tema Dashfy.
       <div
         style={{
-          background: "#ffffff",
+          background: "#0f172a",
           width: "100%",
           height: "100%",
           display: "flex",

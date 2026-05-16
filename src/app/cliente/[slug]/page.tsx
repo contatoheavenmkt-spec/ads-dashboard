@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { ClientDashboard } from "@/components/dashboard/client-dashboard";
 import { PasswordGate } from "@/components/dashboard/password-gate";
+import { PrivateWorkspaceGate } from "@/components/dashboard/private-workspace-gate";
 import { shareCookieName, verifyShareToken } from "@/lib/workspace-access";
 import { parseVisibleMetrics } from "@/lib/visible-metrics";
 
@@ -22,9 +23,12 @@ export default async function PublicClientPage({ params }: Props) {
 
   if (!workspace) notFound();
 
-  // Workspaces não públicos não são acessíveis via /cliente/[slug] — protege
-  // contra vazamento se o owner setou publicAccess=false.
-  if (!workspace.publicAccess) notFound();
+  // Workspace existe mas o owner não habilitou "Acesso público" — em vez de
+  // soltar 404 cru (UX confuso pra cliente final que recebeu o link),
+  // mostra página branded explicando que precisa fazer login.
+  if (!workspace.publicAccess) {
+    return <PrivateWorkspaceGate slug={slug} workspaceName={workspace.name} />;
+  }
 
   if (workspace.sharePassword) {
     const cookieStore = await cookies();
