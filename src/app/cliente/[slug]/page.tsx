@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { ClientDashboard } from "@/components/dashboard/client-dashboard";
 import { PasswordGate } from "@/components/dashboard/password-gate";
 import { shareCookieName, verifyShareToken } from "@/lib/workspace-access";
+import { parseVisibleMetrics } from "@/lib/visible-metrics";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -43,6 +44,7 @@ export default async function PublicClientPage({ params }: Props) {
       platforms={platforms}
       showLogout={false}
       slug={slug}
+      visibleMetrics={parseVisibleMetrics(workspace.visibleMetrics)}
     />
   );
 }

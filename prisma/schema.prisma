@@ -66,6 +66,9 @@ model Workspace {
   logo          String?
   publicAccess  Boolean  @default(false)
   sharePassword String?
+  // JSON com flags { showSpend, showRevenue, showMessages, ... }. null = auto
+  // (mostra todas que têm dados, comportamento padrão antigo).
+  visibleMetrics String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

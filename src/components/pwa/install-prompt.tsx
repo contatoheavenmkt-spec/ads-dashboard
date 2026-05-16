@@ -3,25 +3,12 @@
 import { useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// Tipo do evento que o navegador dispara em browsers compatíveis com PWA.
-// Não está no lib.dom.d.ts, então declaramos a interface mínima.
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
-}
+import { initPwaStore, triggerInstall, usePwaState } from "./pwa-store";
 
 const DISMISS_KEY = "dashfy.pwa.installDismissed";
 // Quanto tempo após dismiss não mostramos de novo. Usuário pode mudar de ideia,
 // então não some pra sempre; aparece de novo após 30 dias.
 const DISMISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-function isStandalone(): boolean {
-  if (typeof window === "undefined") return false;
-  if (window.matchMedia?.("(display-mode: standalone)").matches) return true;
-  // iOS expõe via navigator.standalone (legado, fora do tipo padrão).
-  return Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
-}
 
 function dismissedRecently(): boolean {
   try {
@@ -36,55 +23,28 @@ function dismissedRecently(): boolean {
 }
 
 export function InstallPrompt() {
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const [visible, setVisible] = useState(false);
+  const { canInstall, isInstalled } = usePwaState();
+  const [dismissed, setDismissed] = useState(true); // começa hidden, libera no effect
 
   useEffect(() => {
-    if (isStandalone() || dismissedRecently()) return;
-
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferred(e as BeforeInstallPromptEvent);
-      setVisible(true);
-    };
-    window.addEventListener("beforeinstallprompt", handler);
-
-    const installedHandler = () => {
-      setVisible(false);
-      setDeferred(null);
-    };
-    window.addEventListener("appinstalled", installedHandler);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handler);
-      window.removeEventListener("appinstalled", installedHandler);
-    };
+    setDismissed(dismissedRecently());
   }, []);
 
   async function handleInstall() {
-    if (!deferred) return;
-    await deferred.prompt();
-    const choice = await deferred.userChoice;
-    if (choice.outcome === "accepted") {
-      setVisible(false);
-      setDeferred(null);
-    } else {
-      handleDismiss();
-    }
+    const outcome = await triggerInstall();
+    if (outcome !== "accepted") handleDismiss();
   }
 
   function handleDismiss() {
     try {
       localStorage.setItem(DISMISS_KEY, String(Date.now()));
     } catch {
-      // Se localStorage falhar (modo privado), o banner reaparece no próximo
-      // load — comportamento aceitável.
+      // localStorage indisponível (modo privado) — banner reaparece no próximo load.
     }
-    setVisible(false);
-    setDeferred(null);
+    setDismissed(true);
   }
 
-  if (!visible || !deferred) return null;
+  if (isInstalled || dismissed || !canInstall) return null;
 
   return (
     <div
@@ -129,12 +89,13 @@ export function InstallPrompt() {
 }
 
 /**
- * Registra o service worker. Chamado uma vez no client. Falha silenciosa se
- * o browser não suportar (Safari < 11.1, modo privado em alguns).
+ * Registra o service worker e inicializa o store do PWA. Chamado uma vez no
+ * layout raiz. Falha silenciosa se o browser não suportar (Safari < 11.1).
  */
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (typeof window === "undefined") return;
+    initPwaStore();
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw.js").catch(() => {
       // Falha aqui não compromete uso normal — só desabilita PWA/push.

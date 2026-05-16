@@ -11,6 +11,7 @@ import {
   Settings,
   CreditCard,
   BadgeCheck,
+  UserCircle,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -93,6 +94,7 @@ const saasItems: NavItem[] = [
   { href: "/integracoes", label: "Contas", icon: Share2 },
   { href: "/workspaces", label: "Workspaces", icon: Users },
   { href: "/dashboard/billing", label: "Plano", icon: BadgeCheck, activeColor: "text-emerald-400" },
+  { href: "/perfil", label: "Perfil", icon: UserCircle },
 ];
 
 const allDashboardItems: NavItem[] = [

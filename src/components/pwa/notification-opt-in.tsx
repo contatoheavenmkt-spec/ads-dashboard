@@ -115,8 +115,8 @@ export function NotificationOptIn() {
         "p-4 flex items-start gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300",
       )}
     >
-      <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 shrink-0">
-        <Bell size={18} className="text-amber-400" />
+      <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 shrink-0">
+        <Bell size={18} className="text-blue-400" />
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-bold text-white mb-0.5">Receber notificações</h3>
@@ -127,7 +127,7 @@ export function NotificationOptIn() {
           <button
             onClick={handleEnable}
             disabled={loading}
-            className="px-3 py-1.5 rounded-md bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 text-xs font-semibold transition-colors"
+            className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
           >
             {loading ? "Ativando..." : "Ativar"}
           </button>

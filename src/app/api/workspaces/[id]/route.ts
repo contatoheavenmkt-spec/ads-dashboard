@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { hashSharePassword } from "@/lib/workspace-access";
+import { parseVisibleMetrics, serializeVisibleMetrics, type VisibleMetrics } from "@/lib/visible-metrics";
 
 async function requireOwnership(workspaceId: string) {
   const session = await auth();
@@ -33,6 +34,7 @@ export async function GET(
       slug: true,
       logo: true,
       publicAccess: true,
+      visibleMetrics: true,
       // sharePassword nunca é exposto na resposta — substituído por hasPassword.
       createdAt: true,
       updatedAt: true,
@@ -53,9 +55,11 @@ export async function GET(
     select: { sharePassword: true },
   });
 
+  const { visibleMetrics: rawMetrics, ...rest } = workspace;
   return NextResponse.json({
-    ...workspace,
+    ...rest,
     hasPassword: !!wsRaw?.sharePassword,
+    visibleMetrics: parseVisibleMetrics(rawMetrics),
   });
 }
 
@@ -70,7 +74,7 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const { name, logo, integrationIds, publicAccess, sharePassword, clearSharePassword } = body;
+  const { name, logo, integrationIds, publicAccess, sharePassword, clearSharePassword, visibleMetrics } = body;
 
   // sharePassword:
   //  - clearSharePassword=true   → remove explicitamente
@@ -114,6 +118,17 @@ export async function PUT(
       .map((integrationId: string) => ({ integrationId }));
   }
 
+  // visibleMetrics:
+  //   - null           → workspace volta pro modo auto-detect
+  //   - objeto válido  → salva flags explícitas (campos não listados viram default `true`)
+  //   - undefined      → não toca no valor atual
+  let visibleMetricsValue: string | null | undefined = undefined;
+  if (visibleMetrics === null) {
+    visibleMetricsValue = null;
+  } else if (visibleMetrics && typeof visibleMetrics === "object") {
+    visibleMetricsValue = serializeVisibleMetrics(visibleMetrics as VisibleMetrics);
+  }
+
   // Remove integrações antigas e recria
   await db.workspaceIntegration.deleteMany({ where: { workspaceId: id } });
 
@@ -124,6 +139,7 @@ export async function PUT(
       ...(logoValue !== undefined ? { logo: logoValue } : {}),
       ...(typeof publicAccess === "boolean" ? { publicAccess } : {}),
       ...(sharePasswordValue !== undefined ? { sharePassword: sharePasswordValue } : {}),
+      ...(visibleMetricsValue !== undefined ? { visibleMetrics: visibleMetricsValue } : {}),
       integrations: integrationsCreate?.length
         ? { create: integrationsCreate }
         : undefined,

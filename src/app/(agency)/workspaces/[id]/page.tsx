@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import {
   ArrowLeft,
+  BarChart3,
   CheckCircle2,
   Copy,
   Eye,
@@ -23,6 +24,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
+import { METRIC_DEFINITIONS, type VisibleMetrics, type MetricKey } from "@/lib/visible-metrics";
 
 interface Integration {
   id: string;
@@ -47,6 +49,8 @@ interface Workspace {
   // O backend não retorna mais o hash da senha (segurança).
   // Apenas indica se existe uma senha definida.
   hasPassword: boolean;
+  // null = auto-detect (padrão); objeto = customização explícita por KPI.
+  visibleMetrics: VisibleMetrics | null;
   integrations: Array<{ integration: Integration }>;
   clients: Client[];
 }
@@ -117,6 +121,10 @@ export default function WorkspaceDetailPage() {
   const [publicAccess, setPublicAccess] = useState(false);
   const [usePassword, setUsePassword] = useState(false);
   const [sharePassword, setSharePassword] = useState("");
+  // null = "deixar auto"; objeto vazio = nenhuma marcada (escondem todas);
+  // objeto com flags = customização explícita.
+  const [customMetrics, setCustomMetrics] = useState(false);
+  const [metricsState, setMetricsState] = useState<VisibleMetrics>({});
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -151,6 +159,8 @@ export default function WorkspaceDetailPage() {
       setUsePassword(!!ws.hasPassword);
       setSelected(ws.integrations.map((i: { integration: Integration }) => i.integration.id));
       setClients(ws.clients ?? []);
+      setCustomMetrics(ws.visibleMetrics !== null);
+      setMetricsState(ws.visibleMetrics ?? {});
     });
   }, [id]);
 
@@ -178,6 +188,9 @@ export default function WorkspaceDetailPage() {
     } else if (sharePassword.length > 0) {
       body.sharePassword = sharePassword;
     }
+
+    // visibleMetrics: null = volta pra auto; objeto = customização explícita.
+    body.visibleMetrics = customMetrics ? metricsState : null;
 
     await fetch(`/api/workspaces/${id}`, {
       method: "PUT",
@@ -437,6 +450,57 @@ export default function WorkspaceDetailPage() {
                       </div>
                       {isSelected && <CheckCircle2 size={16} className="text-blue-400 shrink-0" />}
                     </div>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
+
+          {/* Métricas visíveis na dash do cliente */}
+          <Section
+            icon={<BarChart3 size={13} />}
+            title="Métricas visíveis"
+            badge={customMetrics ? "Personalizado" : "Auto"}
+          >
+            <div className="flex items-start justify-between gap-3 p-3 rounded-xl border border-slate-700/50 bg-slate-800/40">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-100">Escolher quais KPIs aparecem</p>
+                <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                  Quando desligado, a dash mostra automaticamente os KPIs que têm dado &gt; 0 no período. Ligue para escolher manualmente — útil para esconder &quot;Vendas&quot; em cliente que só roda WhatsApp, ou &quot;Mensagens&quot; em cliente que só roda site.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCustomMetrics((v) => !v)}
+                className={`w-10 h-5 rounded-full transition-all relative flex-shrink-0 ${customMetrics ? "bg-blue-600" : "bg-slate-700"}`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${customMetrics ? "left-5.5 translate-x-0.5" : "left-0.5"}`} />
+              </button>
+            </div>
+
+            {customMetrics && (
+              <div className="space-y-2 mt-2">
+                {METRIC_DEFINITIONS.map((def) => {
+                  // Default visible quando não setado explicitamente — coerente com shouldShowMetric.
+                  const checked = metricsState[def.key] !== false;
+                  return (
+                    <label
+                      key={def.key}
+                      className="flex items-start gap-3 p-3 rounded-xl border border-slate-700/50 bg-slate-800/40 hover:border-slate-600/60 cursor-pointer transition-all"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) =>
+                          setMetricsState((prev) => ({ ...prev, [def.key as MetricKey]: e.target.checked }))
+                        }
+                        className="mt-0.5 w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-slate-100">{def.label}</p>
+                        <p className="text-[11px] text-slate-500">{def.description}</p>
+                      </div>
+                    </label>
                   );
                 })}
               </div>

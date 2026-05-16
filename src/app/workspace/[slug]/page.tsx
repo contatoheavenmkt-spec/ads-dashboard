@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { ClientDashboard } from "@/components/dashboard/client-dashboard";
+import { parseVisibleMetrics } from "@/lib/visible-metrics";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -34,6 +35,7 @@ export default async function ClientWorkspacePage({ params }: Props) {
       platforms={platforms}
       showLogout={true}
       slug={slug}
+      visibleMetrics={parseVisibleMetrics(workspace.visibleMetrics)}
     />
   );
 }

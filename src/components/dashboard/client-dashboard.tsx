@@ -13,6 +13,7 @@ import { ClientSidebar, ClientView } from "@/components/layout/client-sidebar";
 import { CrmView } from "@/components/dashboard/crm-view";
 import { NotificationOptIn } from "@/components/pwa/notification-opt-in";
 import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
+import { shouldShowMetric, type VisibleMetrics } from "@/lib/visible-metrics";
 import {
   Loader2, LayoutDashboard, Calendar, ChevronDown, Check,
   Download, Users, PieChart as PieChartIcon,
@@ -146,6 +147,11 @@ interface ClientDashboardProps {
   platforms: string[];
   showLogout?: boolean;
   slug: string;
+  /**
+   * Override de quais KPIs aparecer. null = auto-detect (mostra se valor > 0).
+   * Configurado pelo dono do workspace em /workspaces/[id].
+   */
+  visibleMetrics?: VisibleMetrics | null;
 }
 
 // ─── Safe fetch ───────────────────────────────────────────────────────────────
@@ -164,6 +170,7 @@ async function safeFetch(url: string): Promise<unknown> {
 
 export function ClientDashboard({
   workspaceId, workspaceName, logo, platforms, showLogout, slug,
+  visibleMetrics = null,
 }: ClientDashboardProps) {
   const defaultView: ClientView =
     platforms.length >= 2 ? "overview"
@@ -270,18 +277,24 @@ export function ClientDashboard({
 
   const renderMeta = () => {
     const t = metaData?.totals;
-    const hasMessages = t && t.messages > 0;
-    const hasPurchases = t && t.purchases > 0;
-    const hasRevenue = t && t.revenue > 0;
+    // shouldShowMetric: respeita override de visibleMetrics se setado pelo dono,
+    // senão usa auto-detect (mostra se valor > 0).
+    const showSpend = shouldShowMetric("spend", visibleMetrics, true);
+    const showImpressions = shouldShowMetric("impressions", visibleMetrics, true);
+    const showReach = shouldShowMetric("reach", visibleMetrics, true);
+    const showClicks = shouldShowMetric("clicks", visibleMetrics, true);
+    const showMessages = shouldShowMetric("messages", visibleMetrics, !!(t && t.messages > 0));
+    const showPurchases = shouldShowMetric("purchases", visibleMetrics, !!(t && t.purchases > 0));
+    const showRevenue = shouldShowMetric("revenue", visibleMetrics, !!(t && t.revenue > 0));
 
     const kpis = [
-      { title: "Investimento", value: formatCurrency(t?.spend ?? 0), color: "#3b82f6", data: metaData?.timeSeries.map(d => d.spend) ?? [] },
-      { title: "Impressões", value: formatNumber(t?.impressions ?? 0), color: "#f59e0b", data: metaData?.timeSeries.map(d => d.impressions) ?? [] },
-      { title: "Alcance", value: formatNumber(t?.reach ?? 0), color: "#a855f7", data: metaData?.timeSeries.map(d => d.reach) ?? [] },
-      { title: "Cliques", value: formatNumber(t?.clicks ?? 0), color: "#06b6d4", data: metaData?.timeSeries.map(d => d.clicks) ?? [] },
-      ...(hasMessages ? [{ title: "Mensagens Iniciadas", value: formatNumber(t?.messages ?? 0), color: "#10b981", data: metaData?.timeSeries.map(d => d.messages) ?? [] }] : []),
-      ...(hasPurchases ? [{ title: "Vendas", value: formatNumber(t?.purchases ?? 0), color: "#f97316", data: metaData?.timeSeries.map(d => d.purchases) ?? [] }] : []),
-      ...(hasRevenue ? [{ title: "Faturamento", value: formatCurrency(t?.revenue ?? 0), color: "#22c55e", data: metaData?.timeSeries.map(d => d.revenue) ?? [] }] : []),
+      ...(showSpend ? [{ title: "Investimento", value: formatCurrency(t?.spend ?? 0), color: "#3b82f6", data: metaData?.timeSeries.map(d => d.spend) ?? [] }] : []),
+      ...(showImpressions ? [{ title: "Impressões", value: formatNumber(t?.impressions ?? 0), color: "#f59e0b", data: metaData?.timeSeries.map(d => d.impressions) ?? [] }] : []),
+      ...(showReach ? [{ title: "Alcance", value: formatNumber(t?.reach ?? 0), color: "#a855f7", data: metaData?.timeSeries.map(d => d.reach) ?? [] }] : []),
+      ...(showClicks ? [{ title: "Cliques", value: formatNumber(t?.clicks ?? 0), color: "#06b6d4", data: metaData?.timeSeries.map(d => d.clicks) ?? [] }] : []),
+      ...(showMessages ? [{ title: "Mensagens Iniciadas", value: formatNumber(t?.messages ?? 0), color: "#10b981", data: metaData?.timeSeries.map(d => d.messages) ?? [] }] : []),
+      ...(showPurchases ? [{ title: "Vendas", value: formatNumber(t?.purchases ?? 0), color: "#f97316", data: metaData?.timeSeries.map(d => d.purchases) ?? [] }] : []),
+      ...(showRevenue ? [{ title: "Faturamento", value: formatCurrency(t?.revenue ?? 0), color: "#22c55e", data: metaData?.timeSeries.map(d => d.revenue) ?? [] }] : []),
     ];
 
     return (
@@ -310,7 +323,15 @@ export function ClientDashboard({
               clicks: t?.clicks ?? 0,
               conversions: t?.conversions ?? 0,
               revenue: t?.revenue ?? 0,
-              conversionLabel: t && t.purchases > 0 ? "Vendas" : t && t.messages > 0 ? "Conversas" : t && t.leads > 0 ? "Leads" : "Conversões"
+              // Label do funil respeita o que o owner deixou visível: se ele
+              // escondeu "Vendas", não chama o KPI de Vendas mesmo havendo purchases.
+              conversionLabel: showPurchases && t && t.purchases > 0
+                ? "Vendas"
+                : showMessages && t && t.messages > 0
+                  ? "Conversas"
+                  : t && t.leads > 0
+                    ? "Leads"
+                    : "Conversões"
             }} />
           </div>
           <div className="glass-panel rounded-2xl p-3 sm:p-5 flex flex-col">
@@ -336,7 +357,7 @@ export function ClientDashboard({
             <h2 className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-6 text-center">Top Campanhas</h2>
             <TopCampaignsDonut
               campaigns={metaData?.campaigns ?? []}
-              conversionLabel={t && t.purchases > 0 ? "VENDAS" : t && t.messages > 0 ? "CONVERSAS" : "CONVERSÕES"}
+              conversionLabel={showPurchases && t && t.purchases > 0 ? "VENDAS" : showMessages && t && t.messages > 0 ? "CONVERSAS" : "CONVERSÕES"}
             />
           </div>
         </div>
