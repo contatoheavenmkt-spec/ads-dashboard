@@ -24,7 +24,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { METRIC_DEFINITIONS, type VisibleMetrics, type MetricKey } from "@/lib/visible-metrics";
+import { METRIC_DEFINITIONS, METRIC_CATEGORIES, type VisibleMetrics, type MetricKey } from "@/lib/visible-metrics";
 
 interface Integration {
   id: string;
@@ -479,28 +479,67 @@ export default function WorkspaceDetailPage() {
             </div>
 
             {customMetrics && (
-              <div className="space-y-2 mt-2">
-                {METRIC_DEFINITIONS.map((def) => {
-                  // Default visible quando não setado explicitamente — coerente com shouldShowMetric.
-                  const checked = metricsState[def.key] !== false;
+              <div className="space-y-4 mt-3">
+                {/* Atalhos rápidos */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const all: VisibleMetrics = {};
+                      for (const def of METRIC_DEFINITIONS) all[def.key] = true;
+                      setMetricsState(all);
+                    }}
+                    className="px-3 py-1 rounded-full bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 text-[10px] font-bold text-blue-300 uppercase tracking-wider transition-colors"
+                  >
+                    Marcar todas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const none: VisibleMetrics = {};
+                      for (const def of METRIC_DEFINITIONS) none[def.key] = false;
+                      setMetricsState(none);
+                    }}
+                    className="px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-bold text-slate-400 uppercase tracking-wider transition-colors"
+                  >
+                    Desmarcar todas
+                  </button>
+                </div>
+
+                {METRIC_CATEGORIES.map((cat) => {
+                  const defs = METRIC_DEFINITIONS.filter((d) => d.category === cat.id);
                   return (
-                    <label
-                      key={def.key}
-                      className="flex items-start gap-3 p-3 rounded-xl border border-slate-700/50 bg-slate-800/40 hover:border-slate-600/60 cursor-pointer transition-all"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) =>
-                          setMetricsState((prev) => ({ ...prev, [def.key as MetricKey]: e.target.checked }))
-                        }
-                        className="mt-0.5 w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-slate-100">{def.label}</p>
-                        <p className="text-[11px] text-slate-500">{def.description}</p>
+                    <div key={cat.id} className="space-y-2">
+                      <div className="flex items-baseline gap-2">
+                        <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{cat.label}</h4>
+                        <span className="text-[10px] text-slate-500">— {cat.description}</span>
                       </div>
-                    </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {defs.map((def) => {
+                          // Default visible quando não setado explicitamente (coerente com shouldShowMetric).
+                          const checked = metricsState[def.key] !== false;
+                          return (
+                            <label
+                              key={def.key}
+                              className="flex items-start gap-2.5 p-2.5 rounded-xl border border-slate-700/50 bg-slate-800/40 hover:border-slate-600/60 cursor-pointer transition-all"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) =>
+                                  setMetricsState((prev) => ({ ...prev, [def.key as MetricKey]: e.target.checked }))
+                                }
+                                className="mt-0.5 w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-slate-100">{def.label}</p>
+                                <p className="text-[10px] text-slate-500 leading-tight">{def.description}</p>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </div>

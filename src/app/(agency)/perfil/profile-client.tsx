@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Header } from "@/components/layout/header";
-import { triggerInstall, usePwaState } from "@/components/pwa/pwa-store";
+import { triggerInstall, usePwaState, subscribeToPush } from "@/components/pwa/pwa-store";
 
 interface UserInfo {
   id: string;
@@ -39,16 +39,6 @@ const PLAN_LABELS: Record<string, string> = {
   premium: "Premium",
 };
 
-function urlBase64ToBuffer(base64String: string): ArrayBuffer {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base64);
-  const buffer = new ArrayBuffer(raw.length);
-  const view = new Uint8Array(buffer);
-  for (let i = 0; i < raw.length; i++) view[i] = raw.charCodeAt(i);
-  return buffer;
-}
-
 export function ProfileClient({ user, subscription }: ProfileClientProps) {
   const { canInstall, isInstalled } = usePwaState();
   const [notifEnabled, setNotifEnabled] = useState<boolean | null>(null);
@@ -70,37 +60,12 @@ export function ProfileClient({ user, subscription }: ProfileClientProps) {
         alert("Seu navegador não suporta notificações push. Use Chrome/Edge desktop ou Android.");
         return;
       }
-
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        if (permission === "denied") {
-          alert("Permissão negada. Para ativar, vá em Configurações do site no seu navegador.");
-        }
-        return;
+      const ok = await subscribeToPush();
+      if (ok) {
+        setNotifEnabled(true);
+      } else if (Notification.permission === "denied") {
+        alert("Permissão negada. Para ativar, vá em Configurações do site no seu navegador.");
       }
-
-      const keyRes = await fetch("/api/notifications/vapid-public-key");
-      if (!keyRes.ok) throw new Error("VAPID indisponível");
-      const { publicKey } = (await keyRes.json()) as { publicKey: string };
-
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToBuffer(publicKey),
-      });
-
-      const json = sub.toJSON();
-      await fetch("/api/notifications/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          endpoint: json.endpoint,
-          keys: json.keys,
-          userAgent: navigator.userAgent,
-        }),
-      });
-
-      setNotifEnabled(true);
     } catch (err) {
       console.error("[profile] enable notifications failed", err);
     } finally {

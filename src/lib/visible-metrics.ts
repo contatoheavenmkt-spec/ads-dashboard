@@ -5,28 +5,67 @@
  */
 
 export type MetricKey =
+  // Volume e alcance
   | "spend"
   | "impressions"
   | "reach"
+  | "frequency"
   | "clicks"
+  // Eficiência
+  | "ctr"
+  | "cpc"
+  | "cpm"
+  | "cpa"
+  | "roas"
+  | "aov"
+  // Conversão e resultado
   | "messages"
-  | "purchases"
   | "leads"
+  | "purchases"
   | "revenue"
   | "conversions";
 
 export type VisibleMetrics = Partial<Record<MetricKey, boolean>>;
 
-export const METRIC_DEFINITIONS: { key: MetricKey; label: string; description: string }[] = [
-  { key: "spend", label: "Investimento", description: "Valor gasto em anúncios" },
-  { key: "impressions", label: "Impressões", description: "Quantas vezes os anúncios apareceram" },
-  { key: "reach", label: "Alcance", description: "Pessoas únicas alcançadas" },
-  { key: "clicks", label: "Cliques", description: "Cliques nos anúncios" },
-  { key: "messages", label: "Mensagens iniciadas", description: "Conversas no WhatsApp/Messenger" },
-  { key: "purchases", label: "Vendas", description: "Compras registradas pelo pixel" },
-  { key: "leads", label: "Leads", description: "Cadastros de lead capturados" },
-  { key: "revenue", label: "Faturamento", description: "Receita gerada pelas vendas" },
-  { key: "conversions", label: "Conversões totais", description: "Vendas + leads + mensagens" },
+export type MetricCategory = "volume" | "eficiencia" | "conversao";
+
+export interface MetricDefinition {
+  key: MetricKey;
+  label: string;
+  description: string;
+  category: MetricCategory;
+  /** Se true, aparece por padrão no modo auto-detect (mesmo sem dado > 0). */
+  defaultAuto?: boolean;
+}
+
+export const METRIC_DEFINITIONS: MetricDefinition[] = [
+  // ─── Volume e alcance ────────────────────────────────────────────
+  { key: "spend", label: "Investimento", description: "Valor total gasto em anúncios", category: "volume", defaultAuto: true },
+  { key: "impressions", label: "Impressões", description: "Quantas vezes os anúncios apareceram", category: "volume", defaultAuto: true },
+  { key: "reach", label: "Alcance", description: "Pessoas únicas alcançadas", category: "volume", defaultAuto: true },
+  { key: "frequency", label: "Frequência", description: "Média de vezes que cada pessoa viu o anúncio (impressões / alcance)", category: "volume" },
+  { key: "clicks", label: "Cliques", description: "Cliques nos anúncios", category: "volume", defaultAuto: true },
+
+  // ─── Eficiência ──────────────────────────────────────────────────
+  { key: "ctr", label: "CTR", description: "Taxa de cliques (cliques / impressões)", category: "eficiencia" },
+  { key: "cpc", label: "CPC", description: "Custo por clique (investimento / cliques)", category: "eficiencia" },
+  { key: "cpm", label: "CPM", description: "Custo por mil impressões", category: "eficiencia" },
+  { key: "cpa", label: "CPA", description: "Custo por conversão (investimento / conversões)", category: "eficiencia" },
+  { key: "roas", label: "ROAS", description: "Retorno sobre investimento (faturamento / investimento)", category: "eficiencia" },
+  { key: "aov", label: "Ticket médio", description: "Valor médio por venda (faturamento / vendas)", category: "eficiencia" },
+
+  // ─── Conversão e resultado ───────────────────────────────────────
+  { key: "messages", label: "Mensagens iniciadas", description: "Conversas no WhatsApp ou Messenger", category: "conversao" },
+  { key: "leads", label: "Leads", description: "Cadastros de lead capturados", category: "conversao" },
+  { key: "purchases", label: "Vendas", description: "Compras registradas pelo pixel", category: "conversao" },
+  { key: "revenue", label: "Faturamento", description: "Receita gerada pelas vendas", category: "conversao" },
+  { key: "conversions", label: "Conversões totais", description: "Vendas + leads + mensagens somados", category: "conversao" },
+];
+
+export const METRIC_CATEGORIES: { id: MetricCategory; label: string; description: string }[] = [
+  { id: "volume", label: "Volume e alcance", description: "Quantos viram seus anúncios e clicaram" },
+  { id: "eficiencia", label: "Eficiência", description: "Custo, retorno e proporções" },
+  { id: "conversao", label: "Conversões e resultado", description: "Vendas, leads e mensagens" },
 ];
 
 export function parseVisibleMetrics(raw: string | null | undefined): VisibleMetrics | null {
@@ -55,7 +94,8 @@ export function serializeVisibleMetrics(v: VisibleMetrics | null): string | null
  * - `hasData`: o KPI tem valor > 0 no período (auto-detect anterior)
  *
  * Regras:
- *   - override null → fallback pro auto-detect (mostra se hasData)
+ *   - override null → fallback pro auto-detect (mostra se hasData OU se
+ *     defaultAuto=true na definição)
  *   - override define a key explicitamente → respeita o boolean
  *   - override existe mas não define essa key → trata como `true` (assume
  *     que o usuário deixou no padrão; é melhor mostrar a mais do que esconder

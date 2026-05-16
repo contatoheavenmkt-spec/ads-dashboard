@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { signOut } from "next-auth/react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function ChangePasswordForm() {
   const [current, setCurrent] = useState("");
@@ -9,6 +11,9 @@ export function ChangePasswordForm() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNext, setShowNext] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,42 +51,33 @@ export function ChangePasswordForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <div>
-        <label className="block text-xs font-medium text-gray-700">Senha atual</label>
-        <input
-          type="password"
-          value={current}
-          onChange={(e) => setCurrent(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          required
-          autoFocus
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700">Nova senha</label>
-        <input
-          type="password"
-          value={next}
-          onChange={(e) => setNext(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          required
-          minLength={6}
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700">Confirme a nova senha</label>
-        <input
-          type="password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          required
-          minLength={6}
-        />
-      </div>
+      <PasswordField
+        label="Senha atual"
+        value={current}
+        onChange={setCurrent}
+        show={showCurrent}
+        onToggle={() => setShowCurrent((v) => !v)}
+        autoFocus
+      />
+      <PasswordField
+        label="Nova senha"
+        value={next}
+        onChange={setNext}
+        show={showNext}
+        onToggle={() => setShowNext((v) => !v)}
+        minLength={6}
+      />
+      <PasswordField
+        label="Confirme a nova senha"
+        value={confirm}
+        onChange={setConfirm}
+        show={showConfirm}
+        onToggle={() => setShowConfirm((v) => !v)}
+        minLength={6}
+      />
 
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+        <p className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2 font-medium">
           {error}
         </p>
       )}
@@ -89,10 +85,54 @@ export function ChangePasswordForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-blue-600 text-white text-sm font-semibold py-2.5 hover:bg-blue-700 disabled:opacity-50"
+        className={cn(
+          "w-full rounded-xl text-sm font-bold py-3 transition-all flex items-center justify-center gap-2",
+          "bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white",
+          "disabled:opacity-50 disabled:cursor-not-allowed",
+        )}
       >
+        {loading && <Loader2 size={14} className="animate-spin" />}
         {loading ? "Salvando..." : "Trocar senha"}
       </button>
     </form>
+  );
+}
+
+interface PasswordFieldProps {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  show: boolean;
+  onToggle: () => void;
+  autoFocus?: boolean;
+  minLength?: number;
+}
+
+function PasswordField({ label, value, onChange, show, onToggle, autoFocus, minLength }: PasswordFieldProps) {
+  return (
+    <div>
+      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required
+          autoFocus={autoFocus}
+          minLength={minLength}
+          className="w-full bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg text-slate-500 hover:text-slate-300 transition-colors"
+          aria-label={show ? "Esconder senha" : "Mostrar senha"}
+        >
+          {show ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
+      </div>
+    </div>
   );
 }

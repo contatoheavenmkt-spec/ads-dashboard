@@ -278,23 +278,58 @@ export function ClientDashboard({
   const renderMeta = () => {
     const t = metaData?.totals;
     // shouldShowMetric: respeita override de visibleMetrics se setado pelo dono,
-    // senão usa auto-detect (mostra se valor > 0).
+    // senão usa auto-detect (mostra se valor > 0 ou KPI é defaultAuto).
     const showSpend = shouldShowMetric("spend", visibleMetrics, true);
     const showImpressions = shouldShowMetric("impressions", visibleMetrics, true);
     const showReach = shouldShowMetric("reach", visibleMetrics, true);
+    const showFrequency = shouldShowMetric("frequency", visibleMetrics, false);
     const showClicks = shouldShowMetric("clicks", visibleMetrics, true);
+    const showCtr = shouldShowMetric("ctr", visibleMetrics, false);
+    const showCpc = shouldShowMetric("cpc", visibleMetrics, false);
+    const showCpm = shouldShowMetric("cpm", visibleMetrics, false);
+    const showCpa = shouldShowMetric("cpa", visibleMetrics, false);
+    const showRoas = shouldShowMetric("roas", visibleMetrics, false);
+    const showAov = shouldShowMetric("aov", visibleMetrics, false);
     const showMessages = shouldShowMetric("messages", visibleMetrics, !!(t && t.messages > 0));
+    const showLeads = shouldShowMetric("leads", visibleMetrics, !!(t && t.leads > 0));
     const showPurchases = shouldShowMetric("purchases", visibleMetrics, !!(t && t.purchases > 0));
     const showRevenue = shouldShowMetric("revenue", visibleMetrics, !!(t && t.revenue > 0));
+    const showConversions = shouldShowMetric("conversions", visibleMetrics, false);
+
+    // KPIs derivados — calculados aqui pra não depender do backend mandar.
+    // Evita divisão por zero substituindo por 0 quando denominador é 0.
+    const spend = t?.spend ?? 0;
+    const impressions = t?.impressions ?? 0;
+    const reach = t?.reach ?? 0;
+    const clicks = t?.clicks ?? 0;
+    const purchases = t?.purchases ?? 0;
+    const revenue = t?.revenue ?? 0;
+    const conversions = t?.conversions ?? 0;
+    const frequency = reach > 0 ? impressions / reach : 0;
+    const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+    const cpc = clicks > 0 ? spend / clicks : 0;
+    const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
+    const cpa = conversions > 0 ? spend / conversions : 0;
+    const roas = spend > 0 ? revenue / spend : 0;
+    const aov = purchases > 0 ? revenue / purchases : 0;
 
     const kpis = [
-      ...(showSpend ? [{ title: "Investimento", value: formatCurrency(t?.spend ?? 0), color: "#3b82f6", data: metaData?.timeSeries.map(d => d.spend) ?? [] }] : []),
-      ...(showImpressions ? [{ title: "Impressões", value: formatNumber(t?.impressions ?? 0), color: "#f59e0b", data: metaData?.timeSeries.map(d => d.impressions) ?? [] }] : []),
-      ...(showReach ? [{ title: "Alcance", value: formatNumber(t?.reach ?? 0), color: "#a855f7", data: metaData?.timeSeries.map(d => d.reach) ?? [] }] : []),
-      ...(showClicks ? [{ title: "Cliques", value: formatNumber(t?.clicks ?? 0), color: "#06b6d4", data: metaData?.timeSeries.map(d => d.clicks) ?? [] }] : []),
+      ...(showSpend ? [{ title: "Investimento", value: formatCurrency(spend), color: "#3b82f6", data: metaData?.timeSeries.map(d => d.spend) ?? [] }] : []),
+      ...(showImpressions ? [{ title: "Impressões", value: formatNumber(impressions), color: "#f59e0b", data: metaData?.timeSeries.map(d => d.impressions) ?? [] }] : []),
+      ...(showReach ? [{ title: "Alcance", value: formatNumber(reach), color: "#a855f7", data: metaData?.timeSeries.map(d => d.reach) ?? [] }] : []),
+      ...(showFrequency ? [{ title: "Frequência", value: frequency.toFixed(2), color: "#a78bfa", data: metaData?.timeSeries.map(d => d.reach > 0 ? d.impressions / d.reach : 0) ?? [] }] : []),
+      ...(showClicks ? [{ title: "Cliques", value: formatNumber(clicks), color: "#06b6d4", data: metaData?.timeSeries.map(d => d.clicks) ?? [] }] : []),
+      ...(showCtr ? [{ title: "CTR", value: `${ctr.toFixed(2)}%`, color: "#22d3ee", data: metaData?.timeSeries.map(d => d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0) ?? [] }] : []),
+      ...(showCpc ? [{ title: "CPC", value: formatCurrency(cpc), color: "#0ea5e9", data: metaData?.timeSeries.map(d => d.clicks > 0 ? d.spend / d.clicks : 0) ?? [] }] : []),
+      ...(showCpm ? [{ title: "CPM", value: formatCurrency(cpm), color: "#38bdf8", data: metaData?.timeSeries.map(d => d.impressions > 0 ? (d.spend / d.impressions) * 1000 : 0) ?? [] }] : []),
       ...(showMessages ? [{ title: "Mensagens Iniciadas", value: formatNumber(t?.messages ?? 0), color: "#10b981", data: metaData?.timeSeries.map(d => d.messages) ?? [] }] : []),
-      ...(showPurchases ? [{ title: "Vendas", value: formatNumber(t?.purchases ?? 0), color: "#f97316", data: metaData?.timeSeries.map(d => d.purchases) ?? [] }] : []),
-      ...(showRevenue ? [{ title: "Faturamento", value: formatCurrency(t?.revenue ?? 0), color: "#22c55e", data: metaData?.timeSeries.map(d => d.revenue) ?? [] }] : []),
+      ...(showLeads ? [{ title: "Leads", value: formatNumber(t?.leads ?? 0), color: "#84cc16", data: metaData?.timeSeries.map(d => d.leads) ?? [] }] : []),
+      ...(showPurchases ? [{ title: "Vendas", value: formatNumber(purchases), color: "#f97316", data: metaData?.timeSeries.map(d => d.purchases) ?? [] }] : []),
+      ...(showRevenue ? [{ title: "Faturamento", value: formatCurrency(revenue), color: "#22c55e", data: metaData?.timeSeries.map(d => d.revenue) ?? [] }] : []),
+      ...(showConversions ? [{ title: "Conversões totais", value: formatNumber(conversions), color: "#facc15", data: metaData?.timeSeries.map(d => d.conversions) ?? [] }] : []),
+      ...(showCpa ? [{ title: "CPA", value: formatCurrency(cpa), color: "#fb923c", data: metaData?.timeSeries.map(d => d.conversions > 0 ? d.spend / d.conversions : 0) ?? [] }] : []),
+      ...(showRoas ? [{ title: "ROAS", value: `${roas.toFixed(2)}x`, color: "#10b981", data: metaData?.timeSeries.map(d => d.spend > 0 ? d.revenue / d.spend : 0) ?? [] }] : []),
+      ...(showAov ? [{ title: "Ticket médio", value: formatCurrency(aov), color: "#34d399", data: metaData?.timeSeries.map(d => d.purchases > 0 ? d.revenue / d.purchases : 0) ?? [] }] : []),
     ];
 
     return (

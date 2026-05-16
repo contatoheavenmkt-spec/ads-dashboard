@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DashfyLogoIcon } from "@/components/logo/logo";
 import { initPwaStore, triggerInstall, usePwaState } from "./pwa-store";
 
 const DISMISS_KEY = "dashfy.pwa.installDismissed";
@@ -54,11 +55,14 @@ export function InstallPrompt() {
         "p-4 flex items-start gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300",
       )}
     >
-      <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 shrink-0">
-        <Download size={18} className="text-blue-400" />
+      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500/30 to-blue-700/20 border border-blue-500/40 flex items-center justify-center shrink-0">
+        <DashfyLogoIcon size={28} />
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-bold text-white mb-0.5">Baixar app Dashfy</h3>
+        <h3 className="text-sm font-bold text-white mb-0.5 flex items-center gap-1.5">
+          <Download size={12} className="text-blue-400" />
+          Baixar app Dashfy
+        </h3>
         <p className="text-[11px] text-slate-400 leading-tight mb-3">
           Acesse mais rápido pela sua tela inicial, sem precisar abrir o navegador.
         </p>
