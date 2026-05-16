@@ -49,6 +49,7 @@ export default async function PublicClientPage({ params }: Props) {
       showLogout={false}
       slug={slug}
       visibleMetrics={parseVisibleMetrics(workspace.visibleMetrics)}
+      showCrm={workspace.showCrm}
     />
   );
 }

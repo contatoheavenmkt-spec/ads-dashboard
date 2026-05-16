@@ -72,6 +72,10 @@ model Workspace {
   // JSON array de origens (tags) customizadas pro CRM, ex: ["Meta", "Indicação"].
   // null = usa os defaults: Meta, Google Ads, Indicação.
   leadSources    String?
+  // Quando false, esconde a aba CRM da dash do cliente final. Útil pra
+  // clientes que não usam o CRM (ex.: rodam só Google Ads). Default true
+  // mantém retrocompatibilidade — workspaces existentes seguem com CRM.
+  showCrm        Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

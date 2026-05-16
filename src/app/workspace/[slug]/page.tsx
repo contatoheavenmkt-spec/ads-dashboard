@@ -36,6 +36,7 @@ export default async function ClientWorkspacePage({ params }: Props) {
       showLogout={true}
       slug={slug}
       visibleMetrics={parseVisibleMetrics(workspace.visibleMetrics)}
+      showCrm={workspace.showCrm}
     />
   );
 }

@@ -37,6 +37,7 @@ export async function GET(
       publicAccess: true,
       visibleMetrics: true,
       leadSources: true,
+      showCrm: true,
       // sharePassword nunca é exposto na resposta — substituído por hasPassword.
       createdAt: true,
       updatedAt: true,
@@ -77,7 +78,7 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const { name, logo, integrationIds, publicAccess, sharePassword, clearSharePassword, visibleMetrics, leadSources } = body;
+  const { name, logo, integrationIds, publicAccess, sharePassword, clearSharePassword, visibleMetrics, leadSources, showCrm } = body;
 
   // sharePassword:
   //  - clearSharePassword=true   → remove explicitamente
@@ -153,6 +154,7 @@ export async function PUT(
       ...(sharePasswordValue !== undefined ? { sharePassword: sharePasswordValue } : {}),
       ...(visibleMetricsValue !== undefined ? { visibleMetrics: visibleMetricsValue } : {}),
       ...(leadSourcesValue !== undefined ? { leadSources: leadSourcesValue } : {}),
+      ...(typeof showCrm === "boolean" ? { showCrm } : {}),
       integrations: integrationsCreate?.length
         ? { create: integrationsCreate }
         : undefined,

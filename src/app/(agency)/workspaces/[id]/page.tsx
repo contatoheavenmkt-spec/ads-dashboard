@@ -57,6 +57,8 @@ interface Workspace {
   // Lista atual de origens (tags) pro CRM — sempre vem populada (defaults
   // quando o workspace não customizou).
   leadSources: string[];
+  // Quando false, esconde a aba CRM da dash do cliente final.
+  showCrm: boolean;
   integrations: Array<{ integration: Integration }>;
   clients: Client[];
 }
@@ -133,6 +135,7 @@ export default function WorkspaceDetailPage() {
   const [metricsState, setMetricsState] = useState<VisibleMetrics>({});
   const [leadSourcesState, setLeadSourcesState] = useState<string[]>(DEFAULT_LEAD_SOURCES);
   const [newSource, setNewSource] = useState("");
+  const [showCrm, setShowCrm] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -170,6 +173,7 @@ export default function WorkspaceDetailPage() {
       setCustomMetrics(ws.visibleMetrics !== null);
       setMetricsState(ws.visibleMetrics ?? {});
       setLeadSourcesState(ws.leadSources ?? DEFAULT_LEAD_SOURCES);
+      setShowCrm(ws.showCrm ?? true);
     });
   }, [id]);
 
@@ -203,6 +207,7 @@ export default function WorkspaceDetailPage() {
 
     // leadSources: array de strings. Backend reduz a null se igual ao default.
     body.leadSources = leadSourcesState;
+    body.showCrm = showCrm;
 
     await fetch(`/api/workspaces/${id}`, {
       method: "PUT",
@@ -556,6 +561,29 @@ export default function WorkspaceDetailPage() {
                 })}
               </div>
             )}
+          </Section>
+
+          {/* CRM — toggle visibilidade na dash do cliente */}
+          <Section
+            icon={<Tags size={13} />}
+            title="CRM na dash do cliente"
+            badge={showCrm ? "Ativo" : "Oculto"}
+          >
+            <div className="flex items-start justify-between gap-3 p-3 rounded-xl border border-slate-700/50 bg-slate-800/40">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-100">Mostrar aba CRM ao cliente</p>
+                <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                  Quando desligado, a aba &quot;CRM&quot; some do sidebar do cliente final. Útil se o cliente só usa relatórios e não opera CRM. Sua equipe da agência continua vendo via <strong>/crm</strong> consolidado.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCrm((v) => !v)}
+                className={`w-10 h-5 rounded-full transition-all relative flex-shrink-0 ${showCrm ? "bg-blue-600" : "bg-slate-700"}`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${showCrm ? "left-5.5 translate-x-0.5" : "left-0.5"}`} />
+              </button>
+            </div>
           </Section>
 
           {/* Tags do CRM */}

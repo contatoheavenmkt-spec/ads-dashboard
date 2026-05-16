@@ -72,11 +72,13 @@ interface ClientSidebarProps {
   view: ClientView;
   onViewChange: (v: ClientView) => void;
   onLogout?: () => void; // presente apenas nas páginas de login autenticado
+  /** Workspace.showCrm — default true (mantém retrocompatibilidade). */
+  showCrm?: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ClientSidebar({ platforms, view, onViewChange, onLogout }: ClientSidebarProps) {
+export function ClientSidebar({ platforms, view, onViewChange, onLogout, showCrm = true }: ClientSidebarProps) {
   const hasMeta = platforms.includes("meta");
   const hasGoogle = platforms.includes("google");
   const hasGA4 = platforms.includes("ga4");
@@ -88,7 +90,7 @@ export function ClientSidebar({ platforms, view, onViewChange, onLogout }: Clien
     ...(hasGoogle ? [{ id: "google" as ClientView, label: "Google Ads", icon: <GoogleAdsIcon />, platform: "google" }] : []),
     ...(hasGA4 ? [{ id: "ga4" as ClientView, label: "GA4", icon: <GA4Icon />, platform: "ga4" }] : []),
     { id: "detalhes" as ClientView, label: "Detalhes", icon: <DetailsIcon /> },
-    { id: "crm" as ClientView, label: "CRM", icon: <Users className="w-6 h-6 mb-1" /> },
+    ...(showCrm ? [{ id: "crm" as ClientView, label: "CRM", icon: <Users className="w-6 h-6 mb-1" /> }] : []),
   ];
 
   // Se nenhuma plataforma conectada, mostra pelo menos Meta

@@ -12,12 +12,13 @@ import { RegionList, RegionMap } from "@/components/dashboard/region-heatmap";
 import { ClientSidebar, ClientView } from "@/components/layout/client-sidebar";
 import { CrmView } from "@/components/dashboard/crm-view";
 import { NotificationOptIn } from "@/components/pwa/notification-opt-in";
+import { usePwaState, triggerInstall } from "@/components/pwa/pwa-store";
 import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
 import { shouldShowMetric, type VisibleMetrics } from "@/lib/visible-metrics";
 import {
   Loader2, LayoutDashboard, Calendar, ChevronDown, Check,
   Download, Users, PieChart as PieChartIcon,
-  Search, Target, Layers, MousePointer2, TrendingUp,
+  Search, Target, Layers, MousePointer2, TrendingUp, Smartphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
@@ -152,6 +153,10 @@ interface ClientDashboardProps {
    * Configurado pelo dono do workspace em /workspaces/[id].
    */
   visibleMetrics?: VisibleMetrics | null;
+  /**
+   * Se false, esconde a aba CRM do sidebar. Default true.
+   */
+  showCrm?: boolean;
 }
 
 // ─── Safe fetch ───────────────────────────────────────────────────────────────
@@ -170,8 +175,12 @@ async function safeFetch(url: string): Promise<unknown> {
 
 export function ClientDashboard({
   workspaceId, workspaceName, logo, platforms, showLogout, slug,
-  visibleMetrics = null,
+  visibleMetrics = null, showCrm = true,
 }: ClientDashboardProps) {
+  // CTA "Baixar app" sempre visível pro cliente final no header — diferente
+  // do banner dismissível do layout root, esse fica permanente. Cliente final
+  // costuma usar a dash pelo celular; queremos máxima visibilidade até instalar.
+  const { canInstall, isInstalled } = usePwaState();
   const defaultView: ClientView =
     platforms.length >= 2 ? "overview"
       : platforms.includes("meta") ? "meta"
@@ -1440,6 +1449,7 @@ export function ClientDashboard({
         view={view}
         onViewChange={(v) => { setView(v); setSelectedCampaign(null); setLoading(true); }}
         onLogout={showLogout ? () => signOut({ callbackUrl: "/login" }) : undefined}
+        showCrm={showCrm}
       />
 
       {/* Main area */}
@@ -1465,6 +1475,20 @@ export function ClientDashboard({
 
           {/* Controls — always on same row. CRM não usa período/campanha/export. */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* CTA "Baixar app" — só aparece se browser disparou o prompt e
+                a dash ainda não está rodando como standalone. Persistente
+                (sem dismiss) pra maximizar adoção do PWA pelo cliente final. */}
+            {canInstall && !isInstalled && (
+              <button
+                onClick={() => triggerInstall()}
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] sm:text-xs font-bold transition-all active:scale-95 shadow-lg shadow-blue-600/30"
+                title="Instalar Dashfy como app"
+              >
+                <Smartphone size={13} className="shrink-0" />
+                <span className="hidden sm:inline">Baixar app</span>
+              </button>
+            )}
+
             {view !== "crm" && (
               <button
                 onClick={handleDownload}
