@@ -18,7 +18,7 @@ export default async function AppleIcon() {
     (
       <div
         style={{
-          background: "linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)",
+          background: "#ffffff",
           width: "100%",
           height: "100%",
           display: "flex",
@@ -30,7 +30,7 @@ export default async function AppleIcon() {
         <img
           src={dataUri}
           alt="Dashfy"
-          style={{ width: "75%", height: "75%", objectFit: "contain" }}
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
         />
       </div>
     ),
