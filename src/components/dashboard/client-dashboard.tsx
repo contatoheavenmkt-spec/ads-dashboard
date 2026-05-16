@@ -11,6 +11,7 @@ import { KeywordsTable } from "@/components/dashboard/keywords-table";
 import { RegionList, RegionMap } from "@/components/dashboard/region-heatmap";
 import { ClientSidebar, ClientView } from "@/components/layout/client-sidebar";
 import { CrmView } from "@/components/dashboard/crm-view";
+import { DateRangeModal } from "@/components/dashboard/date-range-modal";
 import { NotificationOptIn } from "@/components/pwa/notification-opt-in";
 import { usePwaState, triggerInstall } from "@/components/pwa/pwa-store";
 import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
@@ -44,9 +45,9 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointE
 const GENDER_COLORS = ["#3b82f6", "#93c5fd", "#1e40af"];
 const AGE_COLORS = ["#1e3a8a", "#1e40af", "#2563eb", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe"];
 
-// days = -1 é o sentinela "Este mês" — convertido via resolveDays() antes
-// do fetch. Sentinela permite manter o rótulo distinto quando o dia do mês
-// coincide com 7/15/30.
+// Sentinelas para opções não-numéricas:
+//   days = -1  → "Este mês"        (resolveDays() converte pra dia do mês)
+//   days = -2  → "Personalizado"   (usa state customRange com since/until)
 const PERIOD_OPTIONS = [
   { label: "Hoje", days: 1 },
   { label: "Últimos 7 dias", days: 7 },
@@ -54,6 +55,7 @@ const PERIOD_OPTIONS = [
   { label: "Este mês", days: -1 },
   { label: "Últimos 30 dias", days: 30 },
   { label: "Últimos 90 dias", days: 90 },
+  { label: "Personalizado", days: -2 },
 ];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -171,6 +173,21 @@ async function safeFetch(url: string): Promise<unknown> {
   } catch { return null; }
 }
 
+/**
+ * Variação percentual entre o valor atual e o do período anterior. Retorna
+ * undefined quando não dá pra calcular (sem dados anteriores ou divisão por
+ * zero) — KpiCard esconde o badge nesse caso. Quando previous=0 e current>0,
+ * retorna 100 (cresceu "do nada") em vez de Infinity.
+ */
+function delta(current: number | undefined, previous: number | undefined): number | undefined {
+  if (current === undefined || previous === undefined) return undefined;
+  if (previous === 0) {
+    if (current === 0) return undefined;
+    return current > 0 ? 100 : -100;
+  }
+  return ((current - previous) / previous) * 100;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ClientDashboard({
@@ -190,6 +207,10 @@ export function ClientDashboard({
 
   const [view, setView] = useState<ClientView>(defaultView);
   const [days, setDays] = useState(30);
+  // Quando days === -2, customRange precisa estar setado (since/until).
+  // Sai do modo customizado se usuário escolher outra opção do dropdown.
+  const [customRange, setCustomRange] = useState<{ since: string; until: string } | null>(null);
+  const [rangeModalOpen, setRangeModalOpen] = useState(false);
   const [daysOpen, setDaysOpen] = useState(false);
   const [campaignOpen, setCampaignOpen] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<{ id: string; name: string } | null>(null);
@@ -202,6 +223,10 @@ export function ClientDashboard({
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [demographics, setDemographics] = useState<{ gender: DemographicBreakdown[]; age: DemographicBreakdown[] }>({ gender: [], age: [] });
   const [regions, setRegions] = useState<{ name: string; value: number }[]>([]);
+  // Totais do período imediatamente anterior — usado pra calcular delta % nos
+  // KPIs (badge verde +X% / vermelho -X% ao lado do valor). Null = ainda
+  // carregando ou sem dados (a UI esconde o badge nesse caso).
+  const [metaPrev, setMetaPrev] = useState<MetaTotals | null>(null);
 
   // Fetch data when view or days changes
   useEffect(() => {
@@ -217,10 +242,20 @@ export function ClientDashboard({
     const needsRegions = view === "detalhes" && hasMeta;
 
     const effectiveDays = resolveDays(days);
-    const metaParams = new URLSearchParams({ workspaceId, days: String(effectiveDays) });
+    // Custom range tem prioridade sobre `days` quando setado. Sem customRange,
+    // useamos `days` padrão.
+    const isCustom = days === -2 && customRange !== null;
+    const baseParams: Record<string, string> = isCustom
+      ? { workspaceId, since: customRange!.since, until: customRange!.until }
+      : { workspaceId, days: String(effectiveDays) };
+
+    const metaParams = new URLSearchParams(baseParams);
     if (selectedCampaign) metaParams.set("campaignId", selectedCampaign.id);
-    const googleParams = new URLSearchParams({ workspaceId, days: String(effectiveDays) });
-    const ga4Params = new URLSearchParams({ workspaceId, days: String(effectiveDays) });
+    const googleParams = new URLSearchParams(baseParams);
+    const ga4Params = new URLSearchParams(baseParams);
+    // Params do período anterior — só pedimos quando renderMeta está em uso
+    // e não está filtrando por campanha específica (delta de campanha = ruído).
+    const metaPrevParams = new URLSearchParams({ ...baseParams, previousPeriod: "1" });
 
     Promise.all([
       needsMeta ? safeFetch(`/api/metrics?${metaParams}`) : Promise.resolve(null),
@@ -229,15 +264,17 @@ export function ClientDashboard({
       needsCreatives ? safeFetch(`/api/meta/creatives?${metaParams}`) : Promise.resolve(null),
       needsDemographics ? safeFetch(`/api/meta/demographics?${metaParams}`) : Promise.resolve(null),
       needsRegions ? safeFetch(`/api/meta/regions?${metaParams}`) : Promise.resolve(null),
-    ]).then(([meta, google, ga4, creativesRes, demoRes, regionsRes]) => {
+      needsMeta && !selectedCampaign ? safeFetch(`/api/metrics?${metaPrevParams}`) : Promise.resolve(null),
+    ]).then(([meta, google, ga4, creativesRes, demoRes, regionsRes, metaPrevRes]) => {
       if (meta) setMetaData(meta as MetaData);
       if (google) setGoogleData(google as GoogleData);
       if (ga4) setGa4Data(ga4 as GA4Data);
       if (creativesRes) setCreatives((creativesRes as { ads: AdCreative[] })?.ads ?? []);
       if (demoRes) setDemographics(demoRes as { gender: DemographicBreakdown[]; age: DemographicBreakdown[] });
       if (regionsRes) setRegions((regionsRes as { regions: { name: string; value: number }[] })?.regions ?? []);
+      setMetaPrev((metaPrevRes as { totals?: MetaTotals })?.totals ?? null);
     }).catch(() => { }).finally(() => setLoading(false));
-  }, [workspaceId, days, view, selectedCampaign]);
+  }, [workspaceId, days, view, selectedCampaign, customRange]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -247,7 +284,17 @@ export function ClientDashboard({
     return () => document.removeEventListener("click", handleClick);
   }, [daysOpen, campaignOpen]);
 
-  const currentPeriodLabel = PERIOD_OPTIONS.find(p => p.days === days)?.label ?? `Últimos ${days} dias`;
+  const currentPeriodLabel = (() => {
+    if (days === -2 && customRange) {
+      // Mostra "DD/MM → DD/MM" no botão pra deixar claro que é range custom.
+      const fmt = (iso: string) => {
+        const [y, m, d] = iso.split("-");
+        return `${d}/${m}/${y.slice(2)}`;
+      };
+      return `${fmt(customRange.since)} → ${fmt(customRange.until)}`;
+    }
+    return PERIOD_OPTIONS.find(p => p.days === days)?.label ?? `Últimos ${days} dias`;
+  })();
 
   // ─── Download CSV ─────────────────────────────────────────────────────────
 
@@ -322,23 +369,44 @@ export function ClientDashboard({
     const roas = spend > 0 ? revenue / spend : 0;
     const aov = purchases > 0 ? revenue / purchases : 0;
 
+    // Período anterior — quando disponível, usado pra calcular delta % no
+    // badge ao lado de cada KPI. metaPrev é null durante o carregamento ou
+    // quando filtra por campanha (só workspace level tem comparação).
+    const p = metaPrev;
+    const pSpend = p?.spend;
+    const pImpressions = p?.impressions;
+    const pReach = p?.reach;
+    const pClicks = p?.clicks;
+    const pMessages = p?.messages;
+    const pLeads = p?.leads;
+    const pPurchases = p?.purchases;
+    const pRevenue = p?.revenue;
+    const pConversions = p?.conversions;
+    const pFrequency = p && p.reach > 0 ? p.impressions / p.reach : undefined;
+    const pCtr = p && p.impressions > 0 ? (p.clicks / p.impressions) * 100 : undefined;
+    const pCpc = p && p.clicks > 0 ? p.spend / p.clicks : undefined;
+    const pCpm = p && p.impressions > 0 ? (p.spend / p.impressions) * 1000 : undefined;
+    const pCpa = p && p.conversions > 0 ? p.spend / p.conversions : undefined;
+    const pRoas = p && p.spend > 0 ? p.revenue / p.spend : undefined;
+    const pAov = p && p.purchases > 0 ? p.revenue / p.purchases : undefined;
+
     const kpis = [
-      ...(showSpend ? [{ title: "Investimento", value: formatCurrency(spend), color: "#3b82f6", data: metaData?.timeSeries.map(d => d.spend) ?? [] }] : []),
-      ...(showImpressions ? [{ title: "Impressões", value: formatNumber(impressions), color: "#f59e0b", data: metaData?.timeSeries.map(d => d.impressions) ?? [] }] : []),
-      ...(showReach ? [{ title: "Alcance", value: formatNumber(reach), color: "#a855f7", data: metaData?.timeSeries.map(d => d.reach) ?? [] }] : []),
-      ...(showFrequency ? [{ title: "Frequência", value: frequency.toFixed(2), color: "#a78bfa", data: metaData?.timeSeries.map(d => d.reach > 0 ? d.impressions / d.reach : 0) ?? [] }] : []),
-      ...(showClicks ? [{ title: "Cliques", value: formatNumber(clicks), color: "#06b6d4", data: metaData?.timeSeries.map(d => d.clicks) ?? [] }] : []),
-      ...(showCtr ? [{ title: "CTR", value: `${ctr.toFixed(2)}%`, color: "#22d3ee", data: metaData?.timeSeries.map(d => d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0) ?? [] }] : []),
-      ...(showCpc ? [{ title: "CPC", value: formatCurrency(cpc), color: "#0ea5e9", data: metaData?.timeSeries.map(d => d.clicks > 0 ? d.spend / d.clicks : 0) ?? [] }] : []),
-      ...(showCpm ? [{ title: "CPM", value: formatCurrency(cpm), color: "#38bdf8", data: metaData?.timeSeries.map(d => d.impressions > 0 ? (d.spend / d.impressions) * 1000 : 0) ?? [] }] : []),
-      ...(showMessages ? [{ title: "Mensagens Iniciadas", value: formatNumber(t?.messages ?? 0), color: "#10b981", data: metaData?.timeSeries.map(d => d.messages) ?? [] }] : []),
-      ...(showLeads ? [{ title: "Leads", value: formatNumber(t?.leads ?? 0), color: "#84cc16", data: metaData?.timeSeries.map(d => d.leads) ?? [] }] : []),
-      ...(showPurchases ? [{ title: "Vendas", value: formatNumber(purchases), color: "#f97316", data: metaData?.timeSeries.map(d => d.purchases) ?? [] }] : []),
-      ...(showRevenue ? [{ title: "Faturamento", value: formatCurrency(revenue), color: "#22c55e", data: metaData?.timeSeries.map(d => d.revenue) ?? [] }] : []),
-      ...(showConversions ? [{ title: "Conversões totais", value: formatNumber(conversions), color: "#facc15", data: metaData?.timeSeries.map(d => d.conversions) ?? [] }] : []),
-      ...(showCpa ? [{ title: "CPA", value: formatCurrency(cpa), color: "#fb923c", data: metaData?.timeSeries.map(d => d.conversions > 0 ? d.spend / d.conversions : 0) ?? [] }] : []),
-      ...(showRoas ? [{ title: "ROAS", value: `${roas.toFixed(2)}x`, color: "#10b981", data: metaData?.timeSeries.map(d => d.spend > 0 ? d.revenue / d.spend : 0) ?? [] }] : []),
-      ...(showAov ? [{ title: "Ticket médio", value: formatCurrency(aov), color: "#34d399", data: metaData?.timeSeries.map(d => d.purchases > 0 ? d.revenue / d.purchases : 0) ?? [] }] : []),
+      ...(showSpend ? [{ title: "Investimento", value: formatCurrency(spend), color: "#3b82f6", data: metaData?.timeSeries.map(d => d.spend) ?? [], change: delta(spend, pSpend) }] : []),
+      ...(showImpressions ? [{ title: "Impressões", value: formatNumber(impressions), color: "#f59e0b", data: metaData?.timeSeries.map(d => d.impressions) ?? [], change: delta(impressions, pImpressions) }] : []),
+      ...(showReach ? [{ title: "Alcance", value: formatNumber(reach), color: "#a855f7", data: metaData?.timeSeries.map(d => d.reach) ?? [], change: delta(reach, pReach) }] : []),
+      ...(showFrequency ? [{ title: "Frequência", value: frequency.toFixed(2), color: "#a78bfa", data: metaData?.timeSeries.map(d => d.reach > 0 ? d.impressions / d.reach : 0) ?? [], change: delta(frequency, pFrequency) }] : []),
+      ...(showClicks ? [{ title: "Cliques", value: formatNumber(clicks), color: "#06b6d4", data: metaData?.timeSeries.map(d => d.clicks) ?? [], change: delta(clicks, pClicks) }] : []),
+      ...(showCtr ? [{ title: "CTR", value: `${ctr.toFixed(2)}%`, color: "#22d3ee", data: metaData?.timeSeries.map(d => d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0) ?? [], change: delta(ctr, pCtr) }] : []),
+      ...(showCpc ? [{ title: "CPC", value: formatCurrency(cpc), color: "#0ea5e9", data: metaData?.timeSeries.map(d => d.clicks > 0 ? d.spend / d.clicks : 0) ?? [], change: delta(cpc, pCpc) }] : []),
+      ...(showCpm ? [{ title: "CPM", value: formatCurrency(cpm), color: "#38bdf8", data: metaData?.timeSeries.map(d => d.impressions > 0 ? (d.spend / d.impressions) * 1000 : 0) ?? [], change: delta(cpm, pCpm) }] : []),
+      ...(showMessages ? [{ title: "Mensagens Iniciadas", value: formatNumber(t?.messages ?? 0), color: "#10b981", data: metaData?.timeSeries.map(d => d.messages) ?? [], change: delta(t?.messages, pMessages) }] : []),
+      ...(showLeads ? [{ title: "Leads", value: formatNumber(t?.leads ?? 0), color: "#84cc16", data: metaData?.timeSeries.map(d => d.leads) ?? [], change: delta(t?.leads, pLeads) }] : []),
+      ...(showPurchases ? [{ title: "Vendas", value: formatNumber(purchases), color: "#f97316", data: metaData?.timeSeries.map(d => d.purchases) ?? [], change: delta(purchases, pPurchases) }] : []),
+      ...(showRevenue ? [{ title: "Faturamento", value: formatCurrency(revenue), color: "#22c55e", data: metaData?.timeSeries.map(d => d.revenue) ?? [], change: delta(revenue, pRevenue) }] : []),
+      ...(showConversions ? [{ title: "Conversões totais", value: formatNumber(conversions), color: "#facc15", data: metaData?.timeSeries.map(d => d.conversions) ?? [], change: delta(conversions, pConversions) }] : []),
+      ...(showCpa ? [{ title: "CPA", value: formatCurrency(cpa), color: "#fb923c", data: metaData?.timeSeries.map(d => d.conversions > 0 ? d.spend / d.conversions : 0) ?? [], change: delta(cpa, pCpa) }] : []),
+      ...(showRoas ? [{ title: "ROAS", value: `${roas.toFixed(2)}x`, color: "#10b981", data: metaData?.timeSeries.map(d => d.spend > 0 ? d.revenue / d.spend : 0) ?? [], change: delta(roas, pRoas) }] : []),
+      ...(showAov ? [{ title: "Ticket médio", value: formatCurrency(aov), color: "#34d399", data: metaData?.timeSeries.map(d => d.purchases > 0 ? d.revenue / d.purchases : 0) ?? [], change: delta(aov, pAov) }] : []),
     ];
 
     return (
@@ -351,7 +419,7 @@ export function ClientDashboard({
               key={k.title}
               title={k.title}
               value={k.value}
-              change={0}
+              change={k.change}
               sparklineColor={k.color}
               sparklineData={k.data}
             />
@@ -1573,7 +1641,17 @@ export function ClientDashboard({
                   {PERIOD_OPTIONS.map(opt => (
                     <button
                       key={opt.days}
-                      onClick={() => { setDays(opt.days); setDaysOpen(false); }}
+                      onClick={() => {
+                        setDaysOpen(false);
+                        if (opt.days === -2) {
+                          // Personalizado: abre modal de range. Só seta days=-2
+                          // DEPOIS que o user confirma datas no modal.
+                          setRangeModalOpen(true);
+                        } else {
+                          setDays(opt.days);
+                          setCustomRange(null);
+                        }
+                      }}
                       className={cn(
                         "w-full text-left px-3 py-2 text-xs font-medium transition-colors flex items-center justify-between",
                         days === opt.days ? "bg-blue-600/20 text-blue-400" : "text-slate-300 hover:bg-slate-800 hover:text-white"
@@ -1613,6 +1691,17 @@ export function ClientDashboard({
 
       </div>
       <NotificationOptIn />
+      {rangeModalOpen && (
+        <DateRangeModal
+          initial={customRange}
+          onClose={() => setRangeModalOpen(false)}
+          onApply={(r) => {
+            setCustomRange(r);
+            setDays(-2);
+            setRangeModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -10,24 +10,41 @@ const GRAPH_API = "https://graph.facebook.com/v21.0";
 const ACCOUNT_TIMEZONE = "America/Sao_Paulo";
 
 /**
- * Intervalo de datas (YYYY-MM-DD) no fuso da conta para uma janela de
- * `days` dias **incluindo hoje**. Para days=1 retorna o mesmo dia em
- * since/until (apenas hoje).
+ * Valida string `YYYY-MM-DD` simples — não aceita timezones ou horas. Usado
+ * pra checar `since`/`until` recebidos via query antes de injetar na URL Meta.
  */
-export function getInsightsDateRange(days: number): { since: string; until: string } {
+export function isValidIsoDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
+/**
+ * Intervalo de datas (YYYY-MM-DD) no fuso da conta para uma janela de
+ * `days` dias **incluindo hoje** (offset=0). Com `offset > 0`, retorna a
+ * janela `offset` dias antes — usado pra calcular comparação com período
+ * anterior:
+ *   offset=0     → [today - days + 1 ... today]      (período atual)
+ *   offset=days  → [today - 2*days + 1 ... today - days]  (período anterior imediato)
+ */
+export function getInsightsDateRange(days: number, offset = 0): { since: string; until: string } {
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: ACCOUNT_TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  const until = fmt.format(new Date());
-  // Parsar `until` (YYYY-MM-DD) e subtrair (days - 1) dias usando UTC midnight
-  // para evitar surpresas com DST. O resultado é uma data calendário BR.
-  const [y, m, d] = until.split("-").map(Number);
-  const ref = new Date(Date.UTC(y, m - 1, d));
-  ref.setUTCDate(ref.getUTCDate() - Math.max(0, days - 1));
-  const since = ref.toISOString().split("T")[0];
+  const todayBR = fmt.format(new Date());
+  const [y, m, d] = todayBR.split("-").map(Number);
+  // UTC midnight evita surpresas com DST quando subtrai dias.
+  const untilRef = new Date(Date.UTC(y, m - 1, d));
+  untilRef.setUTCDate(untilRef.getUTCDate() - offset);
+  const until = untilRef.toISOString().split("T")[0];
+
+  const sinceRef = new Date(untilRef);
+  sinceRef.setUTCDate(sinceRef.getUTCDate() - Math.max(0, days - 1));
+  const since = sinceRef.toISOString().split("T")[0];
+
   return { since, until };
 }
 
@@ -165,9 +182,11 @@ export async function getMetaBMs(accessToken: string): Promise<MetaBM[]> {
 export async function getAccountInsights(
   adAccountId: string,
   accessToken: string,
-  days: number = 30
+  days: number = 30,
+  offset: number = 0,
+  customRange?: { since: string; until: string }
 ): Promise<MetaInsightDay[]> {
-  const { since, until } = getInsightsDateRange(days);
+  const { since, until } = customRange ?? getInsightsDateRange(days, offset);
 
   const fields = "spend,impressions,reach,clicks,actions,action_values";
   const url =
@@ -267,9 +286,10 @@ export async function getCampaignInsights(
 export async function getAccountCampaigns(
   adAccountId: string,
   accessToken: string,
-  days: number = 30
+  days: number = 30,
+  customRange?: { since: string; until: string }
 ): Promise<MetaCampaign[]> {
-  const { since, until } = getInsightsDateRange(days);
+  const { since, until } = customRange ?? getInsightsDateRange(days);
   const insightFields = "spend,impressions,clicks,actions,action_values";
   // Sub-field parameters do Graph API seguem o padrão `field.param(value)`.
   // time_range respeita o filtro do usuário (antes era last_30d hardcoded);
@@ -329,10 +349,12 @@ export async function getAccountCampaigns(
 export async function getAccountsInsights(
   adAccountIds: string[],
   accessToken: string,
-  days: number = 30
+  days: number = 30,
+  offset: number = 0,
+  customRange?: { since: string; until: string }
 ): Promise<MetaInsightDay[]> {
   const results = await Promise.allSettled(
-    adAccountIds.map((id) => getAccountInsights(id, accessToken, days))
+    adAccountIds.map((id) => getAccountInsights(id, accessToken, days, offset, customRange))
   );
 
   const allDays: MetaInsightDay[] = [];
@@ -381,9 +403,10 @@ export interface MetaAdCreative {
 export async function getAdCreatives(
   adAccountId: string,
   accessToken: string,
-  days: number = 30
+  days: number = 30,
+  customRange?: { since: string; until: string }
 ): Promise<MetaAdCreative[]> {
-  const { since, until } = getInsightsDateRange(days);
+  const { since, until } = customRange ?? getInsightsDateRange(days);
   const insightFields = "impressions,clicks,spend,actions";
   // date_preset só aceita valores enumerados (last_7d/last_30d/...), então
   // values arbitrários como 15 quebravam silenciosamente. time_range aceita
@@ -463,9 +486,10 @@ export interface DemographicBreakdown {
 export async function getGenderBreakdown(
   adAccountId: string,
   accessToken: string,
-  days: number = 30
+  days: number = 30,
+  customRange?: { since: string; until: string }
 ): Promise<DemographicBreakdown[]> {
-  const { since, until } = getInsightsDateRange(days);
+  const { since, until } = customRange ?? getInsightsDateRange(days);
   const url =
     `${GRAPH_API}/${adAccountId}/insights` +
     `?fields=impressions,clicks&breakdowns=gender` +
@@ -487,9 +511,10 @@ export async function getGenderBreakdown(
 export async function getAgeBreakdown(
   adAccountId: string,
   accessToken: string,
-  days: number = 30
+  days: number = 30,
+  customRange?: { since: string; until: string }
 ): Promise<DemographicBreakdown[]> {
-  const { since, until } = getInsightsDateRange(days);
+  const { since, until } = customRange ?? getInsightsDateRange(days);
   const url =
     `${GRAPH_API}/${adAccountId}/insights` +
     `?fields=impressions,clicks&breakdowns=age` +

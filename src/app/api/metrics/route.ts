@@ -9,6 +9,7 @@ import {
 } from "@/lib/meta-api";
 import { getCachedMetrics, setCachedMetrics } from "@/lib/metrics-cache";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
+import { parseCustomRange, daysFromRange } from "@/lib/date-range";
 
 const EMPTY = {
   timeSeries: [],
@@ -23,8 +24,21 @@ export async function GET(req: NextRequest) {
   const bmId = searchParams.get("bmId");
   const adAccountId = searchParams.get("adAccountId");
   const campaignId = searchParams.get("campaignId");
-  const days = parseInt(searchParams.get("days") ?? "30");
   const force = searchParams.get("force") === "1";
+  // Range customizado via since/until tem prioridade sobre `days`. Validação
+  // simples: ambos presentes, ambos YYYY-MM-DD, since <= until, máx 1 ano.
+  const rangeResult = parseCustomRange(searchParams.get("since"), searchParams.get("until"));
+  if (rangeResult.error) {
+    return NextResponse.json({ error: rangeResult.error }, { status: 400 });
+  }
+  const customRange = rangeResult.range;
+  const days = customRange
+    ? daysFromRange(customRange.since, customRange.until)
+    : parseInt(searchParams.get("days") ?? "30");
+  // Quando previousPeriod=1, retornamos os totals do período imediatamente
+  // anterior — usado pelo client pra calcular delta % nos KPIs.
+  const previousPeriod = searchParams.get("previousPeriod") === "1";
+  const offset = previousPeriod ? days : 0;
 
   // Autoriza ANTES de qualquer leitura de cache ou dados.
   const access = await requireMetricsAccess(req, workspaceId);
@@ -38,7 +52,10 @@ export async function GET(req: NextRequest) {
   // requireMetricsAccess), desativamos o cache pra não criar bucket
   // "anon" compartilhável entre usuários.
   const cacheWsId = workspaceId ?? (access.resolvedUserId ? `user:${access.resolvedUserId}` : null);
-  const cacheKey = `${days}:${bmId || "anybm"}:${adAccountId || "all"}:${campaignId || "none"}`;
+  // Cache discrimina período (atual vs anterior) e range customizado pra não
+  // servir cache do range padrão quando o client pede um intervalo específico.
+  const rangeKey = customRange ? `${customRange.since}_${customRange.until}` : String(days);
+  const cacheKey = `${rangeKey}:${previousPeriod ? "prev" : "cur"}:${bmId || "anybm"}:${adAccountId || "all"}:${campaignId || "none"}`;
 
   if (!force && cacheWsId) {
     const cached = await getCachedMetrics(cacheWsId, "meta", cacheKey);
@@ -53,6 +70,21 @@ export async function GET(req: NextRequest) {
 
   const token = await getStoredMetaToken(userId);
   if (!token) return NextResponse.json(EMPTY);
+
+  // Quando previousPeriod=1 + customRange, calcula o range deslocado `days`
+  // dias antes do `since` original. Ex: range 01/05–10/05 + previousPeriod → 21/04–30/04.
+  const effectiveCustomRange = customRange && previousPeriod
+    ? (() => {
+        const sinceDate = new Date(`${customRange.since}T00:00:00Z`);
+        const untilDate = new Date(`${customRange.until}T00:00:00Z`);
+        sinceDate.setUTCDate(sinceDate.getUTCDate() - days);
+        untilDate.setUTCDate(untilDate.getUTCDate() - days);
+        return {
+          since: sinceDate.toISOString().slice(0, 10),
+          until: untilDate.toISOString().slice(0, 10),
+        };
+      })()
+    : customRange;
 
   if (campaignId) {
     const timeSeries = await getCampaignInsights(campaignId, token, days);
@@ -115,14 +147,26 @@ export async function GET(req: NextRequest) {
 
   if (accountIds.length === 0) return NextResponse.json(EMPTY);
 
-  const timeSeries = await getAccountsInsights(accountIds, token, days);
+  // Modo previousPeriod: só retorna totals (não precisa de timeSeries detalhada
+  // nem campanhas — request lightweight pro client calcular delta de KPIs).
+  if (previousPeriod) {
+    const series = await getAccountsInsights(accountIds, token, days, offset, effectiveCustomRange ?? undefined);
+    const totals = aggregateInsights(series);
+    const result = { totals };
+    if (cacheWsId && series.length > 0) {
+      await setCachedMetrics(cacheWsId, "meta", cacheKey, result);
+    }
+    return NextResponse.json(result);
+  }
+
+  const timeSeries = await getAccountsInsights(accountIds, token, days, 0, customRange ?? undefined);
   const totals = aggregateInsights(timeSeries);
 
   // Campanhas (concatena de todas as contas) — respeita o período do filtro.
   // Antes usava `last_30d` hardcoded e a tabela mostrava 30d mesmo quando
   // o usuário escolhia "Últimos 7 dias", divergindo dos totais.
   const campaignResults = await Promise.allSettled(
-    accountIds.map((id) => getAccountCampaigns(id, token, days)),
+    accountIds.map((id) => getAccountCampaigns(id, token, days, customRange ?? undefined)),
   );
   const campaigns = campaignResults
     .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof getAccountCampaigns>>> => r.status === "fulfilled")
