@@ -73,7 +73,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, logo, integrationIds } = body;
+    const { logo, integrationIds } = body;
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 100) : "";
 
     if (!name) {
       return NextResponse.json({ error: "Nome obrigatório" }, { status: 400 });

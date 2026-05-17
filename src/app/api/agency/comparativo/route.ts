@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { getStoredMetaToken } from "@/lib/meta-token";
 import { getAccountsInsights, aggregateInsights } from "@/lib/meta-api";
-import { rateLimit } from "@/lib/rate-limit-mem";
+import { rateLimit } from "@/lib/rate-limit";
 
 /**
  * Comparativo de todos os workspaces do AGENCY logado. Para cada workspace,

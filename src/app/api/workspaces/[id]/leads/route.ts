@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { resolveCrmAccess, isValidStatus } from "@/lib/crm-access";
 import { parseLeadSources } from "@/lib/lead-sources";
+import { clampString } from "@/lib/utils";
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -72,7 +73,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  if (!body.name || body.name.trim().length === 0) {
+  // clampString trunca + valida tipo (proteção contra payload gigante).
+  const name = clampString(body.name, 150);
+  if (!name) {
     return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
   }
 
@@ -81,12 +84,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const lead = await db.lead.create({
     data: {
       workspaceId,
-      name: body.name.trim(),
-      phone: body.phone?.trim() || null,
-      email: body.email?.trim() || null,
-      source: body.source?.trim() || null,
-      campaignId: body.campaignId?.trim() || null,
-      notes: body.notes?.trim() || null,
+      name,
+      phone: clampString(body.phone, 30),
+      email: clampString(body.email, 200),
+      source: clampString(body.source, 50),
+      campaignId: clampString(body.campaignId, 50),
+      notes: clampString(body.notes, 2000),
       status,
       createdByUserId: session.user.id,
     },

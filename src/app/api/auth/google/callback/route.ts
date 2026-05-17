@@ -6,9 +6,32 @@ function htmlResponse(html: string) {
   return new Response(html, { headers: { "Content-Type": "text/html" } });
 }
 
-function safeMsg(s: string): string {
-  return s.replace(/[<>"'&]/g, "");
+/**
+ * Escape robusto para inserir string dentro de `<script>...</script>`.
+ * `JSON.stringify` cobre aspas, barras, newlines etc. Mas faltam dois
+ * casos clássicos pra XSS em script inline:
+ *   - `</` que pode fechar a tag `<script>` prematuramente
+ *   - U+2028 (LINE SEP) e U+2029 (PARAGRAPH SEP) que JSON.stringify NÃO
+ *     escapa mas o parser JS trata como quebra de linha, permitindo
+ *     injetar código depois. Usamos charCode pra não escrever esses
+ *     caracteres literais no source (TS parser também treipa).
+ */
+const LS = String.fromCharCode(0x2028);
+const PS = String.fromCharCode(0x2029);
+
+function safeJs(value: unknown): string {
+  return JSON.stringify(String(value ?? ""))
+    .replace(/<\//g, "<\\/")
+    .replaceAll(LS, "\\u2028")
+    .replaceAll(PS, "\\u2029");
 }
+
+/**
+ * Origem permitida pra postMessage. Antes era "*" (qualquer origem que
+ * tivesse aberto a popup recebia o email + status). Restringe pra o
+ * domínio público da app.
+ */
+const ALLOWED_ORIGIN = JSON.stringify(process.env.NEXT_PUBLIC_APP_URL || "/");
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -18,14 +41,14 @@ export async function GET(request: Request) {
 
   if (error) {
     return htmlResponse(`<script>
-      window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "${safeMsg(error)}" }, "*");
+      window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: ${safeJs(error)} }, ${ALLOWED_ORIGIN});
       window.close();
     </script>`);
   }
 
   if (!code) {
     return htmlResponse(`<script>
-      window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "No authorization code" }, "*");
+      window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "No authorization code" }, ${ALLOWED_ORIGIN});
       window.close();
     </script>`);
   }
@@ -34,7 +57,7 @@ export async function GET(request: Request) {
   const userId = state ? verifyOAuthState(state) : null;
   if (!userId) {
     return htmlResponse(`<script>
-      window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "Sessão inválida ou expirada. Tente novamente." }, "*");
+      window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "Sessão inválida ou expirada. Tente novamente." }, ${ALLOWED_ORIGIN});
       window.close();
     </script>`);
   }
@@ -56,7 +79,7 @@ export async function GET(request: Request) {
 
     if (tokens.error) {
       return htmlResponse(`<script>
-        window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "${safeMsg(String(tokens.error))}" }, "*");
+        window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: ${safeJs(tokens.error)} }, ${ALLOWED_ORIGIN});
         window.close();
       </script>`);
     }
@@ -70,7 +93,7 @@ export async function GET(request: Request) {
 
     if (!tokens.refresh_token && !existingConn?.refreshToken) {
       return htmlResponse(`<script>
-        window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "Google não retornou refresh_token. Tente reconectar." }, "*");
+        window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "Google não retornou refresh_token. Tente reconectar." }, ${ALLOWED_ORIGIN});
         window.close();
       </script>`);
     }
@@ -109,14 +132,14 @@ export async function GET(request: Request) {
     });
 
     return htmlResponse(`<script>
-      window.opener?.postMessage({ type: "GOOGLE_AUTH_SUCCESS", email: "${safeMsg(userInfo.email)}" }, "*");
+      window.opener?.postMessage({ type: "GOOGLE_AUTH_SUCCESS", email: ${safeJs(userInfo.email)} }, ${ALLOWED_ORIGIN});
       window.close();
     </script>`);
 
   } catch (err) {
     console.error("Erro na autenticação Google:", err);
     return htmlResponse(`<script>
-      window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "Internal server error" }, "*");
+      window.opener?.postMessage({ type: "GOOGLE_AUTH_ERROR", message: "Internal server error" }, ${ALLOWED_ORIGIN});
       window.close();
     </script>`);
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Loader2, Plus, Search, Trash2, Phone, Mail,
   CheckCircle2, XCircle, Clock, Send, X, LayoutGrid, List,
@@ -56,6 +56,8 @@ export function CrmView({ workspaceId }: CrmViewProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Lead | null>(null);
   const [sources, setSources] = useState<string[]>([]);
+  // Token de sequência — descarta respostas obsoletas quando user troca filtros.
+  const fetchSeqRef = useRef(0);
   // Persiste preferência em localStorage por workspace — usuário não precisa
   // reescolher toda vez. SSR safe: começa null, hydrata no useEffect.
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
@@ -80,6 +82,7 @@ export function CrmView({ workspaceId }: CrmViewProps) {
 
   async function loadLeads() {
     setLoading(true);
+    const seq = ++fetchSeqRef.current;
     try {
       const params = new URLSearchParams();
       // Kanban mostra todas as colunas lado a lado — ignora filtro de status.
@@ -88,11 +91,13 @@ export function CrmView({ workspaceId }: CrmViewProps) {
       const r = await fetch(`/api/workspaces/${workspaceId}/leads?${params}`);
       if (!r.ok) return;
       const data = (await r.json()) as { leads: Lead[]; canDelete: boolean; leadSources: string[] };
+      // Descarta se outro load começou depois (user trocou filtro rápido).
+      if (seq !== fetchSeqRef.current) return;
       setLeads(data.leads);
       setCanDelete(data.canDelete);
       setSources(data.leadSources ?? []);
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) setLoading(false);
     }
   }
 
@@ -422,12 +427,19 @@ function LeadFormModal({ workspaceId, sources, lead, onClose, onSaved }: LeadFor
             >
               <option value="">— Selecione —</option>
               {/* Tags configuráveis pelo dono do workspace em /workspaces/[id].
-                  Default: Meta, Google Ads, Indicação. Sempre inclui "Outro"
-                  pra permitir cadastro com origem livre. */}
-              {sources.map((s) => (
+                  Default: Meta, Google Ads, Indicação. Sempre inclui "Outro".
+                  Se o lead foi criado com uma tag que depois sumiu da config,
+                  preservamos o valor legado pra não dropar silenciosamente
+                  ao salvar (UX confuso pro user). */}
+              {Array.from(
+                new Set([
+                  ...sources,
+                  ...(lead?.source && !sources.includes(lead.source) ? [lead.source] : []),
+                  "Outro",
+                ]),
+              ).map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
-              <option value="Outro">Outro</option>
             </select>
           </Field>
 

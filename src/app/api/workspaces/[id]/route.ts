@@ -148,10 +148,13 @@ export async function PUT(
   // Remove integrações antigas e recria
   await db.workspaceIntegration.deleteMany({ where: { workspaceId: id } });
 
+  // Trunca name a 100 chars (regra do POST) pra defender contra payload longo.
+  const safeName = typeof name === "string" ? name.trim().slice(0, 100) : undefined;
+
   const workspace = await db.workspace.update({
     where: { id },
     data: {
-      ...(typeof name === "string" ? { name } : {}),
+      ...(safeName !== undefined && safeName.length > 0 ? { name: safeName } : {}),
       ...(logoValue !== undefined ? { logo: logoValue } : {}),
       ...(typeof publicAccess === "boolean" ? { publicAccess } : {}),
       ...(sharePasswordValue !== undefined ? { sharePassword: sharePasswordValue } : {}),

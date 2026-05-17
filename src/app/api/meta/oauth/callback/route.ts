@@ -12,10 +12,13 @@ function safeText(s: string): string {
 
 function htmlClose(status: "success" | "error", message?: string) {
   const msg = message ?? "Erro";
+  // Origem permitida: restrito ao domínio público da app (antes era "*",
+  // qualquer página que abrisse a popup recebia a mensagem).
+  const targetOrigin = JSON.stringify(process.env.NEXT_PUBLIC_APP_URL || "/");
   const script =
     status === "success"
-      ? `window.opener?.postMessage({ type: "META_AUTH_SUCCESS" }, "*"); window.close();`
-      : `window.opener?.postMessage({ type: "META_AUTH_ERROR", message: ${JSON.stringify(msg)} }, "*"); window.close();`;
+      ? `window.opener?.postMessage({ type: "META_AUTH_SUCCESS" }, ${targetOrigin}); window.close();`
+      : `window.opener?.postMessage({ type: "META_AUTH_ERROR", message: ${JSON.stringify(msg)} }, ${targetOrigin}); window.close();`;
 
   return new NextResponse(
     `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>

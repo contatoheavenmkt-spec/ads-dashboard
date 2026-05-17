@@ -25,6 +25,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Subscription incompleta" }, { status: 400 });
   }
 
+  // Sanity check de tamanho — push endpoints da FCM/Mozilla são tipicamente
+  // até ~500 chars; keys p256dh = 88, auth = 24 (base64). Limites generosos
+  // pra cobrir formato futuro mas barrar payload abusivo.
+  if (
+    body.endpoint.length > 2048 ||
+    body.keys.p256dh.length > 256 ||
+    body.keys.auth.length > 128 ||
+    (body.userAgent && body.userAgent.length > 500)
+  ) {
+    return NextResponse.json({ error: "Payload muito grande" }, { status: 413 });
+  }
+
   // Busca role e workspaceId atuais do user — snapshot pra usar no roteamento
   // de notificações sem precisar fazer join toda vez.
   const user = await db.user.findUnique({
@@ -32,6 +44,9 @@ export async function POST(req: NextRequest) {
     select: { role: true, workspaceId: true },
   });
   if (!user) return NextResponse.json({ error: "User não encontrado" }, { status: 404 });
+
+  // Trunca userAgent (informativo, não precisa de precisão).
+  const userAgent = body.userAgent ? body.userAgent.slice(0, 500) : null;
 
   // Upsert por endpoint: se o mesmo device re-subscreve, atualiza as keys
   // (push services rotacionam o auth ocasionalmente).
@@ -44,7 +59,7 @@ export async function POST(req: NextRequest) {
       auth: body.keys.auth,
       role: user.role,
       workspaceId: user.workspaceId,
-      userAgent: body.userAgent,
+      userAgent,
     },
     update: {
       userId: session.user.id,
@@ -52,7 +67,7 @@ export async function POST(req: NextRequest) {
       auth: body.keys.auth,
       role: user.role,
       workspaceId: user.workspaceId,
-      userAgent: body.userAgent,
+      userAgent,
     },
   });
 

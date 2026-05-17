@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { getCachedMetrics, setCachedMetrics } from "@/lib/metrics-cache";
 import { getInsightsDateRange } from "@/lib/meta-api";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
-import { rateLimit } from "@/lib/rate-limit-mem";
+import { rateLimit } from "@/lib/rate-limit";
+import { safeInt } from "@/lib/utils";
 
 const GADS_API = "https://googleads.googleapis.com/v22";
 const REQUIRED_SCOPE = "https://www.googleapis.com/auth/adwords";
@@ -230,7 +231,7 @@ export async function GET(req: NextRequest) {
   // Sem nenhum dos dois, não cacheia pra evitar bucket "anon" compartilhável.
   const cacheWsId = workspaceIdParam ?? (access.resolvedUserId ? `user:${access.resolvedUserId}` : null);
   if (!force && cacheWsId) {
-    const days0 = parseInt(req.nextUrl.searchParams.get("days") ?? "30");
+    const days0 = safeInt(req.nextUrl.searchParams.get("days"), 30, 1, 366);
     const camp0 = req.nextUrl.searchParams.get("campaignId");
     const cacheKey = `${days0}:${customerId}:${camp0 || "none"}`;
     const cached = await getCachedMetrics(cacheWsId, "google", cacheKey);
@@ -256,11 +257,15 @@ export async function GET(req: NextRequest) {
   // usamos o GOOGLE_ADS_LOGIN_CUSTOMER_ID do env.
   const envLoginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.replace(/-/g, "");
   const loginCustomerId = envLoginCustomerId || customerId.replace(/-/g, "");
-  const days = parseInt(req.nextUrl.searchParams.get("days") ?? "30");
+  const days = safeInt(req.nextUrl.searchParams.get("days"), 30, 1, 366);
   // Compartilha o mesmo helper do Meta: janela inclui hoje (sem off-by-one)
   // e usa fuso BR para casar com o que o cliente vê no Google Ads UI.
   const { since: dateFrom, until: dateTo } = getInsightsDateRange(days);
-  const campaignId = req.nextUrl.searchParams.get("campaignId");
+  // GAQL injection: query era `AND campaign.id = ${campaignId}` interpolado
+  // direto. User podia passar `1 OR metrics.clicks > 0` e contornar o filtro.
+  // Aceita SÓ números (IDs Google Ads são int64).
+  const rawCampaignId = req.nextUrl.searchParams.get("campaignId");
+  const campaignId = rawCampaignId && /^\d{1,20}$/.test(rawCampaignId) ? rawCampaignId : null;
 
   // ── 1. Time Series ────────────────────────────────────────────
 

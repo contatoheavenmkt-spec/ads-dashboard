@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PerformanceChart } from "@/components/charts/performance-chart";
 import { FunnelChart } from "@/components/charts/funnel-chart";
@@ -230,9 +230,17 @@ export function ClientDashboard({
   // carregando ou sem dados (a UI esconde o badge nesse caso).
   const [metaPrev, setMetaPrev] = useState<MetaTotals | null>(null);
 
+  // Token de sequência pra evitar race: user troca filtro rapidamente, fetch
+  // antigo resolve depois do novo e sobrescreve state com dado velho.
+  // Cada chamada incrementa e captura o número; só atualiza state se ainda
+  // for a chamada mais recente.
+  const fetchSeqRef = useRef(0);
+
   // Fetch data when view or days changes
   useEffect(() => {
     setLoading(true);
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
     const hasMeta = platforms.includes("meta");
     const hasGoogle = platforms.includes("google");
     const hasGA4 = platforms.includes("ga4");
@@ -270,6 +278,9 @@ export function ClientDashboard({
       needsMeta && !selectedCampaign ? safeFetch(`/api/metrics?${metaPrevParams}`) : Promise.resolve(null),
       needsPlacements ? safeFetch(`/api/meta/placements?${metaParams}`) : Promise.resolve(null),
     ]).then(([meta, google, ga4, creativesRes, demoRes, regionsRes, metaPrevRes, placementsRes]) => {
+      // Descarta resposta se outro fetch foi disparado depois — evita
+      // sobrescrever state novo com dado velho quando user troca filtros rápido.
+      if (isStale()) return;
       if (meta) setMetaData(meta as MetaData);
       if (google) setGoogleData(google as GoogleData);
       if (ga4) setGa4Data(ga4 as GA4Data);
@@ -278,7 +289,9 @@ export function ClientDashboard({
       if (regionsRes) setRegions((regionsRes as { regions: { name: string; value: number }[] })?.regions ?? []);
       setMetaPrev((metaPrevRes as { totals?: MetaTotals })?.totals ?? null);
       if (placementsRes) setPlacements((placementsRes as { placements: { label: string; impressions: number; clicks: number; spend: number }[] })?.placements ?? []);
-    }).catch(() => { }).finally(() => setLoading(false));
+    }).catch(() => { }).finally(() => {
+      if (!isStale()) setLoading(false);
+    });
   }, [workspaceId, days, view, selectedCampaign, customRange]);
 
   // Close dropdowns on outside click
@@ -1194,7 +1207,7 @@ export function ClientDashboard({
                 color="#3b82f6"
               />
             </div>
-            <div className={`glass-panel rounded-2xl p-4 space-y-2 ${mt?.revenue ?? 0 > 0 ? "" : "border-slate-800/50"}`}>
+            <div className={`glass-panel rounded-2xl p-4 space-y-2 ${(mt?.revenue ?? 0) > 0 ? "" : "border-slate-800/50"}`}>
               <div className="flex justify-between text-[10px] font-bold uppercase text-slate-500">
                 <span>Investimento</span>
                 <span className="text-white">{formatCurrency(mt?.spend ?? 0)}</span>

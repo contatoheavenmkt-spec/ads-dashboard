@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { resolveCrmAccess, isValidStatus } from "@/lib/crm-access";
+import { clampString } from "@/lib/utils";
 
 interface PatchBody {
   name?: string;
@@ -43,17 +44,20 @@ export async function PATCH(
 
   const data: Record<string, unknown> = {};
   if (body.name !== undefined) {
-    if (!body.name.trim()) {
-      return NextResponse.json({ error: "Nome não pode ser vazio" }, { status: 400 });
-    }
-    data.name = body.name.trim();
+    const n = clampString(body.name, 150);
+    if (!n) return NextResponse.json({ error: "Nome não pode ser vazio" }, { status: 400 });
+    data.name = n;
   }
-  if (body.phone !== undefined) data.phone = body.phone?.trim() || null;
-  if (body.email !== undefined) data.email = body.email?.trim() || null;
-  if (body.source !== undefined) data.source = body.source?.trim() || null;
-  if (body.campaignId !== undefined) data.campaignId = body.campaignId?.trim() || null;
-  if (body.notes !== undefined) data.notes = body.notes?.trim() || null;
-  if (body.saleValue !== undefined) data.saleValue = body.saleValue;
+  if (body.phone !== undefined) data.phone = clampString(body.phone, 30);
+  if (body.email !== undefined) data.email = clampString(body.email, 200);
+  if (body.source !== undefined) data.source = clampString(body.source, 50);
+  if (body.campaignId !== undefined) data.campaignId = clampString(body.campaignId, 50);
+  if (body.notes !== undefined) data.notes = clampString(body.notes, 2000);
+  if (body.saleValue !== undefined) {
+    // Valida que é número finito e não absurdo (até 100 milhões — futuro-proof).
+    const v = Number(body.saleValue);
+    data.saleValue = body.saleValue === null ? null : (Number.isFinite(v) && v >= 0 && v < 1e8 ? v : null);
+  }
 
   if (body.status !== undefined) {
     if (!isValidStatus(body.status)) {

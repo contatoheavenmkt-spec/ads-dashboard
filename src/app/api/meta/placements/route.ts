@@ -4,6 +4,7 @@ import { getStoredMetaToken } from "@/lib/meta-token";
 import { getPlacementBreakdown, type PlacementBreakdown } from "@/lib/meta-api";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
 import { parseCustomRange } from "@/lib/date-range";
+import { safeInt } from "@/lib/utils";
 
 function mergePlacements(results: PlacementBreakdown[][]): PlacementBreakdown[] {
   const map = new Map<string, PlacementBreakdown>();
@@ -24,7 +25,7 @@ function mergePlacements(results: PlacementBreakdown[][]): PlacementBreakdown[] 
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const days = parseInt(searchParams.get("days") ?? "30");
+  const days = safeInt(searchParams.get("days"), 30, 1, 366);
   const adAccountIdParam = searchParams.get("adAccountId");
   const workspaceId = searchParams.get("workspaceId");
 
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
       .map((wi) => wi.integration.adAccountId);
   } else {
     const userWs = await db.workspace.findMany({
-      where: { ownerId: userId },
+      where: { ownerId: userId, deletedAt: null },
       include: { integrations: { include: { integration: true } } },
     });
     accountIds = userWs.flatMap((w) =>

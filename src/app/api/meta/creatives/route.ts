@@ -3,10 +3,11 @@ import { db } from "@/lib/db";
 import { getStoredMetaToken } from "@/lib/meta-token";
 import { getAdCreatives } from "@/lib/meta-api";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
+import { safeInt } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const days = parseInt(searchParams.get("days") ?? "30");
+  const days = safeInt(searchParams.get("days"), 30, 1, 366);
   const adAccountIdParam = searchParams.get("adAccountId");
   const workspaceIdParam = searchParams.get("workspaceId");
 
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
   } else {
     // Sem workspaceId: pega integrações de workspaces do próprio dono.
     const userWs = await db.workspace.findMany({
-      where: { ownerId: userId },
+      where: { ownerId: userId, deletedAt: null },
       include: { integrations: { include: { integration: true } } },
     });
     accountIds = userWs.flatMap((w) =>

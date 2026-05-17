@@ -13,9 +13,14 @@ interface Bucket {
 const buckets = new Map<string, Bucket>();
 
 export interface RateLimitResult {
+  /** Mais idiomático que `allowed`; mantido como alias por retrocompat. */
+  ok: boolean;
+  /** @deprecated use `ok` */
   allowed: boolean;
   remaining: number;
   resetMs: number;
+  /** Segundos até a próxima request ser aceita (0 quando ok=true). */
+  retryAfter: number;
 }
 
 export function rateLimit(key: string, max: number, windowMs: number): RateLimitResult {
@@ -24,15 +29,28 @@ export function rateLimit(key: string, max: number, windowMs: number): RateLimit
 
   if (!bucket || bucket.resetAt < now) {
     buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return { allowed: true, remaining: max - 1, resetMs: windowMs };
+    return { ok: true, allowed: true, remaining: max - 1, resetMs: windowMs, retryAfter: 0 };
   }
 
   if (bucket.count >= max) {
-    return { allowed: false, remaining: 0, resetMs: bucket.resetAt - now };
+    const remainingMs = bucket.resetAt - now;
+    return {
+      ok: false,
+      allowed: false,
+      remaining: 0,
+      resetMs: remainingMs,
+      retryAfter: Math.max(1, Math.ceil(remainingMs / 1000)),
+    };
   }
 
   bucket.count++;
-  return { allowed: true, remaining: max - bucket.count, resetMs: bucket.resetAt - now };
+  return {
+    ok: true,
+    allowed: true,
+    remaining: max - bucket.count,
+    resetMs: bucket.resetAt - now,
+    retryAfter: 0,
+  };
 }
 
 // GC ocasional para não vazar memória — roda no acesso a cada ~1000 keys

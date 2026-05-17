@@ -58,12 +58,18 @@ export async function PATCH(
 
   const ip = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? undefined;
 
+  // Whitelist de valores aceitos — admin é admin, mas é foot-gun aceitar
+  // role/plan/status arbitrários (quebra outras rotas que comparam contra enum).
+  const ALLOWED_ROLES = ["AGENCY", "CLIENT", "ADMIN"];
+  const ALLOWED_PLANS = ["trial", "start", "plus", "premium"];
+  const ALLOWED_STATUSES = ["active", "trialing", "expired", "canceled"];
+
   // Update user fields
   const userUpdate = {
-    ...(name !== undefined && { name }),
-    ...(role !== undefined && { role }),
-    ...(onboardingCompleted !== undefined && { onboardingCompleted }),
-    ...(forcePasswordChange !== undefined && { forcePasswordChange }),
+    ...(typeof name === "string" && { name: name.trim().slice(0, 100) }),
+    ...(role !== undefined && ALLOWED_ROLES.includes(role) && { role }),
+    ...(onboardingCompleted !== undefined && { onboardingCompleted: Boolean(onboardingCompleted) }),
+    ...(forcePasswordChange !== undefined && { forcePasswordChange: Boolean(forcePasswordChange) }),
   };
 
   if (Object.keys(userUpdate).length > 0) {
@@ -82,12 +88,16 @@ export async function PATCH(
 
   // Update subscription fields
   if (plan !== undefined || status !== undefined || trialEndsAt !== undefined || currentPeriodEnd !== undefined) {
-    const planDef = plan ? PLANS[plan] : null;
+    // Valida plan/status contra whitelists — evita persistir valor inválido
+    // que quebra `PLANS[plan]` em outras rotas que dependem do enum.
+    const validPlan = plan !== undefined && ALLOWED_PLANS.includes(plan) ? plan : undefined;
+    const validStatus = status !== undefined && ALLOWED_STATUSES.includes(status) ? status : undefined;
+    const planDef = validPlan ? PLANS[validPlan] : null;
     const parsedTrial = parseDate(trialEndsAt);
     const parsedPeriod = parseDate(currentPeriodEnd);
     const subUpdate = {
-      ...(plan !== undefined && { plan }),
-      ...(status !== undefined && { status }),
+      ...(validPlan !== undefined && { plan: validPlan }),
+      ...(validStatus !== undefined && { status: validStatus }),
       ...(parsedTrial !== undefined && { trialEndsAt: parsedTrial }),
       ...(parsedPeriod !== undefined && { currentPeriodEnd: parsedPeriod }),
       ...(planDef && { accountsLimit: planDef.accountsLimit }),
