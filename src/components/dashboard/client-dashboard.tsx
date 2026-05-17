@@ -19,7 +19,7 @@ import { shouldShowMetric, type VisibleMetrics } from "@/lib/visible-metrics";
 import {
   Loader2, LayoutDashboard, Calendar, ChevronDown, Check,
   Download, Users, PieChart as PieChartIcon,
-  Search, Target, Layers, MousePointer2, TrendingUp, Smartphone,
+  Search, Target, Layers, MousePointer2, TrendingUp, Smartphone, Printer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
@@ -1564,19 +1564,22 @@ export function ClientDashboard({
   return (
     <div className="flex h-screen bg-slate-950 pb-16 md:pb-0 overflow-hidden">
       {/* Sidebar */}
-      <ClientSidebar
-        platforms={platforms}
-        view={view}
-        onViewChange={(v) => { setView(v); setSelectedCampaign(null); setLoading(true); }}
-        onLogout={showLogout ? () => signOut({ callbackUrl: "/login" }) : undefined}
-        showCrm={showCrm}
-      />
+      <div className="no-print contents">
+        <ClientSidebar
+          platforms={platforms}
+          view={view}
+          onViewChange={(v) => { setView(v); setSelectedCampaign(null); setLoading(true); }}
+          onLogout={showLogout ? () => signOut({ callbackUrl: "/login" }) : undefined}
+          showCrm={showCrm}
+        />
+      </div>
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
 
-        {/* Header */}
-        <header className="px-3 sm:px-6 py-2 sm:py-4 flex items-center justify-between gap-2 border-b border-slate-700/50 bg-slate-900/40 backdrop-blur-md flex-shrink-0 z-30 relative">
+        {/* Header — escondido na impressão (relatório PDF não precisa de
+            sidebar/controles, só o conteúdo). */}
+        <header className="no-print px-3 sm:px-6 py-2 sm:py-4 flex items-center justify-between gap-2 border-b border-slate-700/50 bg-slate-900/40 backdrop-blur-md flex-shrink-0 z-30 relative">
           {/* Workspace identity */}
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {logo && (
@@ -1610,13 +1613,22 @@ export function ClientDashboard({
             )}
 
             {view !== "crm" && (
-              <button
-                onClick={handleDownload}
-                className="p-1.5 sm:p-2 rounded-lg border bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 transition-all active:scale-95"
-                title="Exportar CSV"
-              >
-                <Download size={14} />
-              </button>
+              <>
+                <button
+                  onClick={() => window.print()}
+                  className="p-1.5 sm:p-2 rounded-lg border bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 transition-all active:scale-95"
+                  title="Imprimir / Salvar como PDF"
+                >
+                  <Printer size={14} />
+                </button>
+                <button
+                  onClick={handleDownload}
+                  className="p-1.5 sm:p-2 rounded-lg border bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 transition-all active:scale-95"
+                  title="Exportar CSV"
+                >
+                  <Download size={14} />
+                </button>
+              </>
             )}
 
             {/* Campaign selector — visible only on meta/detalhes views */}

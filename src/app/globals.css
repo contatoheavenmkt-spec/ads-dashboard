@@ -99,4 +99,61 @@ html {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Elementos marcados com .no-print somem na impressão (window.print() / PDF).
+     Usado pra sidebar, controles, banners — qualquer coisa que não faz sentido
+     no relatório impresso. */
+  .no-print {
+    /* Aplica em ambos os contextos sem precisar de duplicação */
+  }
+}
+
+/* ─── Print styles ───────────────────────────────────────────────────────
+   Otimiza a impressão / "Salvar como PDF" do navegador:
+   - Esconde sidebars, headers, banners e botões (.no-print)
+   - Força fundo branco e tipografia legível pra papel
+   - Mantém charts e tabelas visíveis com cores adequadas
+*/
+@media print {
+  /* Some com elementos visualmente decorativos / interativos */
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  /* Fundo branco + cores normais (Chrome respeita color-adjust pra manter
+     gradient/cores dos chips, mas usuário pode ter "background graphics"
+     desativado por padrão). */
+  body {
+    background: white !important;
+    color: black !important;
+    overflow: visible !important;
+  }
+
+  /* Glass panels viram cards simples com borda — sem blur (não imprime). */
+  .glass-panel {
+    background: white !important;
+    backdrop-filter: none !important;
+    border: 1px solid #d1d5db !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  .glass-panel * {
+    color: inherit;
+  }
+
+  /* Charts ChartJS já são canvas — saem como imagem. Nada a ajustar. */
+
+  /* Tabelas: bordas mais contrastadas */
+  table, th, td {
+    color: #0f172a !important;
+    border-color: #d1d5db !important;
+  }
+
+  /* Page break antes de cada glass-panel pra evitar cortar no meio de gráfico */
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
 }

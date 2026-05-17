@@ -50,6 +50,7 @@ export function InstallPrompt() {
   return (
     <div
       className={cn(
+        "no-print",
         "fixed bottom-4 right-4 z-[200] max-w-sm",
         "bg-slate-950/95 backdrop-blur-xl border border-slate-700 rounded-xl shadow-2xl",
         "p-4 flex items-start gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300",
