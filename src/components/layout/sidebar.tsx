@@ -13,7 +13,6 @@ import {
   BadgeCheck,
   UserCircle,
   UserSearch,
-  BarChart3,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -95,7 +94,6 @@ const saasItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Zap },
   { href: "/integracoes", label: "Contas", icon: Share2 },
   { href: "/workspaces", label: "Workspaces", icon: Users },
-  { href: "/comparativo", label: "Comparar", icon: BarChart3 },
   { href: "/crm", label: "CRM", icon: UserSearch },
   { href: "/dashboard/billing", label: "Plano", icon: BadgeCheck, activeColor: "text-emerald-400" },
   { href: "/perfil", label: "Perfil", icon: UserCircle },
