@@ -13,6 +13,7 @@ import { ClientSidebar, ClientView } from "@/components/layout/client-sidebar";
 import { CrmView } from "@/components/dashboard/crm-view";
 import { DateRangeModal } from "@/components/dashboard/date-range-modal";
 import { NotificationOptIn } from "@/components/pwa/notification-opt-in";
+import { InstallInstructionsModal } from "@/components/pwa/install-instructions-modal";
 import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { usePwaState, triggerInstall } from "@/components/pwa/pwa-store";
 import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
@@ -199,6 +200,22 @@ export function ClientDashboard({
   // do banner dismissível do layout root, esse fica permanente. Cliente final
   // costuma usar a dash pelo celular; queremos máxima visibilidade até instalar.
   const { canInstall, isInstalled } = usePwaState();
+  // Modal de instruções manuais — usado quando `beforeinstallprompt` ainda
+  // não disparou (Chrome desktop antes do critério de engagement, Safari iOS,
+  // browser sem suporte). Cliente final precisa de jeito de instalar mesmo
+  // sem o prompt automático.
+  const [installModalOpen, setInstallModalOpen] = useState(false);
+
+  async function handleInstallClick() {
+    if (canInstall) {
+      // Browser tem prompt diferido — tenta usar primeiro.
+      const outcome = await triggerInstall();
+      if (outcome === null) setInstallModalOpen(true); // fallback se algo deu errado
+    } else {
+      // Sem prompt nativo disponível — mostra instruções por device.
+      setInstallModalOpen(true);
+    }
+  }
   const defaultView: ClientView =
     platforms.length >= 2 ? "overview"
       : platforms.includes("meta") ? "meta"
@@ -1612,12 +1629,15 @@ export function ClientDashboard({
 
           {/* Controls — always on same row. CRM não usa período/campanha/export. */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* CTA "Baixar app" — só aparece se browser disparou o prompt e
-                a dash ainda não está rodando como standalone. Persistente
-                (sem dismiss) pra maximizar adoção do PWA pelo cliente final. */}
-            {canInstall && !isInstalled && (
+            {/* CTA "Baixar app" — aparece SEMPRE que não está instalado.
+                Se o browser disparou prompt nativo, clica → prompt. Senão,
+                clica → modal com instruções manuais por device (Chrome
+                desktop, Android, iOS). Não tem dismiss, fica permanente
+                até o user instalar — link de cliente final precisa de
+                máxima visibilidade pra adoção do PWA. */}
+            {!isInstalled && (
               <button
-                onClick={() => triggerInstall()}
+                onClick={handleInstallClick}
                 className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] sm:text-xs font-bold transition-all active:scale-95 shadow-lg shadow-blue-600/30"
                 title="Instalar Dashfy como app"
               >
@@ -1777,6 +1797,9 @@ export function ClientDashboard({
             setRangeModalOpen(false);
           }}
         />
+      )}
+      {installModalOpen && (
+        <InstallInstructionsModal onClose={() => setInstallModalOpen(false)} />
       )}
     </div>
   );
