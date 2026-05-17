@@ -223,6 +223,7 @@ export function ClientDashboard({
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [demographics, setDemographics] = useState<{ gender: DemographicBreakdown[]; age: DemographicBreakdown[] }>({ gender: [], age: [] });
   const [regions, setRegions] = useState<{ name: string; value: number }[]>([]);
+  const [placements, setPlacements] = useState<{ label: string; impressions: number; clicks: number; spend: number }[]>([]);
   // Totais do período imediatamente anterior — usado pra calcular delta % nos
   // KPIs (badge verde +X% / vermelho -X% ao lado do valor). Null = ainda
   // carregando ou sem dados (a UI esconde o badge nesse caso).
@@ -240,6 +241,7 @@ export function ClientDashboard({
     const needsCreatives = view === "detalhes" && hasMeta;
     const needsDemographics = view === "detalhes" && hasMeta;
     const needsRegions = view === "detalhes" && hasMeta;
+    const needsPlacements = view === "detalhes" && hasMeta;
 
     const effectiveDays = resolveDays(days);
     // Custom range tem prioridade sobre `days` quando setado. Sem customRange,
@@ -265,7 +267,8 @@ export function ClientDashboard({
       needsDemographics ? safeFetch(`/api/meta/demographics?${metaParams}`) : Promise.resolve(null),
       needsRegions ? safeFetch(`/api/meta/regions?${metaParams}`) : Promise.resolve(null),
       needsMeta && !selectedCampaign ? safeFetch(`/api/metrics?${metaPrevParams}`) : Promise.resolve(null),
-    ]).then(([meta, google, ga4, creativesRes, demoRes, regionsRes, metaPrevRes]) => {
+      needsPlacements ? safeFetch(`/api/meta/placements?${metaParams}`) : Promise.resolve(null),
+    ]).then(([meta, google, ga4, creativesRes, demoRes, regionsRes, metaPrevRes, placementsRes]) => {
       if (meta) setMetaData(meta as MetaData);
       if (google) setGoogleData(google as GoogleData);
       if (ga4) setGa4Data(ga4 as GA4Data);
@@ -273,6 +276,7 @@ export function ClientDashboard({
       if (demoRes) setDemographics(demoRes as { gender: DemographicBreakdown[]; age: DemographicBreakdown[] });
       if (regionsRes) setRegions((regionsRes as { regions: { name: string; value: number }[] })?.regions ?? []);
       setMetaPrev((metaPrevRes as { totals?: MetaTotals })?.totals ?? null);
+      if (placementsRes) setPlacements((placementsRes as { placements: { label: string; impressions: number; clicks: number; spend: number }[] })?.placements ?? []);
     }).catch(() => { }).finally(() => setLoading(false));
   }, [workspaceId, days, view, selectedCampaign, customRange]);
 
@@ -1414,6 +1418,54 @@ export function ClientDashboard({
             )}
           </div>
         </div>}
+
+        {/* ═══ Row 2.5: Placements (onde os anúncios apareceram, Meta only) ═══ */}
+        {hasMeta && placements.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+            <div className="lg:col-span-12 glass-panel rounded-2xl p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4 sm:mb-5 flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-sm font-black text-white/80 uppercase tracking-[0.2em]">Onde aparecem</h3>
+                  <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 uppercase">Meta Ads</span>
+                </div>
+                <span className="text-[10px] text-slate-500 uppercase tracking-widest">
+                  Placement (Feed / Stories / Reels / ...)
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="border-b border-slate-800">
+                    <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+                      <th className="px-3 py-2">Placement</th>
+                      <th className="px-3 py-2 text-right">Impressões</th>
+                      <th className="px-3 py-2 text-right">Cliques</th>
+                      <th className="px-3 py-2 text-right">CTR</th>
+                      <th className="px-3 py-2 text-right">Investimento</th>
+                      <th className="px-3 py-2 text-right">CPM</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {placements.map((p) => {
+                      const ctr = p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0;
+                      const cpm = p.impressions > 0 ? (p.spend / p.impressions) * 1000 : 0;
+                      return (
+                        <tr key={p.label} className="border-b border-slate-800/40 hover:bg-slate-900/40 transition-colors">
+                          <td className="px-3 py-2.5 text-slate-200 font-bold">{p.label}</td>
+                          <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(p.impressions)}</td>
+                          <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(p.clicks)}</td>
+                          <td className="px-3 py-2.5 text-right text-cyan-400 font-semibold">{ctr.toFixed(2)}%</td>
+                          <td className="px-3 py-2.5 text-right text-slate-300">{formatCurrency(p.spend)}</td>
+                          <td className="px-3 py-2.5 text-right text-slate-400">{formatCurrency(cpm)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ═══ Row 3: Região & Mapa Geográfico (SPLIT, Meta only) ═══ */}
         {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">

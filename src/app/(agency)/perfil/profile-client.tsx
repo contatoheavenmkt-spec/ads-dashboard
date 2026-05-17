@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   UserCircle, Bell, BellOff, Download, KeyRound, CreditCard, LogOut,
   Check, Smartphone, ChevronRight, Info, Loader2, Apple, ExternalLink,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Header } from "@/components/layout/header";
@@ -27,6 +28,15 @@ interface SubscriptionInfo {
   accountsLimit: number;
 }
 
+interface NotificationEntry {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  url: string | null;
+  createdAt: string;
+}
+
 interface ProfileClientProps {
   user: UserInfo;
   subscription: SubscriptionInfo | null;
@@ -44,6 +54,8 @@ export function ProfileClient({ user, subscription }: ProfileClientProps) {
   const [notifEnabled, setNotifEnabled] = useState<boolean | null>(null);
   const [notifBusy, setNotifBusy] = useState(false);
   const [installModal, setInstallModal] = useState(false);
+  const [history, setHistory] = useState<NotificationEntry[] | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // Carrega status atual das notificações
   useEffect(() => {
@@ -90,6 +102,26 @@ export function ProfileClient({ user, subscription }: ProfileClientProps) {
       setNotifEnabled(false);
     } finally {
       setNotifBusy(false);
+    }
+  }
+
+  async function toggleHistory() {
+    const next = !historyOpen;
+    setHistoryOpen(next);
+    // Lazy load: só busca quando user expande pela primeira vez. Cache em memória
+    // (state local) — reabrir mostra o que já foi carregado.
+    if (next && history === null) {
+      try {
+        const r = await fetch("/api/notifications/history?limit=50");
+        if (r.ok) {
+          const data = (await r.json()) as { notifications: NotificationEntry[] };
+          setHistory(data.notifications);
+        } else {
+          setHistory([]);
+        }
+      } catch {
+        setHistory([]);
+      }
     }
   }
 
@@ -201,6 +233,58 @@ export function ProfileClient({ user, subscription }: ProfileClientProps) {
             </button>
           )}
         </SectionCard>
+
+        {/* Histórico de notificações */}
+        <div className="glass-panel rounded-2xl p-4 sm:p-5">
+          <button
+            onClick={toggleHistory}
+            className="w-full flex items-center justify-between gap-2 text-left"
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60">
+                <History size={18} className="text-slate-300" />
+              </div>
+              <h3 className="text-sm font-bold text-white">Histórico de notificações</h3>
+            </div>
+            <ChevronRight
+              size={16}
+              className={cn(
+                "text-slate-600 transition-transform",
+                historyOpen ? "rotate-90" : "rotate-0",
+              )}
+            />
+          </button>
+
+          {historyOpen && (
+            <div className="mt-4 pt-4 border-t border-slate-800">
+              {history === null ? (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Loader2 size={12} className="animate-spin" />
+                  Carregando...
+                </div>
+              ) : history.length === 0 ? (
+                <p className="text-xs text-slate-500 py-4 text-center">
+                  Nenhuma notificação registrada ainda. Quando rolar a primeira (campanha ativa,
+                  saldo, resumo do dia), ela aparece aqui.
+                </p>
+              ) : (
+                <ul className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                  {history.map((n) => (
+                    <li key={n.id} className="p-3 rounded-xl border border-slate-700/50 bg-slate-800/40">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-xs font-bold text-slate-100">{n.title}</p>
+                        <span className="text-[10px] text-slate-500 shrink-0">
+                          {formatRelative(n.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">{n.body}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Plano */}
         <Link href="/dashboard/billing" className="block">
@@ -338,4 +422,15 @@ function InstructionBlock({ title, icon, children }: { title: string; icon: Reac
       <p className="text-xs text-slate-400 leading-relaxed">{children}</p>
     </div>
   );
+}
+
+function formatRelative(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const diffSec = Math.floor((now - then) / 1000);
+  if (diffSec < 60) return "agora";
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} min`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} h`;
+  if (diffSec < 86400 * 7) return `${Math.floor(diffSec / 86400)} d`;
+  return new Date(iso).toLocaleDateString("pt-BR");
 }

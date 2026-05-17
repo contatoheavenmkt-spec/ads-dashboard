@@ -508,6 +508,86 @@ export async function getGenderBreakdown(
   }));
 }
 
+export interface PlacementBreakdown {
+  /** "facebook · feed", "instagram · stories", "instagram · reels", etc. */
+  label: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+}
+
+/**
+ * Breakdown por placement do Meta — onde os anúncios apareceram (Feed,
+ * Stories, Reels, Audience Network, etc) cruzando publisher_platform com
+ * platform_position. Útil pra ver onde o investimento está performando
+ * melhor por placement.
+ */
+export async function getPlacementBreakdown(
+  adAccountId: string,
+  accessToken: string,
+  days: number = 30,
+  customRange?: { since: string; until: string }
+): Promise<PlacementBreakdown[]> {
+  const { since, until } = customRange ?? getInsightsDateRange(days);
+  // publisher_platform = facebook/instagram/messenger/audience_network
+  // platform_position  = feed/stories/reels/marketplace/...
+  const url =
+    `${GRAPH_API}/${adAccountId}/insights` +
+    `?fields=impressions,clicks,spend` +
+    `&breakdowns=publisher_platform,platform_position` +
+    `&time_range={"since":"${since}","until":"${until}"}` +
+    `&${ATTRIBUTION_PARAM}` +
+    `&limit=100` +
+    `&access_token=${accessToken}`;
+
+  const res = await fetch(url, { cache: "no-store" });
+  const data = await res.json();
+  if (data.error) throw new Error(`Meta Placement [${adAccountId}]: ${data.error.message}`);
+
+  return ((data.data ?? []) as Array<{
+    publisher_platform: string;
+    platform_position: string;
+    impressions: string;
+    clicks: string;
+    spend: string;
+  }>).map((row) => ({
+    label: `${prettyPlatform(row.publisher_platform)} · ${prettyPosition(row.platform_position)}`,
+    impressions: Number(row.impressions ?? 0),
+    clicks: Number(row.clicks ?? 0),
+    spend: Number(row.spend ?? 0),
+  })).filter((r) => r.impressions > 0);
+}
+
+function prettyPlatform(p: string): string {
+  const map: Record<string, string> = {
+    facebook: "Facebook",
+    instagram: "Instagram",
+    messenger: "Messenger",
+    audience_network: "Audience Network",
+  };
+  return map[p] ?? p;
+}
+
+function prettyPosition(p: string): string {
+  const map: Record<string, string> = {
+    feed: "Feed",
+    facebook_stories: "Stories",
+    instagram_stories: "Stories",
+    instagram_reels: "Reels",
+    instagram_explore: "Explore",
+    instagram_shop: "Shop",
+    marketplace: "Marketplace",
+    video_feeds: "Vídeos",
+    right_hand_column: "Coluna direita",
+    instream_video: "Em vídeo",
+    search: "Pesquisa",
+    biz_disco_feed: "Discovery",
+    reels: "Reels",
+    stories: "Stories",
+  };
+  return map[p] ?? p.replace(/_/g, " ");
+}
+
 export async function getAgeBreakdown(
   adAccountId: string,
   accessToken: string,
