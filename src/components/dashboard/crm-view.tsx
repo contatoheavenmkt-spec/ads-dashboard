@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   Loader2, Plus, Search, Trash2, Phone, Mail,
-  CheckCircle2, XCircle, Clock, Send, X,
+  CheckCircle2, XCircle, Clock, Send, X, LayoutGrid, List,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -55,12 +55,34 @@ export function CrmView({ workspaceId }: CrmViewProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Lead | null>(null);
   const [sources, setSources] = useState<string[]>([]);
+  // Persiste preferência em localStorage por workspace — usuário não precisa
+  // reescolher toda vez. SSR safe: começa null, hydrata no useEffect.
+  const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`dashfy.crm.viewMode.${workspaceId}`);
+      if (stored === "kanban" || stored === "table") setViewMode(stored);
+    } catch {
+      // localStorage indisponível — mantém default
+    }
+  }, [workspaceId]);
+
+  function changeViewMode(mode: "table" | "kanban") {
+    setViewMode(mode);
+    try {
+      localStorage.setItem(`dashfy.crm.viewMode.${workspaceId}`, mode);
+    } catch {
+      // ignora
+    }
+  }
 
   async function loadLeads() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filterStatus !== "all") params.set("status", filterStatus);
+      // Kanban mostra todas as colunas lado a lado — ignora filtro de status.
+      if (filterStatus !== "all" && viewMode === "table") params.set("status", filterStatus);
       if (search) params.set("q", search);
       const r = await fetch(`/api/workspaces/${workspaceId}/leads?${params}`);
       if (!r.ok) return;
@@ -76,7 +98,7 @@ export function CrmView({ workspaceId }: CrmViewProps) {
   useEffect(() => {
     loadLeads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, filterStatus]);
+  }, [workspaceId, filterStatus, viewMode]);
 
   // Search com debounce simples
   useEffect(() => {
@@ -104,23 +126,27 @@ export function CrmView({ workspaceId }: CrmViewProps) {
 
       {/* Filtros + busca + criar */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {STATUSES.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setFilterStatus(s.id)}
-              className={cn(
-                "px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border transition-colors flex items-center gap-1.5",
-                filterStatus === s.id
-                  ? "bg-slate-800 border-slate-600 text-white"
-                  : "bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-800",
-              )}
-            >
-              {s.icon}
-              {s.label}
-            </button>
-          ))}
-        </div>
+        {/* Filtros de status só fazem sentido no modo Tabela — Kanban já mostra
+            todas as colunas lado a lado, filtrar esconde colunas inteiras. */}
+        {viewMode === "table" && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {STATUSES.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setFilterStatus(s.id)}
+                className={cn(
+                  "px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border transition-colors flex items-center gap-1.5",
+                  filterStatus === s.id
+                    ? "bg-slate-800 border-slate-600 text-white"
+                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-800",
+                )}
+              >
+                {s.icon}
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex-1 min-w-[180px] relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
@@ -129,6 +155,33 @@ export function CrmView({ workspaceId }: CrmViewProps) {
             placeholder="Buscar por nome, telefone ou email…"
             className="w-full pl-9 pr-3 py-2 text-xs bg-slate-900/60 border border-slate-800 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-blue-500/60"
           />
+        </div>
+        {/* Toggle Tabela / Kanban */}
+        <div className="flex items-center gap-0.5 rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
+          <button
+            onClick={() => changeViewMode("table")}
+            className={cn(
+              "p-1.5 rounded transition-colors",
+              viewMode === "table"
+                ? "bg-slate-800 text-blue-400"
+                : "text-slate-500 hover:text-slate-300",
+            )}
+            title="Tabela"
+          >
+            <List size={14} />
+          </button>
+          <button
+            onClick={() => changeViewMode("kanban")}
+            className={cn(
+              "p-1.5 rounded transition-colors",
+              viewMode === "kanban"
+                ? "bg-slate-800 text-blue-400"
+                : "text-slate-500 hover:text-slate-300",
+            )}
+            title="Kanban"
+          >
+            <LayoutGrid size={14} />
+          </button>
         </div>
         <button
           onClick={() => setShowCreate(true)}
@@ -139,7 +192,7 @@ export function CrmView({ workspaceId }: CrmViewProps) {
         </button>
       </div>
 
-      {/* Tabela */}
+      {/* Tabela ou Kanban */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
@@ -147,10 +200,12 @@ export function CrmView({ workspaceId }: CrmViewProps) {
       ) : leads.length === 0 ? (
         <div className="glass-panel rounded-2xl p-12 text-center">
           <p className="text-slate-400 text-sm">
-            Nenhum lead {filterStatus !== "all" ? "neste status " : ""}ainda.
+            Nenhum lead {filterStatus !== "all" && viewMode === "table" ? "neste status " : ""}ainda.
           </p>
           <p className="text-slate-500 text-xs mt-1">Clique em <strong>Novo lead</strong> para cadastrar.</p>
         </div>
+      ) : viewMode === "kanban" ? (
+        <KanbanBoard leads={leads} onCardClick={(l) => setEditing(l)} />
       ) : (
         <div className="glass-panel rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
@@ -447,6 +502,110 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+// ─── Kanban Board ────────────────────────────────────────────────────────────
+
+const KANBAN_COLUMNS: { id: LeadStatus; label: string; accent: string }[] = [
+  { id: "novo", label: "Novos", accent: "border-blue-500/30 bg-blue-500/5" },
+  { id: "contato", label: "Em contato", accent: "border-amber-500/30 bg-amber-500/5" },
+  { id: "negociando", label: "Negociando", accent: "border-purple-500/30 bg-purple-500/5" },
+  { id: "vendido", label: "Vendidos", accent: "border-emerald-500/30 bg-emerald-500/5" },
+  { id: "perdido", label: "Perdidos", accent: "border-rose-500/30 bg-rose-500/5" },
+];
+
+function KanbanBoard({
+  leads,
+  onCardClick,
+}: {
+  leads: Lead[];
+  onCardClick: (l: Lead) => void;
+}) {
+  const byStatus = KANBAN_COLUMNS.map((col) => ({
+    ...col,
+    leads: leads.filter((l) => l.status === col.id),
+  }));
+
+  return (
+    // Scroll horizontal em mobile/tablet, full width em desktop. Min width
+    // garante que cada coluna respira (não fica mais estreita que ~240px).
+    <div className="overflow-x-auto pb-2 -mx-3 sm:-mx-6 px-3 sm:px-6">
+      <div className="flex gap-3 sm:gap-4" style={{ minWidth: `${KANBAN_COLUMNS.length * 260}px` }}>
+        {byStatus.map((col) => {
+          const total = col.leads.length;
+          const colFat = col.id === "vendido"
+            ? col.leads.reduce((s, l) => s + (l.saleValue ?? 0), 0)
+            : 0;
+          return (
+            <div
+              key={col.id}
+              className={cn(
+                "flex-1 min-w-[240px] rounded-xl border bg-slate-900/40 p-3 flex flex-col",
+                col.accent,
+              )}
+            >
+              <div className="flex items-center justify-between mb-3 px-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[10px] font-black uppercase tracking-wider text-slate-200">
+                    {col.label}
+                  </h3>
+                  <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded-full">
+                    {total}
+                  </span>
+                </div>
+                {col.id === "vendido" && colFat > 0 && (
+                  <span className="text-[10px] font-bold text-emerald-400">
+                    {formatCurrency(colFat)}
+                  </span>
+                )}
+              </div>
+
+              {col.leads.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center py-8 text-[10px] text-slate-600 font-bold uppercase tracking-widest text-center">
+                  Sem leads
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[60vh] overflow-y-auto no-scrollbar">
+                  {col.leads.map((lead) => (
+                    <button
+                      key={lead.id}
+                      onClick={() => onCardClick(lead)}
+                      className="w-full text-left p-2.5 rounded-lg border border-slate-700/50 bg-slate-800/40 hover:border-slate-600/70 hover:bg-slate-800/60 transition-colors group"
+                    >
+                      <p className="text-xs font-bold text-slate-100 mb-1 truncate group-hover:text-blue-400 transition-colors">
+                        {lead.name}
+                      </p>
+                      {(lead.phone || lead.email) && (
+                        <p className="text-[10px] text-slate-500 truncate">
+                          {lead.phone ?? lead.email}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between mt-1.5 gap-2">
+                        {lead.source ? (
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                            {lead.source}
+                          </span>
+                        ) : <span />}
+                        {lead.saleValue ? (
+                          <span className="text-[10px] font-bold text-emerald-400 shrink-0">
+                            {formatCurrency(lead.saleValue)}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] text-slate-600">
+                            {new Date(lead.createdAt).toLocaleDateString("pt-BR")}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
