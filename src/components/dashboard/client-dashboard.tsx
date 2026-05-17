@@ -13,6 +13,7 @@ import { ClientSidebar, ClientView } from "@/components/layout/client-sidebar";
 import { CrmView } from "@/components/dashboard/crm-view";
 import { DateRangeModal } from "@/components/dashboard/date-range-modal";
 import { NotificationOptIn } from "@/components/pwa/notification-opt-in";
+import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { usePwaState, triggerInstall } from "@/components/pwa/pwa-store";
 import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
 import { shouldShowMetric, type VisibleMetrics } from "@/lib/visible-metrics";
@@ -1734,13 +1735,11 @@ export function ClientDashboard({
 
         {/* Content */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
-          {loading ? (
-            <div className="flex items-center justify-center flex-1">
-              <div className="flex flex-col items-center gap-4">
-                <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
-                <p className="text-slate-400 text-sm font-medium animate-pulse">Carregando métricas...</p>
-              </div>
-            </div>
+          {/* Loading skeleton substitui spinner central — usuário já vê o
+              esqueleto do layout, sente que a página está respondendo. CRM
+              tem suas próprias regras (loading interno), então pula skeleton. */}
+          {loading && view !== "crm" ? (
+            <DashboardSkeleton kpiCount={view === "overview" ? 6 : 7} />
           ) : (
             <>
               {view === "meta" && renderMeta()}

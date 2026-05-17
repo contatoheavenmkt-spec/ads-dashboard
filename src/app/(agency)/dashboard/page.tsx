@@ -6,6 +6,7 @@ import { Header } from "@/components/layout/header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PerformanceChart } from "@/components/charts/performance-chart";
 import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
+import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { Pie } from "react-chartjs-2";
 import { Loader2, TrendingUp, Zap } from "lucide-react";
 import Link from "next/link";
@@ -239,11 +240,9 @@ export default function DashboardOverviewPage() {
 
   if (loading && !metaData && !googleData) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-slate-900">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
-          <p className="text-slate-400 text-sm font-medium animate-pulse">Carregando visão consolidada...</p>
-        </div>
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-900">
+        <Header title="Visão Geral" subtitle="Dados consolidados de todas as plataformas" days={days} onDaysChange={setDays} accounts={integrations} selectedAccount={selectedAccount} onAccountChange={setSelectedAccount} />
+        <DashboardSkeleton kpiCount={6} />
       </div>
     );
   }

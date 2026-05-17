@@ -7,6 +7,7 @@ import { PerformanceChart } from "@/components/charts/performance-chart";
 import { FunnelChart } from "@/components/charts/funnel-chart";
 import { TopCampaignsDonut } from "@/components/charts/top-campaigns-donut";
 import { formatNumber, resolveDays } from "@/lib/utils";
+import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { Loader2, LayoutDashboard, Users, PieChart as PieChartIcon, Zap } from "lucide-react";
 import Link from "next/link";
 import { Pie } from "react-chartjs-2";
@@ -68,11 +69,9 @@ export default function GA4Page() {
 
   if (loading && !data && isConnected !== false) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-slate-900">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-          <p className="text-slate-400 text-sm font-medium animate-pulse">Carregando métricas GA4...</p>
-        </div>
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-900">
+        <Header title="Google Analytics 4" subtitle="Métricas de Audiência e Comportamento" days={days} onDaysChange={setDays} />
+        <DashboardSkeleton kpiCount={6} />
       </div>
     );
   }

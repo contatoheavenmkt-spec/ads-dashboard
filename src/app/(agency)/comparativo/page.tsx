@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import { TableSkeleton } from "@/components/ui/skeleton";
 
 interface ComparativoRow {
   workspaceId: string;
@@ -102,9 +103,7 @@ export default function ComparativoPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-          </div>
+          <TableSkeleton rows={6} cols={7} />
         ) : rows.length === 0 ? (
           <div className="glass-panel rounded-2xl p-12 text-center">
             <p className="text-slate-400 text-sm">Nenhum workspace encontrado.</p>

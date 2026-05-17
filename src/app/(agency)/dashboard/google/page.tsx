@@ -8,6 +8,7 @@ import { FunnelChart } from "@/components/charts/funnel-chart";
 import { TopCampaignsDonut } from "@/components/charts/top-campaigns-donut";
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
 import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
+import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { Loader2, LayoutDashboard, Users, PieChart as PieChartIcon, Zap } from "lucide-react";
 import Link from "next/link";
 import { KeywordsTable } from "@/components/dashboard/keywords-table";
@@ -90,11 +91,9 @@ export default function GoogleAdsPage() {
 
   if (loading && !data && isConnected !== false) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-slate-900">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 text-cyan-500 animate-spin" />
-          <p className="text-slate-400 text-sm font-medium animate-pulse">Carregando métricas Google Ads...</p>
-        </div>
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-900">
+        <Header title="Google Ads" subtitle="Relatório Google Ads" days={days} onDaysChange={setDays} accounts={integrations} selectedAccount={selectedAccount} onAccountChange={setSelectedAccount} />
+        <DashboardSkeleton kpiCount={6} />
       </div>
     );
   }

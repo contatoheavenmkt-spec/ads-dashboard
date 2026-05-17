@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { cn, formatCurrency } from "@/lib/utils";
+import { TableSkeleton } from "@/components/ui/skeleton";
 
 type LeadStatus = "novo" | "contato" | "negociando" | "vendido" | "perdido";
 
@@ -152,9 +153,7 @@ export default function AgencyCrmPage() {
 
         {/* Tabela */}
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-          </div>
+          <TableSkeleton rows={8} cols={8} />
         ) : leads.length === 0 ? (
           <div className="glass-panel rounded-2xl p-12 text-center">
             <p className="text-slate-400 text-sm">
