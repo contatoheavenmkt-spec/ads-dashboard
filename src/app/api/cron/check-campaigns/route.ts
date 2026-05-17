@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
   // não estourar o tempo de request quando o sistema tiver muitos clientes.
   const workspaces = await db.workspace.findMany({
     where: {
+      deletedAt: null,
       integrations: { some: { integration: { platform: "meta", status: "active" } } },
     },
     include: {

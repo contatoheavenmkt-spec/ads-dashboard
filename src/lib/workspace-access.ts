@@ -91,9 +91,9 @@ export async function canAccessPublicWorkspace(
 ): Promise<WorkspaceAccessCheck> {
   const ws = await db.workspace.findUnique({
     where: { id: workspaceId },
-    select: { id: true, slug: true, publicAccess: true, sharePassword: true, ownerId: true },
+    select: { id: true, slug: true, publicAccess: true, sharePassword: true, ownerId: true, deletedAt: true },
   });
-  if (!ws) return { allowed: false, reason: "not_found" };
+  if (!ws || ws.deletedAt) return { allowed: false, reason: "not_found" };
   if (!ws.publicAccess) return { allowed: false, reason: "private", ownerId: ws.ownerId };
 
   if (ws.sharePassword) {
@@ -117,9 +117,9 @@ export async function canAccessWorkspaceAuthed(
 ): Promise<WorkspaceAccessCheck> {
   const ws = await db.workspace.findUnique({
     where: { id: workspaceId },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, deletedAt: true },
   });
-  if (!ws) return { allowed: false, reason: "not_found" };
+  if (!ws || ws.deletedAt) return { allowed: false, reason: "not_found" };
   if (ws.ownerId === userId) return { allowed: true, ownerId: ws.ownerId };
 
   const user = await db.user.findUnique({
@@ -151,7 +151,7 @@ export async function isAdAccountAuthorized(
     const found = await db.workspaceIntegration.findFirst({
       where: {
         workspaceId,
-        workspace: { ownerId: ownerUserId },
+        workspace: { ownerId: ownerUserId, deletedAt: null },
         integration: { adAccountId },
       },
       select: { id: true },
@@ -163,7 +163,7 @@ export async function isAdAccountAuthorized(
     where: {
       adAccountId,
       workspaceIntegrations: {
-        some: { workspace: { ownerId: ownerUserId } },
+        some: { workspace: { ownerId: ownerUserId, deletedAt: null } },
       },
     },
     select: { id: true },

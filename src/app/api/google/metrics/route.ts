@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCachedMetrics, setCachedMetrics } from "@/lib/metrics-cache";
 import { getInsightsDateRange } from "@/lib/meta-api";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
+import { rateLimit } from "@/lib/rate-limit-mem";
 
 const GADS_API = "https://googleads.googleapis.com/v22";
 const REQUIRED_SCOPE = "https://www.googleapis.com/auth/adwords";
@@ -203,6 +204,18 @@ export async function GET(req: NextRequest) {
   const access = await requireMetricsAccess(req, workspaceIdParam);
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status ?? 401 });
+  }
+
+  // Rate limit pra force=1 (que ignora cache e dispara GAQL). Protege contra
+  // refresh manual em loop e custo na conta Google Ads.
+  if (force && access.resolvedUserId) {
+    const rl = rateLimit(`google-metrics-force:${access.resolvedUserId}`, 10, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Muitas requisições. Tente novamente em ${rl.retryAfter}s.` },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
+      );
+    }
   }
 
   const customerId = await resolveCustomerId(req, access.resolvedUserId ?? null);

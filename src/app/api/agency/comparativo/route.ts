@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { getStoredMetaToken } from "@/lib/meta-token";
 import { getAccountsInsights, aggregateInsights } from "@/lib/meta-api";
+import { rateLimit } from "@/lib/rate-limit-mem";
 
 /**
  * Comparativo de todos os workspaces do AGENCY logado. Para cada workspace,
@@ -21,14 +22,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
 
+  // Rate limit: endpoint é caro (N fetches Meta por workspace). 5 req/min
+  // por user é mais que suficiente — UI dispara só ao trocar filtro de período.
+  const rl = rateLimit(`agency-comparativo:${session.user.id}`, 5, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Muitas requisições. Tente novamente em ${rl.retryAfter}s.` },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
+    );
+  }
+
   const days = Math.max(1, Math.min(90, parseInt(req.nextUrl.searchParams.get("days") ?? "30")));
 
   const token = await getStoredMetaToken(session.user.id);
   if (!token) return NextResponse.json({ rows: [], days });
 
-  // Workspaces do owner com integrações Meta vinculadas
+  // Workspaces do owner com integrações Meta vinculadas (exclui soft-deleted).
   const workspaces = await db.workspace.findMany({
-    where: { ownerId: session.user.id },
+    where: { ownerId: session.user.id, deletedAt: null },
     include: {
       integrations: { include: { integration: true } },
     },

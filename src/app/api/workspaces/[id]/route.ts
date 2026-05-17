@@ -10,9 +10,12 @@ async function requireOwnership(workspaceId: string) {
   if (!session?.user?.id || session.user.role !== "AGENCY") return null;
   const ws = await db.workspace.findUnique({
     where: { id: workspaceId },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, deletedAt: true },
   });
   if (!ws || ws.ownerId !== session.user.id) return null;
+  // Workspace deletado é invisível pra fluxo normal — DELETE retorna 401 também
+  // (já foi deletado, nada a fazer).
+  if (ws.deletedAt) return null;
   return { userId: session.user.id, workspace: ws };
 }
 
@@ -185,12 +188,24 @@ export async function DELETE(
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  // Antes de deletar workspace, desvincula os CLIENTs (workspaceId fica null)
-  // para evitar FK constraint.
+  // **Soft delete**: marca `deletedAt` em vez de remover. Preserva:
+  //   - Histórico de leads no CRM (auditoria de vendas fechadas)
+  //   - CampaignSnapshot e NotificationLog (continuam acessíveis ao owner
+  //     via admin se precisar)
+  //   - WorkspaceIntegration + Integration (a integração com Meta/Google
+  //     fica pendurada mas órfã do workspace ativo)
+  //
+  // CLIENTs vinculados são desvinculados (workspaceId → null) pra que não
+  // tenham acesso a um workspace que "não existe mais" do ponto de vista deles.
+  // Se a agência restaurar (sem rota pública por enquanto, mas o campo permite),
+  // os CLIENTs precisariam ser re-adicionados.
   await db.user.updateMany({
     where: { workspaceId: id },
     data: { workspaceId: null },
   });
-  await db.workspace.delete({ where: { id } });
+  await db.workspace.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
   return NextResponse.json({ ok: true });
 }

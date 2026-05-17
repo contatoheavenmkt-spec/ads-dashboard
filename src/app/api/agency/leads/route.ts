@@ -24,8 +24,9 @@ export async function GET(req: NextRequest) {
   const search = url.searchParams.get("q")?.trim();
 
   // Resolve workspaces deste owner (lista usada como filtro + chips).
+  // Exclui soft-deleted pra não vazar leads de workspace removido.
   const workspaces = await db.workspace.findMany({
-    where: { ownerId: session.user.id },
+    where: { ownerId: session.user.id, deletedAt: null },
     select: { id: true, name: true, slug: true },
     orderBy: { name: "asc" },
   });

@@ -170,10 +170,12 @@ export async function sendToWorkspace(
     where: { id: workspaceId },
     select: {
       ownerId: true,
+      deletedAt: true,
       clients: { select: { id: true } },
     },
   });
-  if (!workspace) return;
+  // Workspace soft-deleted não recebe mais notificações.
+  if (!workspace || workspace.deletedAt) return;
 
   const userIds = [
     ...(workspace.ownerId ? [workspace.ownerId] : []),

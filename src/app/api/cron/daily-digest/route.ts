@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
 
   const workspaces = await db.workspace.findMany({
     where: {
+      deletedAt: null,
       integrations: { some: { integration: { platform: "meta", status: "active" } } },
     },
     include: { integrations: { include: { integration: true } } },

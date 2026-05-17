@@ -10,6 +10,7 @@ import {
 import { getCachedMetrics, setCachedMetrics } from "@/lib/metrics-cache";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
 import { parseCustomRange, daysFromRange } from "@/lib/date-range";
+import { rateLimit } from "@/lib/rate-limit-mem";
 
 const EMPTY = {
   timeSeries: [],
@@ -44,6 +45,19 @@ export async function GET(req: NextRequest) {
   const access = await requireMetricsAccess(req, workspaceId);
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status ?? 401 });
+  }
+
+  // Rate limit por user — protege Graph API contra abuse acidental (refresh
+  // manual contínuo) ou intencional. Janela maior pra `force=1` que ignora
+  // cache e chama Meta direto. Sem rate limit no leitor de cache (barato).
+  if (force && access.resolvedUserId) {
+    const rl = rateLimit(`metrics-force:${access.resolvedUserId}`, 10, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Muitas requisições. Tente novamente em ${rl.retryAfter}s.` },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
+      );
+    }
   }
 
   // Discriminador de cache: por workspace quando disponível, senão por usuário.
@@ -122,9 +136,9 @@ export async function GET(req: NextRequest) {
     accountIds = [adAccountId];
   } else {
     // Sem workspaceId e sem adAccountId: lista todas as integrações Meta vinculadas
-    // a workspaces deste usuário (só do próprio dono).
+    // a workspaces deste usuário (só do próprio dono, exclui soft-deleted).
     const userWs = await db.workspace.findMany({
-      where: { ownerId: userId },
+      where: { ownerId: userId, deletedAt: null },
       include: { integrations: { include: { integration: true } } },
     });
     accountIds = userWs.flatMap((w) =>

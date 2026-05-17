@@ -19,7 +19,8 @@ export default async function ClientWorkspacePage({ params }: Props) {
     include: { integrations: { include: { integration: true } } },
   });
 
-  if (!workspace) notFound();
+  // Trata workspace deletado como inexistente (soft delete).
+  if (!workspace || workspace.deletedAt) notFound();
 
   if (session.user.role === "CLIENT" && session.user.workspaceId !== workspace.id) {
     redirect("/login");

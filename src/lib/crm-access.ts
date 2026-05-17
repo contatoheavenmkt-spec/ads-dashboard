@@ -24,9 +24,9 @@ export async function resolveCrmAccess(
 ): Promise<CrmAccess> {
   const ws = await db.workspace.findUnique({
     where: { id: workspaceId },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, deletedAt: true },
   });
-  if (!ws) return { allowed: false, role: null, canDelete: false };
+  if (!ws || ws.deletedAt) return { allowed: false, role: null, canDelete: false };
 
   if (ws.ownerId === userId) {
     return { allowed: true, role: "AGENCY", canDelete: true };

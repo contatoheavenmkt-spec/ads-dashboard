@@ -76,6 +76,11 @@ model Workspace {
   // clientes que não usam o CRM (ex.: rodam só Google Ads). Default true
   // mantém retrocompatibilidade — workspaces existentes seguem com CRM.
   showCrm        Boolean  @default(true)
+  // Soft delete: workspaces "removidos" recebem deletedAt mas as linhas
+  // permanecem (preservam histórico de CampaignSnapshot, NotificationLog,
+  // Lead, etc.). Queries da app filtram `deletedAt: null`; só o admin
+  // ainda enxerga pra eventual restore.
+  deletedAt      DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

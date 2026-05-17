@@ -21,7 +21,8 @@ export default async function PublicClientPage({ params }: Props) {
     },
   });
 
-  if (!workspace) notFound();
+  // Workspace deletado se comporta como inexistente.
+  if (!workspace || workspace.deletedAt) notFound();
 
   // Workspace existe mas o owner não habilitou "Acesso público" — em vez de
   // soltar 404 cru (UX confuso pra cliente final que recebeu o link),

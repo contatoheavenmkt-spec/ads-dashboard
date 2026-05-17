@@ -24,7 +24,8 @@ export async function GET() {
         orConditions.push({ id: freshUser.workspaceId, ownerId: null });
       }
       const workspaces = await db.workspace.findMany({
-        where: { OR: orConditions },
+        // deletedAt: null exclui workspaces soft-deleted da listagem regular.
+        where: { OR: orConditions, deletedAt: null },
         orderBy: { createdAt: "desc" },
         include: {
           integrations: { include: { integration: true } },
@@ -55,7 +56,8 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json(workspace ? [workspace] : []);
+    // CLIENT vinculado a workspace soft-deleted é tratado como "sem workspace".
+    return NextResponse.json(workspace && !workspace.deletedAt ? [workspace] : []);
   } catch (err: any) {
     console.error("[workspaces/GET] Erro:", err?.message ?? err);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
