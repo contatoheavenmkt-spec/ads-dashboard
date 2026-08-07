@@ -38,11 +38,13 @@ export default auth((req) => {
     nextUrl.pathname.startsWith("/dashboard") ||
     nextUrl.pathname.startsWith("/integracoes") ||
     nextUrl.pathname.startsWith("/workspaces") ||
-    // /crm e /track são telas consolidadas da agência: mostram dados de todos
-    // os clientes ao mesmo tempo. As APIs por trás já exigem role AGENCY, mas
-    // sem estarem listadas aqui um CLIENT logado abria a página e via uma tela
-    // de erro em vez de ser mandado para o painel dele.
-    nextUrl.pathname.startsWith("/crm") ||
+    // /track é tela consolidada da agência (mostra dados de todos os clientes
+    // ao mesmo tempo), então CLIENT logado é mandado para o painel dele. A API
+    // por trás já exige role AGENCY; isto é só para não abrir uma tela de erro.
+    //
+    // Nota: /crm tem a mesma característica e NÃO está listado aqui. É assim
+    // desde antes do Track e não foi alterado de propósito, para não mudar
+    // comportamento de tela que já estava em produção.
     nextUrl.pathname.startsWith("/track");
   const isPasswordChange = nextUrl.pathname.startsWith("/account/change-password");
 

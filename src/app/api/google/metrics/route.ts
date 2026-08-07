@@ -5,7 +5,118 @@ import { getInsightsDateRange } from "@/lib/meta-api";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
 import { rateLimit } from "@/lib/rate-limit";
 import { safeInt } from "@/lib/utils";
-import { getValidGoogleToken, gaqlSearch } from "@/lib/google-ads";
+
+const GADS_API = "https://googleads.googleapis.com/v22";
+const REQUIRED_SCOPE = "https://www.googleapis.com/auth/adwords";
+
+// ─── Token management ──────────────────────────────────────────────
+
+async function getValidToken(userId: string): Promise<{ accessToken: string; scopes: string[] } | null> {
+  const conn = await db.googleConnection.findFirst({ where: { userId }, orderBy: { connectedAt: "desc" } });
+  if (!conn) return null;
+
+  const connScopes = (conn.scopes ?? "").split(" ").filter(Boolean);
+  // If scopes are recorded and don't include adwords, skip this connection
+  // But if scopes are empty (legacy data), proceed anyway and let the API call fail naturally
+  if (connScopes.length > 0 && !connScopes.includes(REQUIRED_SCOPE)) return null;
+
+  let token = conn.accessToken;
+
+  const expiresAt = conn.expiresAt instanceof Date ? conn.expiresAt : null;
+  if (!expiresAt || isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        grant_type: "refresh_token",
+        refresh_token: conn.refreshToken,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) return null;
+
+    await db.googleConnection.update({
+      where: { id: conn.id },
+      data: {
+        accessToken: data.access_token,
+        expiresAt: new Date(Date.now() + data.expires_in * 1000),
+        // Google ocasionalmente rotaciona o refresh_token — quando vier, persiste.
+        ...(data.refresh_token ? { refreshToken: data.refresh_token } : {}),
+      },
+    });
+    token = data.access_token;
+  }
+
+  return { accessToken: token, scopes: connScopes };
+}
+
+// ─── GAQL helper ──────────────────────────────────────────────────
+
+function gaqlHeaders(token: string, loginCustomerId: string) {
+  return {
+    Authorization: `Bearer ${token}`,
+    "developer-token": process.env.GOOGLE_DEVELOPER_TOKEN!,
+    "Content-Type": "application/json",
+    "login-customer-id": loginCustomerId,
+  };
+}
+
+async function gaqlSearch(customerId: string, token: string, loginCustomerId: string, query: string): Promise<any[]> {
+  const body = JSON.stringify({ query });
+
+  const attempt = async (lci: string) => {
+    console.log(`[google/metrics] GAQL → customerId=${customerId} login-customer-id=${lci}`);
+    const res = await fetch(`${GADS_API}/customers/${customerId}/googleAds:search`, {
+      method: "POST",
+      headers: {
+        ...gaqlHeaders(token, lci),
+        "Content-Length": String(Buffer.byteLength(body)),
+      },
+      body,
+    });
+    return res.json();
+  };
+
+  let data = await attempt(loginCustomerId);
+
+  // Se deu permission error com o MCC, retenta usando o próprio customerId (conta direta)
+  if (data.error) {
+    const code = data.error.details?.[0]?.errors?.[0]?.errorCode?.authorizationError;
+    const isPermissionError = code === "USER_PERMISSION_DENIED" || data.error.status === "PERMISSION_DENIED";
+    if (isPermissionError && loginCustomerId !== customerId) {
+      console.warn(`[google/metrics] login-customer-id=${loginCustomerId} negado, retentando com customerId=${customerId}`);
+      data = await attempt(customerId);
+    }
+  }
+
+  if (data.error) {
+    console.error("[google/metrics] GAQL error:", JSON.stringify(data.error));
+    throw new Error(data.error.message);
+  }
+
+  console.log(`[google/metrics] GAQL rows: ${data.results?.length ?? 0}`);
+  return data.results?.map((r: any) => flattenFields(r)) ?? [];
+}
+
+function camelToSnake(s: string): string {
+  return s.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`);
+}
+
+function flattenFields(obj: any, prefix = ""): Record<string, any> {
+  let result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const snakeKey = camelToSnake(key);
+    const fullKey = prefix ? `${prefix}.${snakeKey}` : snakeKey;
+    if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
+      result = { ...result, ...flattenFields(value as any, fullKey) };
+    } else {
+      result[fullKey] = value;
+    }
+  }
+  return result;
+}
 
 // ─── Resolve customerId ───────────────────────────────────────────
 
@@ -132,7 +243,7 @@ export async function GET(req: NextRequest) {
 
   const resolvedUserId = access.resolvedUserId ?? undefined;
 
-  const tokenInfo = await getValidGoogleToken(resolvedUserId ?? "");
+  const tokenInfo = await getValidToken(resolvedUserId ?? "");
   if (!tokenInfo) {
     console.warn("[google/metrics] No valid token found, returning empty data");
     return NextResponse.json({
@@ -168,7 +279,7 @@ export async function GET(req: NextRequest) {
 
   let timeSeriesRows: Record<string, any>[] = [];
   try {
-    timeSeriesRows = await gaqlSearch({ customerId, token: tokenInfo.accessToken, loginCustomerId, query: tsQuery, tag: "google/metrics" });
+    timeSeriesRows = await gaqlSearch(customerId, tokenInfo.accessToken, loginCustomerId, tsQuery);
   } catch (err: any) {
     console.error("[google/metrics] timeSeries error:", err.message);
   }
@@ -211,7 +322,7 @@ export async function GET(req: NextRequest) {
 
   let campRows: Record<string, any>[] = [];
   try {
-    campRows = await gaqlSearch({ customerId, token: tokenInfo.accessToken, loginCustomerId, query: campQuery, tag: "google/metrics" });
+    campRows = await gaqlSearch(customerId, tokenInfo.accessToken, loginCustomerId, campQuery);
   } catch (err: any) {
     console.error("[google/metrics] campaigns error:", err.message);
   }
@@ -253,7 +364,7 @@ export async function GET(req: NextRequest) {
 
   let kwRows: Record<string, any>[] = [];
   try {
-    kwRows = await gaqlSearch({ customerId, token: tokenInfo.accessToken, loginCustomerId, query: kwQuery, tag: "google/metrics" });
+    kwRows = await gaqlSearch(customerId, tokenInfo.accessToken, loginCustomerId, kwQuery);
   } catch (err: any) {
     console.error("[google/metrics] keywords error:", err.message);
   }
@@ -301,7 +412,7 @@ export async function GET(req: NextRequest) {
 
   let gRows: Record<string, any>[] = [];
   try {
-    gRows = await gaqlSearch({ customerId, token: tokenInfo.accessToken, loginCustomerId, query: gQuery, tag: "google/metrics" });
+    gRows = await gaqlSearch(customerId, tokenInfo.accessToken, loginCustomerId, gQuery);
   } catch { /* fallback */ }
 
   const finalGenderMap = new Map<string, { label: string; impressions: number; clicks: number }>();
@@ -327,7 +438,7 @@ export async function GET(req: NextRequest) {
 
   let arRows: Record<string, any>[] = [];
   try {
-    arRows = await gaqlSearch({ customerId, token: tokenInfo.accessToken, loginCustomerId, query: arQuery, tag: "google/metrics" });
+    arRows = await gaqlSearch(customerId, tokenInfo.accessToken, loginCustomerId, arQuery);
   } catch { /* fallback */ }
 
   const finalAgeMap = new Map<string, { label: string; impressions: number; clicks: number }>();

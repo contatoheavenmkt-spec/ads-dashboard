@@ -1,11 +1,20 @@
 /**
- * Cliente único da Google Ads API.
+ * Cliente da Google Ads API usado pelo módulo Track.
  *
- * Antes isso vivia duplicado (e divergente) em api/google/metrics/route.ts e
- * api/google/accounts/route.ts. A divergência importava: `metrics` aceitava
- * conexão com `scopes` vazio (dado legado de contas antigas) e `accounts`
- * rejeitava. Aqui vale a versão tolerante, senão quem conectou antes da
- * gravação de escopo para de listar contas.
+ * ESCOPO DESTE ARQUIVO: só o Track consome daqui. As rotas antigas
+ * (`api/google/metrics` e `api/google/accounts`) seguem com a cópia própria
+ * delas, intocadas, porque já estão em produção servindo os dashboards e
+ * mexer nelas não é necessário para o Track funcionar.
+ *
+ * Isso deixa uma duplicação conhecida entre este arquivo e aquelas duas rotas.
+ * É proposital: unificar é uma limpeza que vale a pena um dia, mas é uma
+ * mudança em código que já funciona e deve ser feita sozinha, com o dashboard
+ * conferido antes e depois, e não de carona num módulo novo.
+ *
+ * Uma diferença de comportamento a registrar, caso a unificação aconteça:
+ * `metrics` aceita conexão com `scopes` vazio (dado legado, de antes de
+ * persistirmos escopo) e `accounts` rejeita. Este arquivo segue a versão
+ * tolerante do `metrics`.
  */
 
 import { db } from "@/lib/db";
