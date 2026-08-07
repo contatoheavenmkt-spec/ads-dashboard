@@ -9,6 +9,7 @@ import {
   lerTimestamp,
 } from "../../src/lib/track/mensagem";
 import { parseTrackSettings } from "../../src/lib/track/settings";
+import { reavaliar } from "./funil";
 
 const log = criarLog("mensagem");
 
@@ -174,6 +175,21 @@ async function processarUma(
   log.info(
     `${instanceId}: ${daAgencia ? "saiu" : "entrou"} msg de ${tel(contato.contactKey)} (${tipoUpsert}) conversa ${conversa.id}`,
   );
+
+  // A frase-gatilho ("parabéns pela sua compra") é avaliada aqui, junto com a
+  // contagem que define "respondeu". Falhar nisso não pode desfazer a gravação
+  // da mensagem, que já é o dado bruto correto.
+  try {
+    await reavaliar({
+      workspaceId,
+      conversationId: conversa.id,
+      cfg,
+      mensagem: { texto: conteudo.texto, direcao: daAgencia ? "out" : "in" },
+      quando,
+    });
+  } catch (err) {
+    log.erro(`falha ao reavaliar funil da conversa ${conversa.id}: ${(err as Error).message}`);
+  }
 }
 
 interface ConversaResumo {

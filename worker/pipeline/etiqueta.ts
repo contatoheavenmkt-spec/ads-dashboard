@@ -1,7 +1,7 @@
 import { criarLog } from "../log";
 import { db } from "../prisma";
-import { contactKeyFromJid } from "../../src/lib/track/phone";
-import { isGroupJid } from "../../src/lib/track/phone";
+import { contactKeyFromJid, isGroupJid } from "../../src/lib/track/phone";
+import { reavaliar } from "./funil";
 
 const log = criarLog("etiqueta");
 
@@ -125,6 +125,16 @@ async function aplicarAssociacao(
     );
   } catch (err) {
     log.erro(`${instanceId}: falha ao atualizar etiquetas: ${(err as Error).message}`);
+    return;
+  }
+
+  // Aqui a etiqueta "Pago" vira venda: é o momento em que o produto entrega o
+  // que promete. Tirar a etiqueta atualiza a lista, mas não desfaz evento já
+  // registrado, porque conversão enviada ao Google não se "des-envia".
+  try {
+    await reavaliar({ workspaceId, conversationId: conversa.id });
+  } catch (err) {
+    log.erro(`falha ao reavaliar funil após etiqueta: ${(err as Error).message}`);
   }
 }
 
