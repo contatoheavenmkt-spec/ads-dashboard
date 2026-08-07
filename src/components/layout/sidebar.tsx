@@ -120,6 +120,10 @@ interface ConnectionStatus {
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
+  // Durante a impersonação, "Sair" precisa ENCERRAR a impersonação, não apagar
+  // o cookie: sem isto o operador cai em /login, sem restaurar a sessão dele e
+  // sem fechar o par start/end no AdminLog.
+  const impersonando = !!(session?.user as { impersonatedBy?: string } | undefined)?.impersonatedBy;
   const [connections, setConnections] = useState<ConnectionStatus | null>(null);
   const [onboardingPending, setOnboardingPending] = useState(false);
 
@@ -247,12 +251,12 @@ export function Sidebar() {
           </Link>
 
 <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => { if (impersonando) { window.location.assign("/api/admin/impersonate/exit?motivo=sair"); } else { signOut({ callbackUrl: "/login" }); } }}
             className={cn(
               "transition-all duration-300 hover:scale-110",
               variant === "dark" ? "text-slate-500 hover:text-red-400" : "text-gray-400 hover:text-white"
             )}
-            title="Sair"
+            title={impersonando ? "Encerrar acesso admin" : "Sair"}
           >
             <LogOut size={22} className="opacity-70 hover:opacity-100" />
           </button>
@@ -300,14 +304,14 @@ export function Sidebar() {
         );
       })}
       <button
-        onClick={() => signOut({ callbackUrl: "/login" })}
+        onClick={() => { if (impersonando) { window.location.assign("/api/admin/impersonate/exit?motivo=sair"); } else { signOut({ callbackUrl: "/login" }); } }}
         className={cn(
           "flex flex-col items-center justify-center flex-1 py-1 gap-0.5 rounded-xl transition-all",
           variant === "dark" ? "text-slate-500 active:text-red-400" : "text-gray-400"
         )}
       >
         <LogOut className="w-5 h-5 opacity-70" />
-        <span className="text-[8px] font-bold uppercase tracking-wide text-slate-500">Sair</span>
+        <span className="text-[8px] font-bold uppercase tracking-wide text-slate-500">{impersonando ? "Encerrar" : "Sair"}</span>
       </button>
     </nav>
     </>

@@ -17,10 +17,37 @@ function getOrCreateSessionId(): string {
   }
 }
 
+/**
+ * Rotas que NÃO entram na telemetria.
+ *
+ * O painel administrativo mede o tráfego do produto — se ele contar as próprias
+ * visitas, o operador aparece nos números que está lendo. Com uma base pequena
+ * a distorção é enorme: navegar por 6 telas do admin gera 6 PageViews e mantém
+ * uma ActiveSession, inflando "visualizações hoje", "visitantes únicos",
+ * "ativos agora" e empurrando /admin para o topo das páginas mais vistas.
+ *
+ * O `<Tracker />` fica montado no layout RAIZ (src/app/layout.tsx), então esta
+ * é a única barreira — não há um layout intermediário onde ele possa deixar de
+ * existir sem tirá-lo do site inteiro.
+ */
+const ROTAS_SEM_TELEMETRIA = ["/admin"];
+
+function deveRastrear(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return !ROTAS_SEM_TELEMETRIA.some(
+    (prefixo) => pathname === prefixo || pathname.startsWith(`${prefixo}/`),
+  );
+}
+
 export function Tracker() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const sessionIdRef = useRef<string | null>(null);
+  // Navegar impersonado gravaria PageView e ActiveSession com o userId do
+  // ALVO, inflando "ativos agora", "último acesso" e o mapa de presença —
+  // exatamente os números que o dono lê em /admin.
+  const impersonando = !!(session?.user as { impersonatedBy?: string } | undefined)?.impersonatedBy;
+  const rastrear = deveRastrear(pathname) && !impersonando;
 
   useEffect(() => {
     sessionIdRef.current = getOrCreateSessionId();
@@ -28,7 +55,7 @@ export function Tracker() {
 
   useEffect(() => {
     const sid = sessionIdRef.current;
-    if (!sid) return;
+    if (!sid || !rastrear) return;
     const userId = (session?.user as { id?: string } | undefined)?.id ?? undefined;
 
     fetch("/api/track/pageview", {
@@ -36,11 +63,13 @@ export function Tracker() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ path: pathname, sessionId: sid, referrer: document.referrer || null, userId }),
     }).catch(() => {});
-  }, [pathname, session]);
+  }, [pathname, session, rastrear]);
 
   useEffect(() => {
     const sid = sessionIdRef.current;
-    if (!sid) return;
+    // Sem heartbeat no admin também: ele é o que mantém a linha em
+    // ActiveSession viva, alimentando "ativos agora" e o mapa de presença.
+    if (!sid || !rastrear) return;
 
     const interval = setInterval(() => {
       const userId = (session?.user as { id?: string } | undefined)?.id ?? undefined;
@@ -52,8 +81,13 @@ export function Tracker() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [session]);
+  }, [session, rastrear]);
 
+  // Captura de ERRO continua ativa no admin, de propósito e sem `rastrear`.
+  // O que polui a analytics é contar acesso do operador como se fosse tráfego
+  // do produto; um erro de JavaScript no painel é justamente o que se quer
+  // saber, e o ErrorLog é uma tabela separada que não alimenta nenhuma métrica
+  // de audiência.
   useEffect(() => {
     const sid = sessionIdRef.current ?? "";
 

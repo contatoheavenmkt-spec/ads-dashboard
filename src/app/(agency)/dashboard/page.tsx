@@ -7,23 +7,10 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PerformanceChart } from "@/components/charts/performance-chart";
 import { formatCurrency, formatNumber, resolveDays } from "@/lib/utils";
 import { DashboardSkeleton } from "@/components/ui/skeleton";
-import { Pie } from "react-chartjs-2";
+import { RoscaSimples } from "@/components/charts/rosca-simples";
+import { COR_PLATAFORMA } from "@/components/charts/paleta";
 import { Loader2, TrendingUp, Zap } from "lucide-react";
 import Link from "next/link";
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Filler,
-} from "chart.js";
-
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, Filler);
 
 
 interface MetaTotals {
@@ -210,7 +197,7 @@ export default function DashboardOverviewPage() {
         />
         <div className="flex-1 flex items-start justify-center pt-12">
           <div className="flex flex-col items-center gap-6 text-center max-w-md px-6">
-            <img src="/Logo Full.png" alt="Dashfy" className="h-96 object-contain opacity-80" />
+            <img src="/logo-full.webp" alt="Dashfy" className="h-96 object-contain opacity-80" />
             <div className="space-y-2 -mt-32">
               <h2 className="text-xl font-black text-white">Comece do Zero</h2>
               <p className="text-slate-400 text-sm leading-relaxed">
@@ -302,16 +289,11 @@ export default function DashboardOverviewPage() {
             <div className="glass-panel rounded-2xl p-6 flex flex-col items-center flex-1">
               <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest mb-4 w-full text-center">Share de Investimento</h3>
               <div className="w-full aspect-square relative max-w-[140px]">
-                <Pie
-                  data={{
-                    labels: ['Meta Ads', 'Google Ads', 'Outros'],
-                    datasets: [{
-                      data: [metaShare, googleShare, Math.max(ga4Share, 0)],
-                      backgroundColor: ['#2563eb', '#22d3ee', '#f97316'],
-                      borderWidth: 0,
-                    }]
-                  }}
-                  options={{ cutout: '70%', plugins: { legend: { display: false } } }}
+                <RoscaSimples
+                  rotulos={['Meta Ads', 'Google Ads', 'Outros']}
+                  valores={[metaShare, googleShare, Math.max(ga4Share, 0)]}
+                  cores={[COR_PLATAFORMA.meta, COR_PLATAFORMA.google, COR_PLATAFORMA.outros]}
+                  sufixo="%"
                 />
                 <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
                   <span className="text-[9px] font-bold text-slate-400">Meta</span>
@@ -320,8 +302,8 @@ export default function DashboardOverviewPage() {
               </div>
               <div className="mt-4 grid grid-cols-1 gap-2 w-full">
                 {[
-                  { label: 'Meta Ads', color: '#2563eb', val: `${metaShare}%`, spend: mt?.spend ?? 0 },
-                  { label: 'Google Ads', color: '#22d3ee', val: `${googleShare}%`, spend: gt?.spend ?? 0 },
+                  { label: 'Meta Ads', color: COR_PLATAFORMA.meta, val: `${metaShare}%`, spend: mt?.spend ?? 0 },
+                  { label: 'Google Ads', color: COR_PLATAFORMA.google, val: `${googleShare}%`, spend: gt?.spend ?? 0 },
                 ].map(item => (
                   <div key={item.label} className="flex justify-between items-center text-[9px] font-bold text-slate-400 uppercase">
                     <div className="flex items-center gap-2">
@@ -452,7 +434,7 @@ export default function DashboardOverviewPage() {
             <div className="text-center space-y-5">
               {/* Logo */}
               <div className="flex items-center justify-center mx-auto">
-                <img src="/Logo Full.png" alt="Dashfy" className="h-10 object-contain" />
+                <img src="/logo-full.webp" alt="Dashfy" className="h-10 object-contain" />
               </div>
 
               {/* Title */}

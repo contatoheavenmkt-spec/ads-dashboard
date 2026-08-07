@@ -20,9 +20,32 @@ interface Workspace {
   publicAccess: boolean;
   createdAt: string;
   integrations: Array<{
-    integration: { id: string; name: string; platform: string };
+    integration: {
+      id: string;
+      name: string;
+      platform: string;
+      // "active" | "error". Vira "error" quando a reconciliação horária
+      // descobre que o token não enxerga mais aquela conta — tipicamente
+      // porque a BM saiu do portfólio ou a conta foi encerrada.
+      status?: string;
+      bmName?: string | null;
+    };
   }>;
   clients: Array<{ id: string; email: string }>;
+}
+
+/** Saúde das contas Meta de um workspace. */
+function saudeMeta(ws: Workspace) {
+  const meta = ws.integrations.filter((i) => i.integration.platform === "meta");
+  const mortas = meta.filter((i) => i.integration.status === "error");
+  return {
+    total: meta.length,
+    mortas: mortas.length,
+    // Só fica cinza quando NENHUMA conta Meta responde. Com uma viva o
+    // painel ainda mostra dado real e cinza seria alarme falso.
+    semBm: meta.length > 0 && mortas.length === meta.length,
+    parcial: mortas.length > 0 && mortas.length < meta.length,
+  };
 }
 
 export default function WorkspacesPage() {
@@ -88,10 +111,16 @@ export default function WorkspacesPage() {
 
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {workspaces.map((ws) => (
+            {workspaces.map((ws) => {
+              const saude = saudeMeta(ws);
+              return (
               <div
                 key={ws.id}
-                className="glass-panel rounded-2xl p-5 flex flex-col gap-4 hover:border-slate-600/60 transition-all group"
+                className={`glass-panel rounded-2xl p-5 flex flex-col gap-4 transition-all group ${saude.semBm
+                  ? "grayscale opacity-60 hover:opacity-100 hover:grayscale-0 border-slate-700/60"
+                  : "hover:border-slate-600/60"
+                  }`}
+                title={saude.semBm ? "Nenhuma conta Meta acessível — a BM saiu do portfólio ou a conta foi encerrada" : undefined}
               >
                 {/* Header */}
                 <div className="flex items-start justify-between">
@@ -103,30 +132,52 @@ export default function WorkspacesPage() {
                         className="w-11 h-11 rounded-xl object-cover border border-slate-700/50"
                       />
                     ) : (
-                      <div className="w-11 h-11 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white font-black text-sm shadow-lg shadow-blue-500/20">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white font-black text-sm shadow-lg ${saude.semBm
+                        ? "bg-gradient-to-br from-slate-600 to-slate-700 shadow-slate-900/20"
+                        : "bg-gradient-to-br from-blue-600 to-blue-700 shadow-blue-500/20"
+                        }`}>
                         {ws.name.slice(0, 2).toUpperCase()}
                       </div>
                     )}
                     <div>
-                      <h3 className="font-black text-slate-100 text-sm leading-tight">{ws.name}</h3>
+                      <h3 className={`font-black text-sm leading-tight ${saude.semBm ? "text-slate-400" : "text-slate-100"}`}>{ws.name}</h3>
                       <p className="text-[10px] text-slate-500 font-mono mt-0.5">/{ws.slug}</p>
                     </div>
                   </div>
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider ${ws.publicAccess
-                    ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-                    : "text-slate-400 bg-slate-800 border-slate-700"
-                    }`}>
-                    {ws.publicAccess ? "Público" : "Privado"}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    {saude.semBm && (
+                      <span className="text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider text-slate-300 bg-slate-700/60 border-slate-600">
+                        Sem BM
+                      </span>
+                    )}
+                    {saude.parcial && (
+                      <span className="text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider text-amber-400 bg-amber-500/10 border-amber-500/30">
+                        {saude.mortas} de {saude.total} sem BM
+                      </span>
+                    )}
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider ${ws.publicAccess
+                      ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                      : "text-slate-400 bg-slate-800 border-slate-700"
+                      }`}>
+                      {ws.publicAccess ? "Público" : "Privado"}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/30 flex items-center gap-2">
-                    <BarChart3 size={13} className="text-blue-400 shrink-0" />
+                    <BarChart3 size={13} className={saude.semBm ? "text-slate-500 shrink-0" : "text-blue-400 shrink-0"} />
                     <div>
                       <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Contas</p>
-                      <p className="text-sm font-black text-slate-100">{ws.integrations.length}</p>
+                      <p className="text-sm font-black text-slate-100">
+                        {ws.integrations.length}
+                        {saude.mortas > 0 && (
+                          <span className="ml-1 text-[10px] font-bold text-slate-500">
+                            ({saude.mortas} sem BM)
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                   <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/30 flex items-center gap-2">
@@ -158,7 +209,8 @@ export default function WorkspacesPage() {
                   </a>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -12,15 +12,7 @@ import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { Loader2, LayoutDashboard, Users, PieChart as PieChartIcon, Zap } from "lucide-react";
 import Link from "next/link";
 import { KeywordsTable } from "@/components/dashboard/keywords-table";
-import { Pie } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-} from "chart.js";
-
-ChartJS.register(ArcElement, Tooltip, Legend);
+import { RoscaSimples } from "@/components/charts/rosca-simples";
 
 
 interface GoogleMetrics {
@@ -105,7 +97,7 @@ export default function GoogleAdsPage() {
         <Header title="Google Ads" subtitle="Relatório Google Ads" days={days} onDaysChange={setDays} accounts={integrations} selectedAccount={selectedAccount} onAccountChange={setSelectedAccount} />
         <div className="flex-1 flex items-start justify-center pt-12">
           <div className="flex flex-col items-center gap-6 text-center max-w-md px-6">
-            <img src="/Logo Full.png" alt="Dashfy" className="h-96 object-contain opacity-80" />
+            <img src="/logo-full.webp" alt="Dashfy" className="h-96 object-contain opacity-80" />
             <div className="space-y-2 -mt-32">
               <h2 className="text-xl font-black text-white">Comece do Zero</h2>
               <p className="text-slate-400 text-sm leading-relaxed">
@@ -259,16 +251,10 @@ export default function GoogleAdsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-6 items-center">
                   <div className="aspect-square relative max-w-[140px] mx-auto">
-                    <Pie
-                      data={{
-                        labels: data!.demographics.gender.map(g => g.label),
-                        datasets: [{
-                          data: data!.demographics.gender.map(g => g.impressions),
-                          backgroundColor: ['#22d3ee', '#2563eb', '#1e40af'],
-                          borderWidth: 0,
-                        }]
-                      }}
-                      options={{ cutout: '70%', plugins: { legend: { display: false } } }}
+                    <RoscaSimples
+                      rotulos={data!.demographics.gender.map(g => g.label)}
+                      valores={data!.demographics.gender.map(g => g.impressions)}
+                      cores={['#22d3ee', '#2563eb', '#1e40af']}
                     />
                   </div>
                   <div className="space-y-3">
