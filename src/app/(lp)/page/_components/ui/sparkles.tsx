@@ -50,7 +50,11 @@ export function Sparkles({
       options={{
         background: { color: { value: background } },
         fullScreen: { enable: false },
-        fpsLimit: 120,
+        // 60fps basta para telas comuns e corta pela metade o trabalho de
+        // canvas; pauseOnOutsideViewport evita animar a seção de preços
+        // enquanto ela está longe da dobra.
+        fpsLimit: 60,
+        pauseOnOutsideViewport: true,
         particles: {
           color: { value: color },
           move: {

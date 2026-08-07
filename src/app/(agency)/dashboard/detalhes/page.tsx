@@ -5,26 +5,12 @@ import { Header } from "@/components/layout/header";
 import { GaugeChart } from "@/components/dashboard/gauge-chart";
 import { PerformanceChart } from "@/components/charts/performance-chart";
 import { RegionList, RegionMap } from "@/components/dashboard/region-heatmap";
-import { Pie } from "react-chartjs-2";
+import { RoscaSimples } from "@/components/charts/rosca-simples";
 import { formatNumber, formatCurrency, resolveDays } from "@/lib/utils";
 import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { Loader2, Search, Target, MousePointer2, Zap } from "lucide-react";
 import Link from "next/link";
 import { KeywordsTable } from "@/components/dashboard/keywords-table";
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Filler,
-} from "chart.js";
-
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, Filler);
 
 
 interface DemographicBreakdown { label: string; impressions: number; clicks: number }
@@ -153,7 +139,7 @@ export default function DetalhesPage() {
         />
         <div className="flex-1 flex items-start justify-center pt-12">
           <div className="flex flex-col items-center gap-6 text-center max-w-md px-6">
-            <img src="/Logo Full.png" alt="Dashfy" className="h-96 object-contain opacity-80" />
+            <img src="/logo-full.webp" alt="Dashfy" className="h-96 object-contain opacity-80" />
             <div className="space-y-2 -mt-32">
               <h2 className="text-xl font-black text-white">Sem Contas Conectadas</h2>
               <p className="text-slate-400 text-sm leading-relaxed">
@@ -313,10 +299,7 @@ export default function DetalhesPage() {
           <div className="lg:col-span-2 glass-panel rounded-2xl p-5 flex flex-col items-center">
             <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest mb-3 w-full text-center">Gênero</h3>
             <div className="w-full aspect-square relative max-w-[120px]">
-              <Pie
-                data={{ labels: gLabels, datasets: [{ data: gData, backgroundColor: GENDER_COLORS, borderWidth: 0 }] }}
-                options={{ cutout: '65%', plugins: { legend: { display: false } } }}
-              />
+              <RoscaSimples rotulos={gLabels} valores={gData} cores={GENDER_COLORS} furo="65%" />
               <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
                 <span className="text-sm font-black text-white">{gData[0]}%</span>
                 <span className="text-[7px] font-bold text-slate-400">Fem.</span>
@@ -339,10 +322,7 @@ export default function DetalhesPage() {
           <div className="lg:col-span-3 glass-panel rounded-2xl p-5 flex flex-col items-center">
             <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest mb-3 w-full text-center">Faixa Etária</h3>
             <div className="w-full aspect-square relative max-w-[120px]">
-              <Pie
-                data={{ labels: aLabels, datasets: [{ data: aData, backgroundColor: AGE_COLORS, borderWidth: 0 }] }}
-                options={{ cutout: '65%', plugins: { legend: { display: false } } }}
-              />
+              <RoscaSimples rotulos={aLabels} valores={aData} cores={AGE_COLORS} furo="65%" />
               <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
                 <span className="text-sm font-black text-white">{aData[0]}%</span>
                 <span className="text-[7px] font-bold text-slate-400">{aLabels[0]}</span>
@@ -532,12 +512,12 @@ export default function DetalhesPage() {
             {/* Mini Pie channels + sessions gauge */}
             <div className="flex gap-4 items-center">
               <div className="w-[100px] aspect-square relative flex-shrink-0">
-                <Pie
-                  data={{
-                    labels: ['Organic', 'Direct', 'Social', 'Paid'],
-                    datasets: [{ data: [45, 30, 15, 10], backgroundColor: ['#f97316', '#fb923c', '#fdba74', '#fed7aa'], borderWidth: 0 }]
-                  }}
-                  options={{ cutout: '65%', plugins: { legend: { display: false } } }}
+                <RoscaSimples
+                  rotulos={['Organic', 'Direct', 'Social', 'Paid']}
+                  valores={[45, 30, 15, 10]}
+                  cores={['#f97316', '#fb923c', '#fdba74', '#fed7aa']}
+                  furo="65%"
+                  sufixo="%"
                 />
                 <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
                   <span className="text-[10px] font-black text-white">45%</span>

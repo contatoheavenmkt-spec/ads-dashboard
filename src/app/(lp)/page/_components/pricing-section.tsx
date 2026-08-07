@@ -176,7 +176,7 @@ export function PricingSection() {
       >
         <div className="absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#ffffff2c_1px,transparent_1px),linear-gradient(to_bottom,#3a3a3a01_1px,transparent_1px)] bg-[size:70px_80px]" />
         <Sparkles
-          density={1800}
+          density={400}
           direction="bottom"
           speed={1}
           color="#FFFFFF"

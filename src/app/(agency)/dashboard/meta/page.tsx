@@ -119,7 +119,7 @@ export default function DashboardPage() {
         <Header title="Meta Ads" subtitle="Relatório Meta Ads" days={days} onDaysChange={setDays} />
         <div className="flex-1 flex items-start justify-center pt-12">
           <div className="flex flex-col items-center gap-6 text-center max-w-md px-6">
-            <img src="/Logo Full.png" alt="Dashfy" className="h-96 object-contain opacity-80" />
+            <img src="/logo-full.webp" alt="Dashfy" className="h-96 object-contain opacity-80" />
             <div className="space-y-2 -mt-32">
               <h2 className="text-xl font-black text-white">Comece do Zero</h2>
               <p className="text-slate-400 text-sm leading-relaxed">

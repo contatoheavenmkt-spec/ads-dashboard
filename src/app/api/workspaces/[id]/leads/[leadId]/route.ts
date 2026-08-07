@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { resolveCrmAccess, isValidStatus } from "@/lib/crm-access";
 import { clampString } from "@/lib/utils";
+import { bloqueioDeEscrita } from "@/lib/impersonation";
 
 interface PatchBody {
   name?: string;
@@ -20,6 +21,8 @@ export async function PATCH(
   ctx: { params: Promise<{ id: string; leadId: string }> },
 ) {
   const session = await auth();
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
@@ -86,6 +89,8 @@ export async function DELETE(
   ctx: { params: Promise<{ id: string; leadId: string }> },
 ) {
   const session = await auth();
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }

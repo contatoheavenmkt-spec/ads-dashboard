@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auth } from "@/auth";
+import { bloqueioDeEscrita } from "@/lib/impersonation";
 
 export async function POST(request: Request) {
   try {
     const session = await auth();
+    const bloqueio = bloqueioDeEscrita(session);
+    if (bloqueio) return bloqueio;
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }

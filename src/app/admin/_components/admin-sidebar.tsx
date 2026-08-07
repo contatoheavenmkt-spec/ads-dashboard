@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -45,14 +46,23 @@ export function AdminSidebar() {
         {NAV.map(({ href, label, icon: Icon, exact }) => {
           const active = exact ? pathname === href : pathname.startsWith(href);
           return (
-            <a
+            // <Link> e não <a>: com âncora crua cada item do menu disparava um
+            // recarregamento COMPLETO da página — HTML novo, todo o JS baixado e
+            // reinterpretado, React hidratando do zero. Era a maior parte da
+            // lentidão percebida ao navegar no painel. O Link faz navegação no
+            // cliente e ainda pré-carrega a rota quando o item entra na tela.
+            <Link
               key={href}
               href={href}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all",
+                // transition-colors e não transition-all: `all` animaria também
+                // a borda que só existe no item ativo, causando um salto de 1px
+                // no layout a cada troca de página.
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors",
                 active
                   ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
               )}
             >
               <Icon size={15} className={active ? "text-blue-400" : "text-slate-500"} />
@@ -60,7 +70,7 @@ export function AdminSidebar() {
               {active && (
                 <div className="ml-auto w-1.5 h-4 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
               )}
-            </a>
+            </Link>
           );
         })}
       </nav>

@@ -3,9 +3,12 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { bloqueioDeEscrita } from "@/lib/impersonation";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }

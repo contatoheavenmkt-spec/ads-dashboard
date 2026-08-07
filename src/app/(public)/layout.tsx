@@ -12,7 +12,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/login" className="flex items-center gap-2 group">
-            <img src="/logo-full.png" alt="Dashfy" className="h-7 object-contain" />
+            <img src="/logo-full.webp" alt="Dashfy" className="h-7 object-contain" />
           </Link>
           <div className="flex items-center gap-4 text-xs text-slate-400">
             <Link href="/about" className="hover:text-white transition-colors">Sobre</Link>

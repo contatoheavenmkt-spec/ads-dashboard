@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { bloqueioDeEscrita } from "@/lib/impersonation";
 
 interface SubscribeBody {
   endpoint: string;
@@ -10,6 +11,8 @@ interface SubscribeBody {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
@@ -76,6 +79,8 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const session = await auth();
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }

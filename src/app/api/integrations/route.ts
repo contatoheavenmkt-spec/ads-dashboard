@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import { validateAccountLimit, validatePlatformLimit } from "@/lib/subscription";
+import { bloqueioDeEscrita } from "@/lib/impersonation";
 
 async function resolveWorkspaceId(userId: string): Promise<string | null> {
   // Sempre busca do banco para evitar inconsistências com JWT em cache
@@ -63,8 +64,25 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
+  // Conectar conta de anúncios é ação de agência. A rota só checava se havia
+  // sessão — um usuário CLIENT (cujo workspaceId aponta para o workspace DA
+  // AGÊNCIA) conseguia injetar integração ali. Lê o role do banco, não da
+  // sessão, para não depender de um JWT antigo com role desatualizado.
+  const dono = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+  if (dono?.role !== "AGENCY") {
+    return NextResponse.json(
+      { error: "Apenas contas de agência podem conectar contas de anúncios" },
+      { status: 403 },
+    );
   }
 
   const body = await req.json();
@@ -126,7 +144,23 @@ export async function POST(req: NextRequest) {
         { status: 409 },
       );
     }
-    integration = existing;
+    // Reconectar/revincular tem que ressuscitar a integração. Sem isto, uma
+    // conta marcada como "error" pela reconciliação ficaria travada nesse
+    // estado para sempre — reconectar pela interface não a traria de volta,
+    // e a única saída seria remover e recriar. Atualiza também nome/BM, que
+    // podem ter mudado desde o primeiro vínculo.
+    integration =
+      existing.status !== "active" || bmId || bmName
+        ? await db.integration.update({
+          where: { id: existing.id },
+          data: {
+            status: "active",
+            name: name || existing.name,
+            bmId: bmId ?? existing.bmId,
+            bmName: bmName ?? existing.bmName,
+          },
+        })
+        : existing;
   } else {
     integration = await db.integration.create({
       data: {

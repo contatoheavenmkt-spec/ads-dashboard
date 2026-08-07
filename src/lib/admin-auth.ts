@@ -15,8 +15,17 @@ import type { NextRequest, NextResponse } from "next/server";
 export const ADMIN_COOKIE = "admin_session";
 const TTL_MS = 8 * 60 * 60 * 1000; // 8 horas
 
-function adminSecret(): string {
-  return process.env.ADMIN_SECRET ?? process.env.AUTH_SECRET ?? "fallback-admin-secret";
+/**
+ * Segredo de assinatura do token admin. Falha FECHADO de propósito.
+ *
+ * Antes havia um fallback para o literal "fallback-admin-secret". Como este
+ * repositório é público, qualquer pessoa conhecia esse valor — bastava a env
+ * faltar em algum deploy para que tokens de admin pudessem ser forjados de
+ * fora. Sem segredo configurado, agora ninguém entra (nem quem sabe a senha).
+ */
+function adminSecret(): string | null {
+  const s = process.env.ADMIN_SECRET ?? process.env.AUTH_SECRET ?? "";
+  return s.length >= 16 ? s : null;
 }
 
 // ─── Token: sign / verify ─────────────────────────────────────────────────────
@@ -26,8 +35,12 @@ function adminSecret(): string {
  * Prefixo "admin:" evita que tokens OAuth sejam aceitos aqui.
  */
 export function signAdminToken(): string {
+  const secret = adminSecret();
+  if (!secret) {
+    throw new Error("ADMIN_SECRET não configurado (mínimo 16 caracteres)");
+  }
   const payload = `admin:${Date.now()}`;
-  const sig = createHmac("sha256", adminSecret()).update(payload).digest("hex");
+  const sig = createHmac("sha256", secret).update(payload).digest("hex");
   const encoded = Buffer.from(payload).toString("base64url");
   return `${encoded}.${sig}`;
 }
@@ -39,6 +52,9 @@ export function signAdminToken(): string {
  */
 export function verifyAdminToken(token: string): boolean {
   try {
+    const secret = adminSecret();
+    if (!secret) return false;
+
     const dotIdx = token.lastIndexOf(".");
     if (dotIdx === -1) return false;
 
@@ -48,7 +64,7 @@ export function verifyAdminToken(token: string): boolean {
 
     if (!payload.startsWith("admin:")) return false;
 
-    const expectedSig = createHmac("sha256", adminSecret()).update(payload).digest("hex");
+    const expectedSig = createHmac("sha256", secret).update(payload).digest("hex");
     if (sig.length !== expectedSig.length) return false;
     if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return false;
 
@@ -115,4 +131,28 @@ export async function logAdminAction(
   } catch {
     // Nunca deixar o log quebrar a requisição principal
   }
+}
+
+/**
+ * Igual a logAdminAction, mas SEM o try/catch que engole o erro.
+ *
+ * A impersonação usa esta versão na entrada: se não dá para registrar quem
+ * entrou na conta de quem, a operação não pode acontecer. Entrar sem rastro
+ * é pior do que não entrar.
+ */
+export async function logAdminActionStrict(
+  action: string,
+  targetId?: string,
+  details?: object,
+  ip?: string
+): Promise<void> {
+  const { db } = await import("@/lib/db");
+  await db.adminLog.create({
+    data: {
+      action,
+      targetId: targetId ?? null,
+      details: details ? JSON.stringify(details) : null,
+      adminIp: ip ?? null,
+    },
+  });
 }

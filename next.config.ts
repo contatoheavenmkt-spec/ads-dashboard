@@ -25,6 +25,13 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // Reescreve imports de barril destas libs para apontar direto ao módulo de
+    // cada símbolo: sem isso, `import { Area } from "recharts"` faz o bundler
+    // atravessar o index inteiro do pacote. Não muda comportamento — só o
+    // tamanho do que entra em cada chunk.
+    optimizePackageImports: ["recharts", "lucide-react"],
+  },
   images: {
     remotePatterns: [
       {

@@ -4,6 +4,7 @@ import path from "path";
 import { randomBytes } from "crypto";
 import { auth } from "@/auth";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { bloqueioDeEscrita } from "@/lib/impersonation";
 
 // Armazena fora de public/ para não depender do static file serving do Next.js
 export const uploadsDir = path.join(process.cwd(), "uploads");
@@ -27,6 +28,8 @@ export async function POST(req: NextRequest) {
   // Apenas usuários logados podem fazer upload (uploads são essencialmente
   // logos de workspace; clientes públicos não precisam).
   const session = await auth();
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }

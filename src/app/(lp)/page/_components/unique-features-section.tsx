@@ -35,7 +35,14 @@ const ImageWithFallback = ({
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={alt} className={className} onError={() => setError(true)} />
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      decoding="async"
+      onError={() => setError(true)}
+    />
   );
 };
 
@@ -60,7 +67,7 @@ const FeatureCard = ({ title, description, image, badge, comingSoon }: FeatureCa
             <ImageWithFallback
               src={image}
               alt={title}
-              className="w-full h-full object-cover object-top opacity-90 group-hover:scale-105 group-hover:opacity-100 transition-all duration-500"
+              className="w-full h-full object-cover object-top opacity-90 group-hover:scale-105 group-hover:opacity-100 transition-[transform,opacity] duration-500 will-change-transform"
             />
             <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-gray-900/70 to-transparent pointer-events-none" />
           </>
@@ -100,12 +107,12 @@ const features: FeatureCardProps[] = [
   {
     title: "Dashboard Meta Ads",
     description: "Integração **oficial via API do Meta** para puxar dados de Facebook Ads e Instagram Ads em tempo real, com todas as métricas atualizadas automaticamente.",
-    image: "/lp/meta-ads-dashboard.png",
+    image: "/lp/meta-ads-dashboard.webp",
   },
   {
     title: "Dashboard Google Ads",
     description: "Conexão **direta com a API oficial do Google Ads** trazendo campanhas, palavras-chave, conversões e performance completa em um painel unificado.",
-    image: "/lp/google-ads-dashboard.png",
+    image: "/lp/google-ads-dashboard.webp",
   },
   {
     title: "Dashboard Google Analytics 4",
@@ -116,17 +123,17 @@ const features: FeatureCardProps[] = [
   {
     title: "Visão Geral Consolidada",
     description: "Painel único que **unifica todos os dados** de Meta Ads, Google Ads e GA4, mostrando performance geral com métricas comparativas e ROI consolidado.",
-    image: "/lp/visao-geral.png",
+    image: "/lp/visao-geral.webp",
   },
   {
     title: "Acesso para Cliente Final",
     description: "Seus clientes recebem **login e senha exclusivos** para acessar o dashboard quando quiserem, sem te ligar toda hora perguntando resultados.",
-    image: "/lp/client-access.png",
+    image: "/lp/client-access.webp",
   },
   {
     title: "Compartilhamento via Link",
     description: "Envie dashboards via **link protegido por senha** sem necessidade de criar login, perfeito para apresentações e reuniões rápidas.",
-    image: "/lp/share-link.png",
+    image: "/lp/share-link.webp",
   },
   {
     title: "App Android e iOS",
@@ -156,7 +163,7 @@ const features: FeatureCardProps[] = [
 
 export function UniqueFeaturesSection() {
   return (
-    <section className="relative py-20 px-6 bg-[#0F172A] overflow-hidden">
+    <section className="relative py-20 px-6 bg-[#0F172A] overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_1200px]">
       <div className="absolute inset-0 bg-[linear-gradient(rgba(59,130,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.03)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_50%,black,transparent)]" />
       <div className="relative z-10 mx-auto max-w-7xl">
         <div className="mb-12 text-center">

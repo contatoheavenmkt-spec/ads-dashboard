@@ -101,12 +101,6 @@ export async function GET(req: NextRequest) {
       })()
     : customRange;
 
-  if (campaignId) {
-    const timeSeries = await getCampaignInsights(campaignId, token, days);
-    const totals = aggregateInsights(timeSeries);
-    return NextResponse.json({ timeSeries, totals, campaigns: [], accountIds: [] });
-  }
-
   let accountIds: string[] = [];
 
   if (workspaceId) {
@@ -161,6 +155,51 @@ export async function GET(req: NextRequest) {
   }
 
   if (accountIds.length === 0) return NextResponse.json(EMPTY);
+
+  // ─── campaignId: só depois de accountIds resolvido ──────────────────────────
+  // Este bloco ficava ANTES da resolução de accountIds e retornava direto, sem
+  // nenhuma checagem de dono: qualquer usuário autenticado lia métricas de
+  // campanha de outro workspace só passando o id. Agora a campanha precisa
+  // pertencer a uma das contas que este usuário já tem autorização para ver.
+  if (campaignId) {
+    if (!/^\d{1,25}$/.test(campaignId)) {
+      return NextResponse.json({ error: "campaignId inválido" }, { status: 400 });
+    }
+
+    // Caminho rápido: o cron já registrou esta campanha para um workspace do
+    // usuário. Evita ida à Graph API no caso comum.
+    let autorizada = false;
+    const escopoWs = await db.workspace.findMany({
+      where: { ownerId: userId, deletedAt: null },
+      select: { id: true },
+    });
+    if (escopoWs.length > 0) {
+      const snap = await db.campaignSnapshot.findFirst({
+        where: { campaignId, workspaceId: { in: escopoWs.map((w) => w.id) } },
+        select: { id: true },
+      });
+      autorizada = !!snap;
+    }
+
+    // Caminho lento: confirma na Meta que a campanha está sob uma das contas
+    // autorizadas (campanha nova, ainda não vista por nenhum cron).
+    if (!autorizada) {
+      const listas = await Promise.allSettled(
+        accountIds.map((id) => getAccountCampaigns(id, token, days, customRange ?? undefined)),
+      );
+      autorizada = listas
+        .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof getAccountCampaigns>>> => r.status === "fulfilled")
+        .some((r) => r.value.some((c) => c.id === campaignId));
+    }
+
+    if (!autorizada) {
+      return NextResponse.json({ error: "Campanha não autorizada" }, { status: 403 });
+    }
+
+    const timeSeries = await getCampaignInsights(campaignId, token, days);
+    const totals = aggregateInsights(timeSeries);
+    return NextResponse.json({ timeSeries, totals, campaigns: [], accountIds: [] });
+  }
 
   // Modo previousPeriod: só retorna totals (não precisa de timeSeries detalhada
   // nem campanhas — request lightweight pro client calcular delta de KPIs).

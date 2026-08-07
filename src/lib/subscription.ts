@@ -23,9 +23,24 @@ export function isTrialActive(sub: SubscriptionData): boolean {
   return new Date() < sub.trialEndsAt;
 }
 
+/**
+ * Acesso liberado manualmente pelo admin, SEM pagamento.
+ *
+ * Existe para separar duas coisas que antes eram a mesma: "esta conta tem
+ * acesso" e "esta conta gera receita". Marcar cortesia como `active` inflava o
+ * MRR — em 29/07/2026 as duas únicas assinaturas `active` eram liberações
+ * manuais do dono, e o painel exibia R$ 599,80 de receita que não existia.
+ *
+ * Comporta-se como `active` para ACESSO e é ignorada em toda conta de receita
+ * (calcularMrr filtra `status: "active"`, então a exclusão é automática).
+ */
+export const STATUS_CORTESIA = "cortesia";
+
 export function isPlanActive(sub: SubscriptionData): boolean {
   if (sub.status === "trialing") return isTrialActive(sub);
-  if (sub.status === "active") {
+  if (sub.status === "active" || sub.status === STATUS_CORTESIA) {
+    // Cortesia sem prazo vale para sempre; com prazo, respeita a data — dá para
+    // liberar acesso por tempo determinado sem cobrar.
     if (!sub.currentPeriodEnd) return true; // no expiry set
     return new Date() < sub.currentPeriodEnd;
   }
@@ -81,8 +96,15 @@ export async function getAndSyncSubscription(userId: string): Promise<Subscripti
     });
   }
 
-  // Auto-expire paid period
-  if (sub.status === "active" && sub.currentPeriodEnd && new Date() >= sub.currentPeriodEnd) {
+  // Auto-expire paid period.
+  // Cortesia COM prazo também expira aqui: o dono liberou até uma data, e
+  // deixar a linha viva depois disso reproduziria o problema que a cortesia
+  // veio resolver — acesso que ninguém revisou.
+  if (
+    (sub.status === "active" || sub.status === STATUS_CORTESIA) &&
+    sub.currentPeriodEnd &&
+    new Date() >= sub.currentPeriodEnd
+  ) {
     sub = await db.subscription.update({
       where: { userId },
       data: { status: "expired" },

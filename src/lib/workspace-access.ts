@@ -16,8 +16,23 @@ import { getAndSyncSubscription, isPlanActive } from "@/lib/subscription";
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
 
-function shareSecret(): string {
-  return process.env.AUTH_SECRET ?? "fallback-secret";
+/**
+ * Segredo do token de unlock. FALHA FECHADO.
+ *
+ * Havia aqui `process.env.AUTH_SECRET ?? "fallback-secret"`. Este repositório
+ * é público: o literal estava à vista, e bastaria a env faltar num deploy para
+ * qualquer pessoa forjar o cookie de unlock e abrir o painel de qualquer
+ * cliente protegido por senha. Mesmo padrão já removido de `adminSecret()` em
+ * admin-auth.ts.
+ *
+ * Vale notar que o segredo real do token é `${shareSecret()}:${passwordHash}` —
+ * o hash da senha entra junto, então trocar a senha invalida os tokens antigos.
+ * Isso NÃO salvava o caso do fallback: o hash está no banco, mas a metade
+ * secreta era um literal público.
+ */
+function shareSecret(): string | null {
+  const s = process.env.AUTH_SECRET ?? "";
+  return s.length >= 16 ? s : null;
 }
 
 export function shareCookieName(slug: string): string {
@@ -45,8 +60,12 @@ export async function verifySharePassword(plain: string, stored: string): Promis
  * (assim, se a senha for trocada, tokens antigos param de valer).
  */
 export function signShareToken(slug: string, passwordHash: string): string {
+  const base = shareSecret();
+  if (!base) {
+    throw new Error("AUTH_SECRET não configurado (mínimo 16 caracteres)");
+  }
   const payload = `${slug}:${Date.now()}`;
-  const secret = `${shareSecret()}:${passwordHash}`;
+  const secret = `${base}:${passwordHash}`;
   const sig = createHmac("sha256", secret).update(payload).digest("hex");
   return `${Buffer.from(payload).toString("base64url")}.${sig}`;
 }
@@ -64,7 +83,11 @@ export function verifyShareToken(slug: string, passwordHash: string, token: stri
     const ts = parseInt(parts[1], 10);
     if (isNaN(ts) || Date.now() - ts > TOKEN_TTL_MS) return false;
 
-    const secret = `${shareSecret()}:${passwordHash}`;
+    // Sem segredo, nada é aceito (falha fechada) — o catch abaixo já cobriria
+    // um throw, mas o retorno explícito deixa a intenção legível.
+    const base = shareSecret();
+    if (!base) return false;
+    const secret = `${base}:${passwordHash}`;
     const expectedSig = createHmac("sha256", secret).update(payload).digest("hex");
     if (sig.length !== expectedSig.length) return false;
     return timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig));

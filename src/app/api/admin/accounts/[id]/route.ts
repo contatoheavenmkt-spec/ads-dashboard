@@ -62,7 +62,7 @@ export async function PATCH(
   // role/plan/status arbitrários (quebra outras rotas que comparam contra enum).
   const ALLOWED_ROLES = ["AGENCY", "CLIENT", "ADMIN"];
   const ALLOWED_PLANS = ["trial", "start", "plus", "premium"];
-  const ALLOWED_STATUSES = ["active", "trialing", "expired", "canceled"];
+  const ALLOWED_STATUSES = ["active", "trialing", "expired", "canceled", "cortesia"];
 
   // Update user fields
   const userUpdate = {

@@ -58,3 +58,6 @@ next-env.d.ts
 
 # Uploads fora de public (servidos via /api/uploads/)
 /uploads/
+
+# backups de build feitos em deploys manuais
+.next.bak-*/

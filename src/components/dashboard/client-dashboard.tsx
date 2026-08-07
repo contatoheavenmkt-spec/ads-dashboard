@@ -25,22 +25,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
-import { Pie } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Filler,
-} from "chart.js";
+import { RoscaSimples } from "@/components/charts/rosca-simples";
+import { COR_PLATAFORMA } from "@/components/charts/paleta";
 import Link from "next/link";
-
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, Filler);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -656,16 +643,10 @@ export function ClientDashboard({
                 </div>
                 <div className="grid grid-cols-2 gap-6 items-center">
                   <div className="aspect-square relative max-w-[140px] mx-auto">
-                    <Pie
-                      data={{
-                        labels: googleData!.demographics.gender.map(g => g.label),
-                        datasets: [{
-                          data: googleData!.demographics.gender.map(g => g.impressions),
-                          backgroundColor: ['#22d3ee', '#2563eb', '#1e40af'],
-                          borderWidth: 0,
-                        }]
-                      }}
-                      options={{ cutout: '70%', plugins: { legend: { display: false } } }}
+                    <RoscaSimples
+                      rotulos={googleData!.demographics.gender.map(g => g.label)}
+                      valores={googleData!.demographics.gender.map(g => g.impressions)}
+                      cores={['#22d3ee', '#2563eb', '#1e40af']}
                     />
                   </div>
                   <div className="space-y-3">
@@ -867,16 +848,10 @@ export function ClientDashboard({
                 </div>
                 <div className="grid grid-cols-2 gap-6 items-center">
                   <div className="aspect-square relative max-w-[160px] mx-auto">
-                    <Pie
-                      data={{
-                        labels: ga4Data!.demographics.gender.map(g => g.label),
-                        datasets: [{
-                          data: ga4Data!.demographics.gender.map(g => g.impressions),
-                          backgroundColor: ['#f97316', '#fb923c', '#fdba74'],
-                          borderWidth: 0,
-                        }]
-                      }}
-                      options={{ cutout: '70%', plugins: { legend: { display: false } } }}
+                    <RoscaSimples
+                      rotulos={ga4Data!.demographics.gender.map(g => g.label)}
+                      valores={ga4Data!.demographics.gender.map(g => g.impressions)}
+                      cores={['#f97316', '#fb923c', '#fdba74']}
                     />
                   </div>
                   <div className="space-y-4">
@@ -1059,16 +1034,11 @@ export function ClientDashboard({
             <div className="glass-panel rounded-2xl p-4 sm:p-6 flex flex-col items-center flex-1">
               <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest mb-4 w-full text-center">Share de Investimento</h3>
               <div className="w-full aspect-square relative max-w-[140px]">
-                <Pie
-                  data={{
-                    labels: ['Meta Ads', 'Google Ads', 'Outros'],
-                    datasets: [{
-                      data: [metaShare, googleShare, Math.max(ga4Share, 0)],
-                      backgroundColor: ['#2563eb', '#22d3ee', '#f97316'],
-                      borderWidth: 0,
-                    }]
-                  }}
-                  options={{ cutout: '70%', plugins: { legend: { display: false } } }}
+                <RoscaSimples
+                  rotulos={['Meta Ads', 'Google Ads', 'Outros']}
+                  valores={[metaShare, googleShare, Math.max(ga4Share, 0)]}
+                  cores={[COR_PLATAFORMA.meta, COR_PLATAFORMA.google, COR_PLATAFORMA.outros]}
+                  sufixo="%"
                 />
                 <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
                   <span className="text-[9px] font-bold text-slate-400">Meta</span>
@@ -1077,8 +1047,8 @@ export function ClientDashboard({
               </div>
               <div className="mt-4 grid grid-cols-1 gap-2 w-full">
                 {[
-                  { label: 'Meta Ads', color: '#2563eb', val: `${metaShare}%`, spend: mt?.spend ?? 0 },
-                  { label: 'Google Ads', color: '#22d3ee', val: `${googleShare}%`, spend: gt?.spend ?? 0 },
+                  { label: 'Meta Ads', color: COR_PLATAFORMA.meta, val: `${metaShare}%`, spend: mt?.spend ?? 0 },
+                  { label: 'Google Ads', color: COR_PLATAFORMA.google, val: `${googleShare}%`, spend: gt?.spend ?? 0 },
                 ].map(item => (
                   <div key={item.label} className="flex justify-between items-center text-[9px] font-bold text-slate-400 uppercase">
                     <div className="flex items-center gap-2">
@@ -1304,10 +1274,7 @@ export function ClientDashboard({
             {gLabels.length > 0 ? (
               <>
                 <div className="w-full aspect-square relative max-w-[120px]">
-                  <Pie
-                    data={{ labels: gLabels, datasets: [{ data: gData, backgroundColor: GENDER_COLORS, borderWidth: 0 }] }}
-                    options={{ cutout: '65%', plugins: { legend: { display: false } } }}
-                  />
+                  <RoscaSimples rotulos={gLabels} valores={gData} cores={GENDER_COLORS} furo="65%" sufixo="%" />
                   <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
                     <span className="text-sm font-black text-white">{gData[0]}%</span>
                     <span className="text-[7px] font-bold text-slate-400">{gLabels[0]?.split(" ")[0]}</span>
@@ -1336,10 +1303,7 @@ export function ClientDashboard({
             {aLabels.length > 0 ? (
               <>
                 <div className="w-full aspect-square relative max-w-[120px]">
-                  <Pie
-                    data={{ labels: aLabels, datasets: [{ data: aData, backgroundColor: AGE_COLORS, borderWidth: 0 }] }}
-                    options={{ cutout: '65%', plugins: { legend: { display: false } } }}
-                  />
+                  <RoscaSimples rotulos={aLabels} valores={aData} cores={AGE_COLORS} furo="65%" sufixo="%" />
                   <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
                     <span className="text-sm font-black text-white">{aData[0]}%</span>
                     <span className="text-[7px] font-bold text-slate-400">{aLabels[0]}</span>

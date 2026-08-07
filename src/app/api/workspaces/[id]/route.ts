@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { hashSharePassword } from "@/lib/workspace-access";
 import { parseVisibleMetrics, serializeVisibleMetrics, type VisibleMetrics } from "@/lib/visible-metrics";
 import { parseLeadSources, serializeLeadSources } from "@/lib/lead-sources";
+import { bloqueioDeEscritaAsync } from "@/lib/impersonation";
 
 async function requireOwnership(workspaceId: string) {
   const session = await auth();
@@ -79,6 +80,11 @@ export async function PUT(
   if (!auth_) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
+
+  // A sessão vive dentro de requireOwnership(), que também serve o GET — por
+  // isso a guarda vai aqui, na forma async, e não dentro do helper.
+  const bloqueio = await bloqueioDeEscritaAsync();
+  if (bloqueio) return bloqueio;
 
   const body = await req.json();
   const { name, logo, integrationIds, publicAccess, sharePassword, clearSharePassword, visibleMetrics, leadSources, showCrm } = body;
@@ -190,6 +196,10 @@ export async function DELETE(
   if (!auth_) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
+
+  // Mesma guarda do PUT: read-only durante a impersonação.
+  const bloqueio = await bloqueioDeEscritaAsync();
+  if (bloqueio) return bloqueio;
 
   // **Soft delete**: marca `deletedAt` em vez de remover. Preserva:
   //   - Histórico de leads no CRM (auditoria de vendas fechadas)
