@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { Tracker } from "@/components/tracking/tracker";
+import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { InstallPrompt, ServiceWorkerRegister } from "@/components/pwa/install-prompt";
 import "./globals.css";
 
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-gray-50 text-gray-900 antialiased" suppressHydrationWarning>
         <Providers>
           <Tracker />
+          <ImpersonationBanner />
           <ServiceWorkerRegister />
           <InstallPrompt />
           {children}

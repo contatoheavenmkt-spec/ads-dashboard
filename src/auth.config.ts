@@ -14,6 +14,22 @@ export const authConfig: NextAuthConfig = {
         token.workspaceSlug = (user as { workspaceSlug?: string | null }).workspaceSlug;
         token.onboardingCompleted = (user as { onboardingCompleted?: boolean }).onboardingCompleted ?? false;
         token.forcePasswordChange = (user as { forcePasswordChange?: boolean }).forcePasswordChange ?? false;
+
+        // Marca de impersonação. Sobrevive à revalidação abaixo porque aquele
+        // bloco só ATRIBUI 6 chaves nomeadas e nunca recria o token — se alguém
+        // um dia trocá-lo por `return { ...fresh }`, a sessão impersonada vira
+        // sessão normal do cliente EM SILÊNCIO (sem banner, sem read-only).
+        const imp = (user as { impersonatedBy?: string }).impersonatedBy;
+        if (imp) {
+          token.impersonatedBy = imp;
+          token.impersonatedUntil = (user as { impersonatedUntil?: number }).impersonatedUntil;
+        } else {
+          // Obrigatório: é este `delete` que garante que o login normal e o
+          // ticket de restauração jamais herdem a marca de impersonação.
+          delete (token as { impersonatedBy?: string }).impersonatedBy;
+          delete (token as { impersonatedUntil?: number }).impersonatedUntil;
+        }
+
         token._revAt = Date.now();
       }
 
@@ -63,6 +79,8 @@ export const authConfig: NextAuthConfig = {
         session.user.workspaceSlug = token.workspaceSlug as string | undefined;
         session.user.onboardingCompleted = token.onboardingCompleted as boolean;
         session.user.forcePasswordChange = (token as { forcePasswordChange?: boolean }).forcePasswordChange ?? false;
+        session.user.impersonatedBy = token.impersonatedBy as string | undefined;
+        session.user.impersonatedUntil = token.impersonatedUntil as number | undefined;
       }
       return session;
     },

@@ -4,7 +4,7 @@
  * Separa as credenciais do App de Login (OAuth) do App de Marketing (dados/métricas).
  */
 
-import { createHmac, randomBytes } from "crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 
 // ─── Configs dos dois apps ─────────────────────────────────────────────────
 
@@ -28,11 +28,32 @@ export const metaMarketingConfig = {
 
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutos
 
+/**
+ * Segredo do state do OAuth. FALHA FECHADO.
+ *
+ * Havia aqui `process.env.AUTH_SECRET ?? "fallback-secret"`. Como este
+ * repositório é público, o literal estava à vista de qualquer um: bastaria a
+ * env faltar num deploy para que o state — que carrega o `userId` — pudesse
+ * ser forjado, e o callback do OAuth conectaria a conta de anúncios do
+ * atacante ao userId da vítima. Mesmo padrão já removido de `adminSecret()`
+ * em admin-auth.ts, pelo mesmo motivo.
+ *
+ * Sem segredo válido a assinatura não acontece — em vez de acontecer com um
+ * segredo que todo mundo conhece.
+ */
+function oauthStateSecret(): string | null {
+  const s = process.env.AUTH_SECRET ?? "";
+  return s.length >= 16 ? s : null;
+}
+
 export function createOAuthState(userId: string): string {
+  const secret = oauthStateSecret();
+  if (!secret) {
+    throw new Error("AUTH_SECRET não configurado (mínimo 16 caracteres)");
+  }
   const nonce = randomBytes(16).toString("hex");
   const ts    = Date.now().toString();
   const payload = `${userId}:${nonce}:${ts}`;
-  const secret  = process.env.AUTH_SECRET ?? "fallback-secret";
   const sig     = createHmac("sha256", secret).update(payload).digest("hex");
   return Buffer.from(`${payload}:${sig}`).toString("base64url");
 }
@@ -53,10 +74,16 @@ export function verifyOAuthState(state: string): string | null {
     const ts = parseInt(parts[parts.length - 1], 10);
     if (isNaN(ts) || Date.now() - ts > STATE_TTL_MS) return null;
 
-    // Verifica assinatura
-    const secret      = process.env.AUTH_SECRET ?? "fallback-secret";
+    // Verifica assinatura. Sem segredo, nada é aceito (falha fechada).
+    const secret = oauthStateSecret();
+    if (!secret) return null;
     const expectedSig = createHmac("sha256", secret).update(payload).digest("hex");
-    if (sig !== expectedSig) return null;
+    // timingSafeEqual em vez de `!==`: a comparação de string sai no primeiro
+    // byte diferente, o que deixa o tempo de resposta revelar quantos bytes da
+    // assinatura já estão certos. É a mesma proteção que verifyShareToken e
+    // verifyAdminToken já usavam; esta função tinha ficado para trás.
+    if (sig.length !== expectedSig.length) return null;
+    if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return null;
 
     return parts[0]; // userId
   } catch {

@@ -145,17 +145,61 @@ const ACTION_LEAD_FALLBACKS = ["omni_lead", "onsite_conversion.lead", "on-site_c
 const ACTION_MESSAGE = "onsite_conversion.messaging_conversation_started_7d";
 const ACTION_MESSAGE_FALLBACKS = ["messaging_conversation_started_7d", "on-site_conversion.messaging_conversation_started_7d"];
 
+// ─── Erros da Graph API ───────────────────────────────────────────────────────
+
+/**
+ * Erro da Graph API preservando `code` e `error_subcode`. Antes todos os
+ * pontos deste módulo faziam `throw new Error(data.error.message)`, jogando
+ * fora o código — e sem o código não dá pra distinguir "conta saiu do BM"
+ * (permanente, precisa avisar o dono) de "rate limit" (passa sozinho).
+ */
+export class MetaApiError extends Error {
+  readonly code: number;
+  readonly subcode: number | null;
+  readonly fbtrace: string | null;
+
+  constructor(
+    raw: { message?: string; code?: number; error_subcode?: number; fbtrace_id?: string } | null | undefined,
+    context?: string,
+  ) {
+    const msg = raw?.message ?? "erro desconhecido da Graph API";
+    super(context ? `${context}: ${msg}` : msg);
+    this.name = "MetaApiError";
+    this.code = raw?.code ?? -1;
+    this.subcode = raw?.error_subcode ?? null;
+    this.fbtrace = raw?.fbtrace_id ?? null;
+  }
+
+  /** Não passa sozinho: conta fora do BM, sem permissão, objeto inexistente. */
+  get isPermanent(): boolean {
+    return [10, 100, 200, 272, 294].includes(this.code);
+  }
+
+  /** Token morto/revogado — afeta TODAS as integrações do dono, não uma conta. */
+  get isTokenError(): boolean {
+    return this.code === 190;
+  }
+
+  /** Throttling — temporário. Nunca marcar integração como morta por isso. */
+  get isRateLimit(): boolean {
+    return [4, 17, 32, 613, 80000, 80004].includes(this.code);
+  }
+}
+
 // ─── Ad Accounts ──────────────────────────────────────────────────────────────
 
 export async function getMetaAdAccounts(accessToken: string): Promise<MetaAdAccount[]> {
-  const fields = "id,name,account_status";
+  // `business{id,name}` identifica a BM dona da conta. Sem esse campo,
+  // getMetaBMs caía sempre no fallback e TODA integração era gravada com
+  // bmId = "todas-contas" (11 de 15 no banco em 27/07).
+  const fields = "id,name,account_status,business{id,name}";
   const url = `${GRAPH_API}/me/adaccounts?fields=${fields}&limit=200&access_token=${accessToken}`;
 
   const res = await fetch(url, { cache: "no-store" });
   const data = await res.json();
 
   if (data.error) {
-    throw new Error(data.error.message);
+    throw new MetaApiError(data.error, "Meta AdAccounts");
   }
 
   return (data.data ?? []) as MetaAdAccount[];
