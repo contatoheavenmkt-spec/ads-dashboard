@@ -61,3 +61,6 @@ next-env.d.ts
 
 # backups de build feitos em deploys manuais
 .next.bak-*/
+
+# Credenciais das sessoes de WhatsApp do worker (NUNCA versionar)
+worker/.wa-auth/
