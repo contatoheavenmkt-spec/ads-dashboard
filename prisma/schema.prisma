@@ -8,23 +8,23 @@ datasource db {
 }
 
 model User {
-  id                   String        @id @default(cuid())
-  email                String        @unique
-  password             String?
-  name                 String?
-  role                 String        @default("AGENCY")
-  workspaceId          String?
-  onboardingCompleted  Boolean       @default(false)
-  stripeCustomerId     String?       @unique
-  forcePasswordChange  Boolean       @default(false)
-  workspace            Workspace?    @relation("MemberWorkspace", fields: [workspaceId], references: [id])
-  ownedWorkspaces      Workspace[]   @relation("OwnedWorkspaces")
-  subscription         Subscription?
-  metaConnections      MetaConnection[]
-  googleConnections    GoogleConnection[]
-  pushSubscriptions    PushSubscription[]
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  id                  String             @id @default(cuid())
+  email               String             @unique
+  password            String?
+  name                String?
+  role                String             @default("AGENCY")
+  workspaceId         String?
+  onboardingCompleted Boolean            @default(false)
+  stripeCustomerId    String?            @unique
+  forcePasswordChange Boolean            @default(false)
+  workspace           Workspace?         @relation("MemberWorkspace", fields: [workspaceId], references: [id])
+  ownedWorkspaces     Workspace[]        @relation("OwnedWorkspaces")
+  subscription        Subscription?
+  metaConnections     MetaConnection[]
+  googleConnections   GoogleConnection[]
+  pushSubscriptions   PushSubscription[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 }
 
 model Subscription {
@@ -39,33 +39,41 @@ model Subscription {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Integration {
-  id          String   @id @default(cuid())
-  platform    String
-  adAccountId String
-  name        String
-  bmId        String?
-  bmName      String?
-  accessToken String   @default("")
-  status      String   @default("active")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  platform             String
+  adAccountId          String
+  name                 String
+  bmId                 String?
+  bmName               String?
+  accessToken          String   @default("")
+  status               String   @default("active")
+  // MCC que enxerga esta conta. Antes era um env global (um MCC pro app
+  // inteiro), o que quebra assim que dois clientes estão em MCCs diferentes.
+  // O env continua valendo como fallback.
+  loginCustomerId      String?
+  // Conta que RECEBE a conversão. Em MCC com conversão cross-account não é
+  // a mesma da coluna adAccountId, e errar isso é a causa nº 1 de
+  // "a API respondeu 200 e não apareceu conversão nenhuma".
+  conversionCustomerId String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   workspaceIntegrations WorkspaceIntegration[]
 }
 
 model Workspace {
-  id            String   @id @default(cuid())
-  ownerId       String?
-  owner         User?    @relation("OwnedWorkspaces", fields: [ownerId], references: [id])
-  name          String
-  slug          String   @unique
-  logo          String?
-  publicAccess  Boolean  @default(false)
-  sharePassword String?
+  id             String    @id @default(cuid())
+  ownerId        String?
+  owner          User?     @relation("OwnedWorkspaces", fields: [ownerId], references: [id])
+  name           String
+  slug           String    @unique
+  logo           String?
+  publicAccess   Boolean   @default(false)
+  sharePassword  String?
   // JSON com flags { showSpend, showRevenue, showMessages, ... }. null = auto
   // (mostra todas que têm dados, comportamento padrão antigo).
   visibleMetrics String?
@@ -75,18 +83,32 @@ model Workspace {
   // Quando false, esconde a aba CRM da dash do cliente final. Útil pra
   // clientes que não usam o CRM (ex.: rodam só Google Ads). Default true
   // mantém retrocompatibilidade — workspaces existentes seguem com CRM.
-  showCrm        Boolean  @default(true)
+  showCrm        Boolean   @default(true)
+  // Track é produto à parte: default false pra nenhum workspace existente
+  // ganhar aba nova sem contratar.
+  showTrack      Boolean   @default(false)
   // Soft delete: workspaces "removidos" recebem deletedAt mas as linhas
   // permanecem (preservam histórico de CampaignSnapshot, NotificationLog,
   // Lead, etc.). Queries da app filtram `deletedAt: null`; só o admin
   // ainda enxerga pra eventual restore.
   deletedAt      DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   integrations WorkspaceIntegration[]
-  clients      User[]   @relation("MemberWorkspace")
+  clients      User[]                 @relation("MemberWorkspace")
   leads        Lead[]
+
+  whatsappInstances  WhatsappInstance[]
+  trackLinks         TrackLink[]
+  trackConversations TrackConversation[]
+  trackTargets       TrackConversionTarget[]
+  trackSettings      TrackSettings?
+
+  // Existe no banco desde a migration de soft delete, mas nunca tinha sido
+  // declarado aqui. Sem esta linha, qualquer `migrate diff` propõe dropar o
+  // índice que acelera as queries de "não deletado" (a maioria delas).
+  @@index([deletedAt])
 }
 
 model MetaConnection {
@@ -99,7 +121,7 @@ model MetaConnection {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, fbUserId])
 }
@@ -115,7 +137,7 @@ model GoogleConnection {
   connectedAt  DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, email])
 }
@@ -139,12 +161,12 @@ model PendingSubscription {
 }
 
 model AdminLog {
-  id          String   @id @default(cuid())
-  action      String
-  targetId    String?
-  details     String?
-  adminIp     String?
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  action    String
+  targetId  String?
+  details   String?
+  adminIp   String?
+  createdAt DateTime @default(now())
 
   @@index([action])
   @@index([targetId])
@@ -201,31 +223,35 @@ model ErrorLog {
 }
 
 model Lead {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   // Dados do lead
-  name        String
-  phone       String?
-  email       String?
-  source      String?  // "meta_messaging", "meta_lead_form", "google", "manual", etc.
-  campaignId  String?  // opcional — vincula à campanha que originou o lead
-  notes       String?
+  name       String
+  phone      String?
+  email      String?
+  source     String? // "meta_messaging", "meta_lead_form", "google", "manual", etc.
+  campaignId String? // opcional — vincula à campanha que originou o lead
+  notes      String?
 
   // Funil: "novo" → "contato" → "negociando" → "vendido" / "perdido"
-  status      String   @default("novo")
+  status String @default("novo")
 
   // Quem fechou (user do workspace que registrou a venda). Pode ser AGENCY
   // ou CLIENT — qualquer membro do workspace pode marcar vendido.
   closedByUserId String?
-  closedAt    DateTime?
-  saleValue   Float?
+  closedAt       DateTime?
+  saleValue      Float?
 
   // Auditoria
   createdByUserId String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Back-relation do Track. Campo virtual do Prisma: NÃO cria coluna nem
+  // altera esta tabela. A chave estrangeira mora em TrackConversation.leadId.
+  trackConversation TrackConversation?
 
   @@index([workspaceId])
   @@index([workspaceId, status])
@@ -234,23 +260,23 @@ model Lead {
 }
 
 model PushSubscription {
-  id        String   @id @default(cuid())
-  userId    String
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
+  id          String   @id @default(cuid())
+  userId      String
+  endpoint    String   @unique
+  p256dh      String
+  auth        String
   // Snapshot de user.role no momento da criação. Usado pra segmentar
   // notificações (AGENCY recebe avisos de plano/integração; CLIENT recebe
   // avisos de campanha/saldo/resumo). Atualizado se o user mudar de role.
-  role      String
+  role        String
   // workspaceId snapshot — preenchido só pra users CLIENT, viabiliza
   // disparar notificação "do workspace X" sem consultar User a cada vez.
   workspaceId String?
-  userAgent String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([role])
@@ -261,7 +287,7 @@ model NotificationLog {
   id          String   @id @default(cuid())
   userId      String?
   workspaceId String?
-  type        String   // "campaign_active", "balance_low", "daily_digest", etc.
+  type        String // "campaign_active", "balance_low", "daily_digest", etc.
   title       String
   body        String
   url         String?
@@ -278,16 +304,16 @@ model NotificationLog {
 }
 
 model CampaignSnapshot {
-  id              String   @id @default(cuid())
-  workspaceId     String
-  campaignId      String
+  id          String   @id @default(cuid())
+  workspaceId String
+  campaignId  String
   // Snapshot do que o cron viu na última passada. Usado pra detectar
   // mudança de status (ACTIVE→PAUSED, novo campaign aparecendo, etc.).
-  name            String
-  status          String
-  spend           Float    @default(0)
-  updatedAt       DateTime @updatedAt
-  createdAt       DateTime @default(now())
+  name        String
+  status      String
+  spend       Float    @default(0)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
 
   @@unique([workspaceId, campaignId])
   @@index([workspaceId])
@@ -305,4 +331,302 @@ model ActiveSession {
   createdAt DateTime @default(now())
 
   @@index([lastSeen])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TRACK — rastreio de venda do clique no anúncio até a etiqueta no
+// WhatsApp, e devolução da conversão para a plataforma de anúncio.
+//
+// Nada aqui altera a tabela Lead: a ligação é TrackConversation.leadId,
+// e a back-relation em Lead é campo virtual do Prisma (DDL zero lá).
+// ═══════════════════════════════════════════════════════════════════
+
+/// Um número de WhatsApp conectado ao worker Baileys.
+model WhatsappInstance {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  label           String    @default("Principal")
+  phone           String? // E.164 sem "+", só dígitos
+  // close | connecting | qr | open | logged_out
+  state           String    @default("close")
+  // Comando do painel: o worker converge o estado real para este.
+  // off | on
+  desiredState    String    @default("off")
+  qr              String? // data URL, só durante o pareamento
+  pairingCode     String?
+  qrExpiresAt     DateTime?
+  // Etiqueta só existe no WhatsApp Business. Sem isso, o funil depende
+  // exclusivamente das frases-gatilho.
+  isBusiness      Boolean   @default(false)
+  lastConnectedAt DateTime?
+  lastSeenAt      DateTime? // heartbeat do worker, usado pelo cron de saúde
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  labels        WhatsappLabel[]
+  conversations TrackConversation[]
+
+  @@index([workspaceId])
+  @@index([desiredState, state])
+}
+
+/// Etiquetas descobertas no aparelho. O nome só chega pelo evento
+/// labels.edit; labels.association traz apenas o id. Por isso o painel
+/// mapeia sempre por waLabelId, nunca por nome: renomear "Pago" para
+/// "Pago ✅" no celular não pode quebrar o funil.
+model WhatsappLabel {
+  id         String           @id @default(cuid())
+  instanceId String
+  instance   WhatsappInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  waLabelId  String
+  name       String
+  color      Int?
+  deleted    Boolean          @default(false)
+  lastSeenAt DateTime         @default(now())
+
+  @@unique([instanceId, waLabelId])
+}
+
+/// Link rastreável usado como URL final do anúncio.
+model TrackLink {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  slug             String    @unique // /r/<slug>
+  name             String
+  instanceId       String?
+  destinationPhone String // wa.me/<destinationPhone>
+  messageTemplate  String    @default("Olá! Vim pelo anúncio. Código {code}")
+  // Usado só se a instância estiver deslogada há muito tempo: melhor mandar
+  // para uma landing do que para um WhatsApp que ninguém lê.
+  fallbackUrl      String?
+  platform         String    @default("google")
+  active           Boolean   @default(true)
+  clickCount       Int       @default(0)
+  createdByUserId  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  clicks TrackClick[]
+
+  @@index([workspaceId, active])
+}
+
+/// Um registro por clique no link. O `code` é o que viaja na mensagem
+/// pré-preenchida e amarra a conversa ao gclid.
+model TrackClick {
+  id          String    @id @default(cuid())
+  workspaceId String
+  linkId      String
+  link        TrackLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  code        String
+  gclid       String?
+  wbraid      String?
+  gbraid      String?
+  fbclid      String?
+  ctwaClid    String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  utmContent  String?
+  utmTerm     String?
+  // ValueTrack do Google Ads: quebra o funil por campanha sem chamar a API.
+  campaignId  String?
+  adGroupId   String?
+  creativeId  String?
+  keyword     String?
+  device      String?
+  ip          String?
+  userAgent   String?
+  matchedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, code])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, matchedAt]) // o match por proximidade varre os não casados
+  @@index([linkId, createdAt])
+}
+
+/// A unidade do funil: uma JORNADA de atribuição, não a thread eterna do
+/// contato. Quem volta meses depois por outro anúncio conta como lead novo,
+/// com gclid novo — por isso o `cycle` na chave única.
+model TrackConversation {
+  id          String           @id @default(cuid())
+  workspaceId String
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instanceId  String
+  instance    WhatsappInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  contactKey  String // telefone canônico, só dígitos
+  lidKey      String? // @lid enquanto o número real não aparece
+  cycle       Int              @default(1)
+  contactName String?
+
+  // atribuição
+  clickId         String?
+  matchType       String  @default("none") // code | ctwa | proximity | manual | none
+  matchConfidence String  @default("none") // high | low | none
+  source          String  @default("organic") // google | meta | organic
+  gclid           String?
+  ctwaClid        String?
+  campaignId      String?
+  adId            String?
+
+  // funil denormalizado: o painel lê sem join
+  stage          String    @default("lead") // lead|respondeu|qualificado|venda|perdido
+  firstMessageAt DateTime
+  lastMessageAt  DateTime
+  inboundCount   Int       @default(0)
+  outboundCount  Int       @default(0)
+  respondedAt    DateTime?
+  qualifiedAt    DateTime?
+  qualifiedBy    String? // label | phrase | manual | crm
+  saleAt         DateTime?
+  saleValue      Float?
+  saleBy         String?
+  lostAt         DateTime?
+  labelsJson     String? // JSON array dos waLabelId atuais
+
+  leadId String? @unique
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  closedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  messages TrackMessage[]
+  events   TrackEvent[]
+
+  @@unique([instanceId, contactKey, cycle])
+  @@index([workspaceId, stage])
+  @@index([workspaceId, firstMessageAt])
+  @@index([workspaceId, campaignId])
+  @@index([clickId])
+}
+
+model TrackMessage {
+  id             String            @id @default(cuid())
+  conversationId String
+  conversation   TrackConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  waMessageId    String?
+  direction      String // in | out
+  type           String            @default("text")
+  // Truncado em 1000 chars; fica null quando o workspace desliga
+  // storeMessageText. Purgado por messageRetentionDays.
+  text           String?
+  isAdReply      Boolean           @default(false)
+  sentAt         DateTime
+  createdAt      DateTime          @default(now())
+
+  @@unique([conversationId, waMessageId])
+  @@index([conversationId, sentAt])
+}
+
+/// Evento de funil. O unique por [conversa, estágio] garante um evento por
+/// estágio por jornada, para sempre.
+model TrackEvent {
+  id             String            @id @default(cuid())
+  workspaceId    String
+  conversationId String
+  conversation   TrackConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  stage          String
+  value          Float?
+  currency       String            @default("BRL")
+  source         String // label | phrase | messages | manual | crm | auto
+  occurredAt     DateTime
+  createdAt      DateTime          @default(now())
+
+  dispatches TrackDispatch[]
+
+  @@unique([conversationId, stage])
+  @@index([workspaceId, stage, occurredAt])
+}
+
+/// Para onde cada estágio do funil é enviado. Atenção: `customerId` aqui é a
+/// conta que RECEBE a conversão (conversion customer), que em MCC com
+/// conversão cross-account não é a mesma conta que roda o anúncio.
+model TrackConversionTarget {
+  id                   String    @id @default(cuid())
+  workspaceId          String
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stage                String
+  platform             String // google | meta
+  enabled              Boolean   @default(false)
+  customerId           String?
+  loginCustomerId      String?
+  conversionActionId   String?
+  conversionActionName String?
+  sendValue            Boolean   @default(false)
+  defaultValue         Float?
+  datasetId            String? // Meta CAPI
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([workspaceId, stage, platform])
+}
+
+/// Fila de envio. O worker produz, o cron do Next consome: é o contrato
+/// entre os dois processos, e nenhum derruba o outro.
+model TrackDispatch {
+  id              String     @id @default(cuid())
+  workspaceId     String
+  eventId         String
+  event           TrackEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  targetId        String
+  platform        String
+  // pending | sending | sent | failed | expired | skipped
+  status          String     @default("pending")
+  attempts        Int        @default(0)
+  // Conversão enviada minutos depois do clique costuma bater em
+  // CLICK_NOT_FOUND: o clique ainda não foi processado do lado do Google.
+  notBeforeAt     DateTime
+  nextAttemptAt   DateTime
+  lockedAt        DateTime?
+  sentAt          DateTime?
+  lastError       String?
+  requestPayload  String?
+  responsePayload String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@unique([eventId, targetId])
+  @@index([status, nextAttemptAt])
+  @@index([workspaceId, createdAt])
+}
+
+/// Regras de qualificação e preferências do Track, por workspace.
+model TrackSettings {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // "respondeu" = houve conversa de verdade, não só o primeiro oi
+  respondedMinInbound       Int     @default(2)
+  respondedRequiresOutbound Boolean @default(true)
+
+  // JSON string[] de waLabelId e JSON [{ text, direction }] de frases.
+  // A direção importa: "parabéns pela sua compra" é do atendente (out),
+  // "quanto custa" é do cliente (in).
+  qualifiedLabelIds String?
+  qualifiedPhrases  String?
+  saleLabelIds      String?
+  salePhrases       String?
+  lostLabelIds      String?
+
+  defaultSaleValue Float?
+  syncCrmSale      Boolean @default(true)
+  createLeadInCrm  Boolean @default(true)
+
+  // LGPD: conteúdo de conversa de terceiro é o dado mais sensível daqui.
+  storeMessageText     Boolean @default(true)
+  messageRetentionDays Int     @default(90)
+
+  journeyResetDays   Int    @default(30)
+  matchWindowMinutes Int    @default(30)
+  uploadLagHours     Int    @default(3)
+  timezone           String @default("America/Sao_Paulo")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
