@@ -166,3 +166,250 @@ export async function gaqlSearch(opts: {
   console.log(`[${tag}] GAQL rows: ${data.results?.length ?? 0}`);
   return data.results?.map((r: unknown) => flattenFields(r)) ?? [];
 }
+
+/* ─────────────────────── conversões offline ─────────────────────── */
+
+/**
+ * A conta que RECEBE a conversão.
+ *
+ * Em MCC com conversão cross-account, o upload não vai para a conta que roda
+ * o anúncio, e sim para a conta de conversão configurada no manager. Mandar
+ * para a conta errada devolve 200 e não registra nada, que é a causa número um
+ * de "subiu certo e não apareceu conversão nenhuma".
+ */
+export async function resolveConversionCustomerId(
+  customerId: string,
+  token: string,
+  loginCustomerId: string,
+): Promise<string> {
+  try {
+    const linhas = await gaqlSearch({
+      customerId,
+      token,
+      loginCustomerId,
+      tag: "google-ads/conv-customer",
+      query: `
+        SELECT customer.id,
+               customer.conversion_tracking_setting.google_ads_conversion_customer
+        FROM customer
+        LIMIT 1
+      `,
+    });
+    const bruto = linhas[0]?.[
+      "customer.conversion_tracking_setting.google_ads_conversion_customer"
+    ];
+    if (typeof bruto === "string" && bruto) {
+      // Vem como resource name "customers/1234567890".
+      const id = bruto.split("/").pop();
+      if (id && /^\d+$/.test(id)) return id;
+    }
+  } catch (err) {
+    console.warn(
+      `[google-ads] não consegui resolver a conta de conversão de ${customerId}: ${(err as Error).message}`,
+    );
+  }
+  return customerId;
+}
+
+export interface ConversionActionInfo {
+  id: string;
+  name: string;
+  status: string;
+  type: string;
+  category: string;
+}
+
+/**
+ * Lista as ações de conversão da conta. O Track só pode usar as do tipo
+ * UPLOAD_CLICKS: as outras são de tag no site e recusam upload.
+ */
+export async function listConversionActions(
+  customerId: string,
+  token: string,
+  loginCustomerId: string,
+): Promise<ConversionActionInfo[]> {
+  const linhas = await gaqlSearch({
+    customerId,
+    token,
+    loginCustomerId,
+    tag: "google-ads/conv-actions",
+    query: `
+      SELECT conversion_action.id,
+             conversion_action.name,
+             conversion_action.status,
+             conversion_action.type,
+             conversion_action.category
+      FROM conversion_action
+      WHERE conversion_action.status != 'REMOVED'
+      ORDER BY conversion_action.name
+    `,
+  });
+  return linhas.map((l) => ({
+    id: String(l["conversion_action.id"] ?? ""),
+    name: String(l["conversion_action.name"] ?? ""),
+    status: String(l["conversion_action.status"] ?? ""),
+    type: String(l["conversion_action.type"] ?? ""),
+    category: String(l["conversion_action.category"] ?? ""),
+  }));
+}
+
+/**
+ * Formata o instante no padrão que a API exige:
+ * "yyyy-MM-dd HH:mm:ss+HH:mm", com o fuso explícito.
+ *
+ * Sem o deslocamento, o Google interpreta no fuso da conta e a conversão pode
+ * cair antes do clique, o que a API recusa com CONVERSION_PRECEDES_CLICK.
+ */
+export function formatConversionDateTime(quando: Date, timeZone = "America/Sao_Paulo"): string {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  });
+  const p: Record<string, string> = {};
+  for (const parte of fmt.formatToParts(quando)) p[parte.type] = parte.value;
+  // hour12:false pode devolver "24" na virada do dia em alguns runtimes.
+  const hora = p.hour === "24" ? "00" : p.hour;
+
+  // Deslocamento real do fuso naquele instante, respeitando horário de verão.
+  const local = new Date(quando.toLocaleString("en-US", { timeZone }));
+  const utc = new Date(quando.toLocaleString("en-US", { timeZone: "UTC" }));
+  const minutos = Math.round((local.getTime() - utc.getTime()) / 60000);
+  const sinal = minutos >= 0 ? "+" : "-";
+  const abs = Math.abs(minutos);
+  const off = `${sinal}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+
+  return `${p.year}-${p.month}-${p.day} ${hora}:${p.minute}:${p.second}${off}`;
+}
+
+export interface ClickConversion {
+  gclid?: string;
+  wbraid?: string;
+  gbraid?: string;
+  conversionAction: string;
+  conversionDateTime: string;
+  conversionValue?: number;
+  currencyCode?: string;
+  /** Chave de deduplicação do lado do Google. Usamos o id do despacho. */
+  orderId?: string;
+}
+
+export interface ResultadoUpload {
+  ok: boolean;
+  /** Erros por índice do lote, quando partialFailure devolve falhas parciais. */
+  errosPorIndice: Map<number, { codigo: string; mensagem: string }>;
+  erroGeral?: { codigo: string; mensagem: string };
+  requestId?: string;
+  respostaCrua: unknown;
+}
+
+/**
+ * Sobe conversões offline para o Google Ads.
+ *
+ * `partialFailure: true` é obrigatório aqui: sem ele, uma conversão ruim no
+ * lote derruba as outras 199, e um gclid expirado no meio faria perder vendas
+ * boas do mesmo envio.
+ */
+export async function uploadClickConversions(p: {
+  customerId: string;
+  token: string;
+  loginCustomerId: string;
+  conversions: ClickConversion[];
+  validateOnly?: boolean;
+}): Promise<ResultadoUpload> {
+  const corpo = JSON.stringify({
+    conversions: p.conversions,
+    partialFailure: true,
+    validateOnly: Boolean(p.validateOnly),
+  });
+
+  const res = await fetch(
+    `${GADS_API}/customers/${p.customerId}:uploadClickConversions`,
+    {
+      method: "POST",
+      headers: {
+        ...gaqlHeaders(p.token, p.loginCustomerId),
+        "Content-Length": String(Buffer.byteLength(corpo)),
+      },
+      body: corpo,
+    },
+  );
+
+  const data = await res.json().catch(() => ({}));
+  const requestId = res.headers.get("request-id") ?? undefined;
+  const errosPorIndice = new Map<number, { codigo: string; mensagem: string }>();
+
+  // Erro que derruba a requisição inteira (auth, conta errada, payload podre).
+  if (data.error) {
+    return {
+      ok: false,
+      errosPorIndice,
+      erroGeral: {
+        codigo: extrairCodigo(data.error) ?? data.error.status ?? "ERRO",
+        mensagem: data.error.message ?? "falha no upload",
+      },
+      requestId,
+      respostaCrua: data,
+    };
+  }
+
+  // Falhas parciais: o lote passou, algumas linhas não.
+  const parcial = data.partialFailureError;
+  if (parcial?.details) {
+    for (const detalhe of parcial.details) {
+      for (const erro of detalhe.errors ?? []) {
+        const indice = erro.location?.fieldPathElements?.find(
+          (f: { fieldName?: string }) => f.fieldName === "conversions",
+        )?.index;
+        const codigo = extrairCodigo({ details: [{ errors: [erro] }] }) ?? "ERRO";
+        if (typeof indice === "number") {
+          errosPorIndice.set(indice, { codigo, mensagem: erro.message ?? "" });
+        }
+      }
+    }
+  }
+
+  return { ok: true, errosPorIndice, requestId, respostaCrua: data };
+}
+
+/** O código de erro do Google vem aninhado num objeto com uma chave só. */
+function extrairCodigo(erro: unknown): string | null {
+  const e = erro as { details?: Array<{ errors?: Array<{ errorCode?: Record<string, string> }> }> };
+  const codigo = e?.details?.[0]?.errors?.[0]?.errorCode;
+  if (!codigo) return null;
+  const valores = Object.values(codigo);
+  return valores.length > 0 ? String(valores[0]) : null;
+}
+
+/**
+ * Vale a pena tentar de novo?
+ *
+ * Distinguir isso é o que evita dois problemas caros: ficar batendo à toa num
+ * erro que nunca vai passar, e desistir de uma conversão boa por um soluço de
+ * rede. CLICK_NOT_FOUND é o caso especial: costuma ser só o Google ainda não
+ * ter processado o clique, então vale insistir por um tempo.
+ */
+export function classificarErroDeConversao(codigo: string): "permanente" | "transitorio" | "sucesso" {
+  // O Google já tinha essa conversão. Deduplicou por orderId, então deu certo.
+  if (codigo === "DUPLICATE_ORDER_ID") return "sucesso";
+
+  const permanentes = [
+    "INVALID_CONVERSION_ACTION_TYPE",
+    "NO_CONVERSION_ACTION_FOUND",
+    "CONVERSION_PRECEDES_EVENT",
+    "CONVERSION_PRECEDES_GCLID",
+    "EXPIRED_GCLID",
+    "EXPIRED_CLICK",
+    "TOO_RECENT_GCLID",
+    "INVALID_CUSTOMER_ID",
+    "CUSTOMER_NOT_ENABLED",
+    "INVALID_GCLID",
+    "UNPARSEABLE_GCLID",
+    "CONVERSION_ACTION_NOT_ENABLED",
+    "DUPLICATE_CLICK_CONVERSION_IN_REQUEST",
+  ];
+  if (permanentes.includes(codigo)) return "permanente";
+
+  return "transitorio";
+}
