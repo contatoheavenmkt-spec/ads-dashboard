@@ -24,6 +24,10 @@ export default auth((req) => {
 
   const isAuthPage = nextUrl.pathname.startsWith("/login") || nextUrl.pathname.startsWith("/cadastro");
   const isPublicClient = nextUrl.pathname.startsWith("/cliente");
+  // /r/<slug> é o redirecionador do Track: quem passa por ali clicou num
+  // anúncio pago e precisa ir direto ao WhatsApp. Sem esta linha o clique
+  // cai na tela de login e a campanha do cliente vira prejuízo.
+  const isTrackRedirect = nextUrl.pathname.startsWith("/r/");
   const isPublicPage =
     nextUrl.pathname.startsWith("/page") ||
     nextUrl.pathname.startsWith("/privacy") ||
@@ -36,7 +40,7 @@ export default auth((req) => {
     nextUrl.pathname.startsWith("/workspaces");
   const isPasswordChange = nextUrl.pathname.startsWith("/account/change-password");
 
-  if (isPublicClient || isPublicPage) return NextResponse.next();
+  if (isPublicClient || isPublicPage || isTrackRedirect) return NextResponse.next();
 
   if (!isLoggedIn && !isAuthPage) {
     return NextResponse.redirect(new URL("/login", nextUrl));
@@ -101,6 +105,12 @@ export const config = {
     // middleware redirecionava o favicon para /login — visitante deslogado
     // ficava sem ícone. O `$` garante que só o caminho exato seja liberado
     // (ex.: /icones continua protegido).
-    "/((?!api|_next/static|_next/image|favicon.ico|icon$|apple-icon$|.*\\..*).*)",
+    //
+    // `r/` fora do middleware é defesa dupla do redirecionador do Track: o
+    // handler já libera a rota, mas sem excluir aqui o Edge ainda decodificaria
+    // o JWT de sessão a cada clique de anúncio, gastando latência no caminho
+    // mais sensível do produto. Só pega "r" seguido de barra, então rotas como
+    // /relatorios seguem protegidas.
+    "/((?!api|r/|_next/static|_next/image|favicon.ico|icon$|apple-icon$|.*\\..*).*)",
   ],
 };
