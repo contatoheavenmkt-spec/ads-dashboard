@@ -5,12 +5,14 @@ import { ArrowRight, Menu, X } from "lucide-react";
 import { AnimatedGroup } from "./ui/animated-group";
 import { cn } from "@/lib/utils";
 
+// Animação de entrada só com opacity + y (transform): ambas rodam no
+// compositor. O `filter: blur()` anterior forçava repaint de blocos grandes
+// (incluindo o wrapper da imagem do hero) a cada frame da entrada.
 const transitionVariants = {
   item: {
-    hidden: { opacity: 0, filter: "blur(12px)", y: 12 },
+    hidden: { opacity: 0, y: 12 },
     visible: {
       opacity: 1,
-      filter: "blur(0px)",
       y: 0,
       transition: { type: "spring", bounce: 0.3, duration: 1.5 },
     },
@@ -56,6 +58,8 @@ export function HeroSection() {
                 className="absolute inset-x-0 top-56 -z-20 hidden lg:top-32 dark:block"
                 width="3276"
                 height="4095"
+                loading="lazy"
+                decoding="async"
               />
             </AnimatedGroup>
 
@@ -150,8 +154,12 @@ export function HeroSection() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     className="bg-[#0F172A] relative rounded-2xl w-full h-auto object-contain"
-                    src="/lp/fb5c8476c8e93960c5fc9aae9744b14fb95d526e.png"
+                    src="/lp/fb5c8476c8e93960c5fc9aae9744b14fb95d526e.webp"
                     alt="Dashfy Dashboard"
+                    width={1600}
+                    height={761}
+                    fetchPriority="high"
+                    decoding="async"
                   />
                 </div>
               </div>
@@ -182,6 +190,7 @@ export function HeroSection() {
                     className="w-full h-full"
                     src="https://www.youtube.com/embed/dm1plJPXJ5w?rel=0&modestbranding=1"
                     title="Dashfy na Prática"
+                    loading="lazy"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                   />
@@ -220,9 +229,29 @@ function HeroHeader() {
   const [isScrolled, setIsScrolled] = React.useState(false);
 
   React.useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 50);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    let frame = 0;
+
+    // Histerese: entra no estado compacto a 80px, só sai abaixo de 40px.
+    // Com um limiar único (50px) qualquer parada na fronteira alternava os
+    // dois estados a cada micro-scroll, e o header piscava.
+    const read = () => {
+      frame = 0;
+      const y = window.scrollY;
+      setIsScrolled((prev) => (prev ? y > 40 : y > 80));
+    };
+
+    // Uma leitura por frame, no máximo — o handler cru disparava dezenas de
+    // vezes por segundo lendo scrollY (força reflow) a cada evento.
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(read);
+    };
+
+    read();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   return (
@@ -233,19 +262,33 @@ function HeroHeader() {
       >
         <div
           className={cn(
-            "mx-auto mt-2 max-w-6xl px-6 transition-all duration-300 lg:px-12",
-            isScrolled &&
-              "bg-[#0F172A]/80 max-w-4xl rounded-2xl border border-slate-700/50 backdrop-blur-lg lg:px-5"
+            "relative mx-auto mt-2 px-6 transition-[max-width,padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+            isScrolled ? "max-w-4xl lg:px-5" : "max-w-6xl lg:px-12"
           )}
         >
+          {/* Fundo, borda, cantos e blur vivem numa camada própria e entram
+              só por `opacity` — animação de compositor, sem repaint. Antes
+              essas quatro propriedades apareciam de uma vez junto com a
+              mudança de largura, e a borda ainda empurrava o layout em 1px. */}
+          <div
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute inset-0 rounded-2xl border border-slate-700/50 bg-[#0F172A]/90 backdrop-blur-md",
+              "transition-opacity duration-500 ease-out will-change-[opacity]",
+              isScrolled ? "opacity-100" : "opacity-0"
+            )}
+          />
           <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
             <div className="flex w-full justify-between lg:w-auto">
               <Link href="/page" aria-label="home" className="flex items-center space-x-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/lp/d50c50aac271cbe6e044e66df6490d9529d486a9.png"
+                  src="/lp/d50c50aac271cbe6e044e66df6490d9529d486a9.webp"
                   alt="Dashfy"
                   className="h-8 w-auto"
+                  width={400}
+                  height={144}
+                  fetchPriority="high"
                 />
               </Link>
               <button
@@ -304,31 +347,29 @@ function HeroHeader() {
                   ))}
                 </ul>
               </div>
-              <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
-                <Link
-                  href="/login"
+              <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit lg:items-center lg:gap-0">
+                {/* O "Login" recolhe em vez de sumir: largura e opacidade
+                    animam juntas. Antes era `lg:hidden`, um corte seco no
+                    meio da transição de largura do header. */}
+                <div
                   className={cn(
-                    "inline-flex items-center justify-center rounded-md border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800",
-                    isScrolled && "lg:hidden"
+                    "overflow-hidden transition-[max-width,opacity,margin-right] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] lg:mr-3",
+                    isScrolled ? "lg:max-w-0 lg:opacity-0 lg:mr-0" : "lg:max-w-32 lg:opacity-100"
                   )}
                 >
-                  Login
-                </Link>
+                  <Link
+                    href="/login"
+                    className="inline-flex w-full items-center justify-center whitespace-nowrap rounded-md border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 sm:w-auto"
+                    tabIndex={isScrolled ? -1 : undefined}
+                  >
+                    Login
+                  </Link>
+                </div>
+                {/* Um único botão, sempre montado — os dois anteriores se
+                    trocavam por display e piscavam na transição. */}
                 <a
                   href="#pricing"
-                  className={cn(
-                    "inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700",
-                    isScrolled && "lg:hidden"
-                  )}
-                >
-                  Começar agora
-                </a>
-                <a
-                  href="#pricing"
-                  className={cn(
-                    "hidden items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700",
-                    isScrolled ? "lg:inline-flex" : "hidden"
-                  )}
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                 >
                   Começar agora
                 </a>

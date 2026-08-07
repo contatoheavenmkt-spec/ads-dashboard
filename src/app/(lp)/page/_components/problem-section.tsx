@@ -1,12 +1,8 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useRef, useEffect } from "react";
 
 export function ProblemSection() {
-  const [mouseGradientStyle, setMouseGradientStyle] = useState({
-    left: "0px",
-    top: "0px",
-    opacity: 0,
-  });
+  const gradientRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const animateWords = () => {
@@ -36,22 +32,51 @@ export function ProblemSection() {
     return () => observer.disconnect();
   }, []);
 
+  // O gradiente segue o mouse escrevendo direto no DOM via ref, com no máximo
+  // uma atualização por frame (rAF) e usando `transform` em vez de left/top.
+  // Antes: um setState por evento de mousemove (60-120+/s) re-renderizava a
+  // seção inteira e animava propriedades de layout num div com blur-3xl.
   useEffect(() => {
+    let frame = 0;
+    let pendingX = 0;
+    let pendingY = 0;
+    let pendingOpacity = 0;
+
+    const flush = () => {
+      frame = 0;
+      const el = gradientRef.current;
+      if (!el) return;
+      el.style.transform = `translate3d(${pendingX}px, ${pendingY}px, 0) translate(-50%, -50%)`;
+      el.style.opacity = String(pendingOpacity);
+    };
+
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(flush);
+    };
+
     const handleMouseMove = (e: MouseEvent) => {
       const section = document.getElementById("problem-section");
       if (!section) return;
       const rect = section.getBoundingClientRect();
       if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
-        setMouseGradientStyle({ left: `${e.clientX}px`, top: `${e.clientY}px`, opacity: 1 });
+        pendingX = e.clientX;
+        pendingY = e.clientY;
+        pendingOpacity = 1;
       } else {
-        setMouseGradientStyle((prev) => ({ ...prev, opacity: 0 }));
+        pendingOpacity = 0;
       }
+      schedule();
     };
-    const handleMouseLeave = () =>
-      setMouseGradientStyle((prev) => ({ ...prev, opacity: 0 }));
-    document.addEventListener("mousemove", handleMouseMove);
+
+    const handleMouseLeave = () => {
+      pendingOpacity = 0;
+      schedule();
+    };
+
+    document.addEventListener("mousemove", handleMouseMove, { passive: true });
     document.addEventListener("mouseleave", handleMouseLeave);
     return () => {
+      if (frame) cancelAnimationFrame(frame);
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseleave", handleMouseLeave);
     };
@@ -59,10 +84,10 @@ export function ProblemSection() {
 
   const pageStyles = `
     #mouse-gradient-problem {
-      position: fixed; pointer-events: none; border-radius: 9999px;
+      position: fixed; top: 0; left: 0; pointer-events: none; border-radius: 9999px;
       background-image: radial-gradient(circle, rgba(239,68,68,.08), rgba(220,38,38,.05), transparent 70%);
-      transform: translate(-50%,-50%); will-change: left,top,opacity;
-      transition: left 70ms linear, top 70ms linear, opacity 300ms ease-out; z-index: 5;
+      transform: translate(-50%,-50%); will-change: transform, opacity;
+      transition: opacity 300ms ease-out; z-index: 5;
     }
     @keyframes word-appear {
       0%   { opacity:0; transform:translateY(30px) scale(.8); filter:blur(10px); }
@@ -75,8 +100,8 @@ export function ProblemSection() {
       100% { stroke-dashoffset:0; opacity:.08; }
     }
     @keyframes pulse-glow {
-      0%,100% { opacity:.1; transform:scale(1); }
-      50%      { opacity:.3; transform:scale(1.1); }
+      0%,100% { opacity:.1; }
+      50%      { opacity:.3; }
     }
     .word-animate-problem {
       display:inline-block; opacity:0; margin:0 .1em;
@@ -108,7 +133,7 @@ export function ProblemSection() {
       <style>{pageStyles}</style>
       <section
         id="problem-section"
-        className="relative bg-[#0F172A] overflow-hidden py-16 sm:py-20 md:py-24"
+        className="relative bg-[#0F172A] overflow-hidden py-16 sm:py-20 md:py-24 [content-visibility:auto] [contain-intrinsic-size:auto_700px]"
       >
         <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
           <defs>
@@ -178,13 +203,10 @@ export function ProblemSection() {
         </div>
 
         <div
+          ref={gradientRef}
           id="mouse-gradient-problem"
           className="w-60 h-60 blur-xl sm:w-80 sm:h-80 sm:blur-2xl md:w-96 md:h-96 md:blur-3xl"
-          style={{
-            left: mouseGradientStyle.left,
-            top: mouseGradientStyle.top,
-            opacity: mouseGradientStyle.opacity,
-          }}
+          style={{ opacity: 0 }}
         />
       </section>
     </>

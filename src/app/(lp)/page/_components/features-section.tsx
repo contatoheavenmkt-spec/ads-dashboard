@@ -160,11 +160,11 @@ function BeforeAfterSlider() {
       onTouchStart={handleMouseDown}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/lp/dashboard-real.png" alt="Depois: Dashboard Dashfy" className="w-full h-auto block rounded-xl" />
+      <img src="/lp/dashboard-real.webp" alt="Depois: Dashboard Dashfy" className="w-full h-auto block rounded-xl" width={1400} height={668} loading="lazy" decoding="async" />
       <div className="absolute inset-0" style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}>
         <div className="w-full h-full bg-white rounded-xl">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/lp/google-ads-before.png" alt="Antes: Google Ads" className="w-full h-full object-cover block rounded-xl" />
+          <img src="/lp/google-ads-before.webp" alt="Antes: Google Ads" className="w-full h-full object-cover block rounded-xl" width={1400} height={664} loading="lazy" decoding="async" />
         </div>
       </div>
       <div className="absolute top-0 bottom-0 z-20" style={{ left: `${sliderPos}%`, transform: "translateX(-50%)" }}>

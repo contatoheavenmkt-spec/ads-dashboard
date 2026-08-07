@@ -62,7 +62,7 @@ export function BentoSection() {
           <div className="text-center">
             <div className="flex items-center justify-center mb-1">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/lp/d50c50aac271cbe6e044e66df6490d9529d486a9.png" alt="Dashfy" className="h-7 w-auto" />
+              <img src="/lp/d50c50aac271cbe6e044e66df6490d9529d486a9.webp" alt="Dashfy" className="h-7 w-auto" width={400} height={144} loading="lazy" decoding="async" />
             </div>
             <p className="text-xs text-gray-500">Plataforma profissional e especializada</p>
           </div>
