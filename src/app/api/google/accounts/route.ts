@@ -1,61 +1,6 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
 import { auth } from "@/auth";
-
-const GADS_API = "https://googleads.googleapis.com/v22";
-const REQUIRED_SCOPE = "https://www.googleapis.com/auth/adwords";
-
-// ─── Token management ──────────────────────────────────────────────
-
-async function getValidToken(userId: string): Promise<{ accessToken: string; scopes: string[] } | null> {
-  const conn = await db.googleConnection.findFirst({ where: { userId }, orderBy: { connectedAt: "desc" } });
-  if (!conn) return null;
-
-  const connScopes = (conn.scopes ?? "").split(" ");
-  if (!connScopes.includes(REQUIRED_SCOPE)) {
-    console.error("[google/accounts] Token sem escopo adwords:", connScopes);
-    return null;
-  }
-
-  // Refresh se expirado ou sem data de expiração
-  const expiresAt = conn.expiresAt instanceof Date ? conn.expiresAt : null;
-  const isExpired = !expiresAt || isNaN(expiresAt.getTime()) || expiresAt <= new Date();
-
-  if (isExpired) {
-    if (!conn.refreshToken) {
-      console.error("[google/accounts] Sem refresh token disponível");
-      return null;
-    }
-    const res = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        grant_type: "refresh_token",
-        refresh_token: conn.refreshToken,
-      }),
-    });
-    const data = await res.json();
-    if (data.error) {
-      console.error("[google/accounts] Falha ao renovar token:", data.error, data.error_description);
-      return null;
-    }
-
-    await db.googleConnection.update({
-      where: { id: conn.id },
-      data: {
-        accessToken: data.access_token,
-        expiresAt: new Date(Date.now() + data.expires_in * 1000),
-        ...(data.refresh_token ? { refreshToken: data.refresh_token } : {}),
-      },
-    });
-
-    return { accessToken: data.access_token, scopes: connScopes };
-  }
-
-  return { accessToken: conn.accessToken, scopes: connScopes };
-}
+import { GADS_API, getValidGoogleToken } from "@/lib/google-ads";
 
 // ─── GET handler ──────────────────────────────────────────────────
 
@@ -76,7 +21,7 @@ export async function GET() {
 
   const loginCustomerId = rawLoginCustomerId.replace(/-/g, "");
 
-  const tokenInfo = await getValidToken(session.user.id);
+  const tokenInfo = await getValidGoogleToken(session.user.id);
   if (!tokenInfo) {
     return NextResponse.json({
       accounts: [],
