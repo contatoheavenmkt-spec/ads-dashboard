@@ -6,6 +6,7 @@ import { Loader2, ArrowLeft, Save, Key, AlertTriangle, CheckCircle, User, Credit
 import { PLANS } from "@/lib/plans";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { BotaoImpersonar } from "@/app/admin/_components/botao-impersonar";
 
 type Tab = "perfil" | "assinatura" | "senha" | "conexoes" | "historico";
 
@@ -48,6 +49,9 @@ const PLAN_COLORS: Record<string, string> = {
 };
 const STATUS_COLORS: Record<string, string> = {
   active: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+  // Cortesia dá o mesmo acesso de "active", mas não é receita — daí não usar o
+  // verde do pagante. Ver STATUS_MAP em admin-ui.tsx.
+  cortesia: "text-violet-400 bg-violet-500/10 border-violet-500/20",
   trialing: "text-amber-400 bg-amber-500/10 border-amber-500/20",
   expired: "text-red-400 bg-red-500/10 border-red-500/20",
   canceled: "text-slate-400 bg-slate-700/50 border-slate-600/50",
@@ -61,6 +65,9 @@ export default function AccountDetailPage() {
   const [tab, setTab] = useState<Tab>("perfil");
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
+  const [emailDigitado, setEmailDigitado] = useState("");
+  const [excluindo, setExcluindo] = useState(false);
 
   // Form state
   const [name, setName] = useState("");
@@ -97,6 +104,15 @@ export default function AccountDetailPage() {
     setFeedback({ ok, msg });
     setTimeout(() => setFeedback(null), 3500);
   }
+
+  // Volta da impersonação: /api/admin/impersonate/exit redireciona para cá com
+  // ?imp=encerrada. Mostra o feedback e limpa o parâmetro da URL.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("imp") === "encerrada") {
+      showFeedback(true, "Impersonação encerrada");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   async function saveProfile() {
     setSaving(true);
@@ -136,6 +152,29 @@ export default function AccountDetailPage() {
     else showFeedback(false, "Erro ao redefinir senha");
   }
 
+  /**
+   * Exclusão da conta. A rota DELETE já existia desde a fase 1 do painel, mas
+   * nunca teve botão — o dono precisava mexer no banco à mão.
+   *
+   * A confirmação exige DIGITAR o e-mail, não é um "tem certeza?". O delete do
+   * Prisma cascateia para workspaces, integrações, conexões e assinatura: não
+   * há desfazer, e um clique errado numa lista de contas parecidas apaga a
+   * conta errada em silêncio.
+   */
+  async function excluirConta() {
+    setExcluindo(true);
+    const res = await fetch(`/api/admin/accounts/${id}`, { method: "DELETE" }).catch(() => null);
+    setExcluindo(false);
+    if (res?.ok) {
+      // Não dá para mostrar feedback nesta tela: ela deixa de existir.
+      router.push("/admin/accounts?excluida=1");
+      return;
+    }
+    const msg = res?.status === 404 ? "Conta não encontrada (já foi excluída?)" : "Erro ao excluir a conta";
+    showFeedback(false, msg);
+    setConfirmandoExclusao(false);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -162,6 +201,14 @@ export default function AccountDetailPage() {
             <Badge text={user.subscription?.status ?? "—"} color={STATUS_COLORS[user.subscription?.status ?? ""] ?? "text-slate-400 bg-slate-800 border-slate-700"} />
           </div>
           <p className="text-sm text-slate-500 mt-0.5">{user.email}</p>
+        </div>
+        <div className="shrink-0">
+          <BotaoImpersonar
+            userId={user.id}
+            email={user.email}
+            nome={user.name}
+            statusAssinatura={user.subscription?.status ?? null}
+          />
         </div>
       </div>
 
@@ -245,10 +292,11 @@ export default function AccountDetailPage() {
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</label>
                 <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50">
-                  <option value="trialing">Trialing</option>
-                  <option value="active">Active</option>
-                  <option value="expired">Expired</option>
-                  <option value="canceled">Canceled</option>
+                  <option value="trialing">Em teste (trial)</option>
+                  <option value="active">Ativo — cliente pagante (entra no MRR)</option>
+                  <option value="cortesia">Cortesia — acesso liberado sem cobrar (fora do MRR)</option>
+                  <option value="expired">Expirado — sem acesso</option>
+                  <option value="canceled">Cancelado</option>
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -396,6 +444,68 @@ export default function AccountDetailPage() {
             )}
           </div>
         )}
+      </div>
+
+      {/* ─── Zona de perigo ─────────────────────────────────────────────────
+          Fora das abas e no fim da página, de propósito: é a única ação
+          irreversível da tela e não deve ficar a um clique de distância de
+          "Salvar perfil". */}
+      <div className="rounded-xl border border-rose-900/50 bg-rose-950/20 p-5">
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={16} className="text-rose-400 shrink-0 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-bold text-rose-300">Excluir esta conta</h3>
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              Apaga o usuário e, em cascata, a assinatura, o workspace, as integrações e as
+              conexões Meta/Google. <strong className="text-slate-300">Não há como desfazer.</strong>{" "}
+              Para tirar o acesso sem perder os dados, use o status{" "}
+              <strong className="text-slate-300">Expirado</strong> na aba Assinatura.
+            </p>
+
+            {!confirmandoExclusao ? (
+              <button
+                onClick={() => { setConfirmandoExclusao(true); setEmailDigitado(""); }}
+                className="mt-3 h-9 px-4 rounded-lg text-xs font-bold bg-rose-600/20 text-rose-300 ring-1 ring-inset ring-rose-600/40 hover:bg-rose-600/30 transition-colors"
+              >
+                Excluir conta
+              </button>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {/* Digitar o e-mail, e não um "tem certeza?": numa lista de
+                    contas parecidas, o clique errado apaga a conta errada. */}
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                  Digite <span className="font-mono text-rose-300">{user.email}</span> para confirmar
+                </label>
+                <input
+                  type="text"
+                  value={emailDigitado}
+                  onChange={(e) => setEmailDigitado(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full h-10 px-3 rounded-lg bg-slate-900/70 text-sm text-white ring-1 ring-inset ring-slate-700 focus:ring-rose-500/60 outline-none font-mono"
+                  placeholder={user.email}
+                />
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => setConfirmandoExclusao(false)}
+                    disabled={excluindo}
+                    className="h-9 px-4 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 ring-1 ring-inset ring-slate-700 hover:bg-slate-700 transition-colors disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={excluirConta}
+                    disabled={excluindo || emailDigitado.trim().toLowerCase() !== user.email.toLowerCase()}
+                    className="h-9 px-4 rounded-lg text-xs font-bold bg-rose-600 text-white hover:bg-rose-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                  >
+                    {excluindo && <Loader2 size={13} className="animate-spin" />}
+                    {excluindo ? "Excluindo…" : "Excluir definitivamente"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
