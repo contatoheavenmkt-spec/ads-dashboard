@@ -1,68 +1,22 @@
 "use client";
 
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-  ChartOptions
-} from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import dynamic from "next/dynamic";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
+/**
+ * Fronteira de carregamento do sparkline.
+ *
+ * API pública idêntica à anterior — `kpi-card.tsx` não mudou. Import pelo
+ * barrel `./impl` para compartilhar o chunk do recharts.
+ *
+ * Este é o mais importante dos três: há vários KpiCards por tela, e com o
+ * chart.js estático cada um deles obrigava a biblioteca inteira a entrar no
+ * chunk inicial da página — inclusive no painel público do cliente.
+ */
+const Impl = dynamic(() => import("./impl").then((m) => m.SparklineImpl), {
+  ssr: false,
+  loading: () => <div className="w-full h-full" />,
+});
 
-interface SparklineProps {
-  data: number[];
-  color: string;
-}
-
-export function Sparkline({ data, color }: SparklineProps) {
-  const chartData = {
-    labels: data.map((_, i) => i.toString()),
-    datasets: [
-      {
-        data: data,
-        borderColor: color,
-        backgroundColor: `${color}1a`, // 10% opacity
-        fill: true,
-        tension: 0.4,
-        pointRadius: 0,
-        borderWidth: 2,
-      },
-    ],
-  };
-
-  const options: ChartOptions<'line'> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: { enabled: false },
-    },
-    scales: {
-      x: { display: false },
-      y: { display: false },
-    },
-    elements: {
-      line: {
-        capBezierPoints: true
-      }
-    }
-  };
-
-  return <Line data={chartData} options={options} />;
+export function Sparkline({ data, color }: { data: number[]; color: string }) {
+  return <Impl data={data} color={color} />;
 }
