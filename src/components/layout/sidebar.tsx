@@ -13,6 +13,7 @@ import {
   BadgeCheck,
   UserCircle,
   UserSearch,
+  Link2,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -95,6 +96,7 @@ const saasItems: NavItem[] = [
   { href: "/integracoes", label: "Contas", icon: Share2 },
   { href: "/workspaces", label: "Workspaces", icon: Users },
   { href: "/crm", label: "CRM", icon: UserSearch },
+  { href: "/track", label: "Track", icon: Link2, activeColor: "text-cyan-400" },
   { href: "/dashboard/billing", label: "Plano", icon: BadgeCheck, activeColor: "text-emerald-400" },
   { href: "/perfil", label: "Perfil", icon: UserCircle },
 ];

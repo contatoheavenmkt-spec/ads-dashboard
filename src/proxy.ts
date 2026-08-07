@@ -37,7 +37,13 @@ export default auth((req) => {
   const isAgencyRoute =
     nextUrl.pathname.startsWith("/dashboard") ||
     nextUrl.pathname.startsWith("/integracoes") ||
-    nextUrl.pathname.startsWith("/workspaces");
+    nextUrl.pathname.startsWith("/workspaces") ||
+    // /crm e /track são telas consolidadas da agência: mostram dados de todos
+    // os clientes ao mesmo tempo. As APIs por trás já exigem role AGENCY, mas
+    // sem estarem listadas aqui um CLIENT logado abria a página e via uma tela
+    // de erro em vez de ser mandado para o painel dele.
+    nextUrl.pathname.startsWith("/crm") ||
+    nextUrl.pathname.startsWith("/track");
   const isPasswordChange = nextUrl.pathname.startsWith("/account/change-password");
 
   if (isPublicClient || isPublicPage || isTrackRedirect) return NextResponse.next();
