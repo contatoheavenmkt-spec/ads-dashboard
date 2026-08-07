@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { generateCode, renderMessage } from "@/lib/track/code";
+import { rateLimit } from "@/lib/rate-limit";
 
 /**
  * Redirecionador do link rastreável: /r/<slug>
@@ -28,6 +29,7 @@ type CachedLink = {
   messageTemplate: string;
   active: boolean;
   fallbackUrl: string | null;
+  workspace: { deletedAt: Date | null } | null;
 } | null;
 
 const linkCache = new Map<string, { value: CachedLink; expiresAt: number }>();
@@ -93,6 +95,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ code: strin
 
   let link = cacheGet(slug);
   if (link === undefined) {
+    let falhouOBanco = false;
     link = await db.trackLink
       .findUnique({
         where: { slug },
@@ -103,11 +106,24 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ code: strin
           messageTemplate: true,
           active: true,
           fallbackUrl: true,
+          // Workspace removido não pode continuar recebendo clique: seria
+          // coleta de dado pessoal depois do fim da relação, em registro que
+          // nenhuma tela lê e que a agência não consegue mais desligar.
+          workspace: { select: { deletedAt: true } },
         },
       })
-      .catch(() => null);
-    // Guarda inclusive o `null`: link inexistente é o que bot mais pede.
-    cacheSet(slug, link);
+      .catch((err) => {
+        falhouOBanco = true;
+        console.error(`[track/r] banco indisponível ao resolver slug=${slug}:`, (err as Error).message);
+        return null;
+      });
+
+    if (link?.workspace?.deletedAt) link = null;
+
+    // Só cacheia ausência REAL. Cachear falha de banco transformaria um
+    // soluço de dois segundos em 404 fixo por um minuto inteiro, e aí o
+    // cliente perde a visita, não só a atribuição.
+    if (!falhouOBanco) cacheSet(slug, link);
   }
 
   if (!link || !link.active) {
@@ -124,7 +140,17 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ code: strin
   const userAgent = req.headers.get("user-agent");
   const bot = isBot(userAgent);
 
-  if (!bot) {
+  /*
+   * O redirect é público e o gclid vem da query, então qualquer um pode bater
+   * aqui em loop e poluir os números do cliente. O limite é por IP e vale só
+   * para a GRAVAÇÃO: o visitante nunca vê erro, no máximo aquele clique não é
+   * contado. Gente de verdade não clica 30 vezes no mesmo anúncio em um
+   * minuto; script sim.
+   */
+  const ip = clientIp(req);
+  const podeGravar = !bot && rateLimit(`track-click:${ip ?? "sem-ip"}`, 30, 60_000).ok;
+
+  if (podeGravar) {
     const dados = {
       workspaceId: link.workspaceId,
       linkId: link.id,
@@ -144,7 +170,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ code: strin
       creativeId: param(req, "creative", "creative_id"),
       keyword: param(req, "keyword"),
       device: param(req, "device"),
-      ip: clientIp(req),
+      ip,
       userAgent: userAgent?.slice(0, 512) ?? null,
     };
 
@@ -156,9 +182,29 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ code: strin
           data: { clickCount: { increment: 1 } },
         });
       } catch (err) {
-        // Colisão de código (P2002) ou banco fora: o visitante já foi para o
-        // WhatsApp. Perde-se a atribuição deste clique, não a visita.
-        console.error(`[track/r] falha ao gravar clique do slug=${slug}:`, (err as Error).message);
+        /*
+         * P2002 é colisão do código curto com um clique que já existe. O
+         * visitante já saiu com aquele código na mensagem, então NÃO dá para
+         * simplesmente ignorar: a conversa dele casaria com o clique de outra
+         * pessoa, atribuindo a venda à campanha errada. Regravar com outro
+         * código também não resolve, porque o código que ele leva é o antigo.
+         *
+         * O caminho correto é queimar o código do clique antigo: os dois
+         * ficam sem atribuição automática, o que é ruim, mas é muito melhor
+         * do que atribuir venda a quem não gerou.
+         */
+        if ((err as { code?: string }).code === "P2002") {
+          console.error(`[track/r] COLISÃO de código ${code} no slug=${slug}: invalidando o clique anterior`);
+          await db.trackClick
+            .updateMany({
+              where: { workspaceId: link.workspaceId, code, matchedAt: null },
+              data: { code: `colidido-${code}-${Date.now()}` },
+            })
+            .then(() => db.trackClick.create({ data: dados }))
+            .catch((e) => console.error(`[track/r] não consegui resolver a colisão:`, (e as Error).message));
+        } else {
+          console.error(`[track/r] falha ao gravar clique do slug=${slug}:`, (err as Error).message);
+        }
       }
     });
   }

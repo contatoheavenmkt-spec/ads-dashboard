@@ -1,7 +1,8 @@
 import { criarLog, tel } from "../log";
 import { db } from "../prisma";
 import { extractCode } from "../../src/lib/track/code";
-import { contactKeyFromJid, isGroupJid, isLidJid, phoneFromJid } from "../../src/lib/track/phone";
+import { isGroupJid } from "../../src/lib/track/phone";
+import { resolverContatoDaMensagem } from "./contatos";
 import {
   ehAntigaDemais,
   ehMensagemDeVerdade,
@@ -31,48 +32,14 @@ const log = criarLog("mensagem");
  */
 
 /**
- * Mapa @lid → telefone real, por instância.
- *
- * Conta Business manda ora o @lid (id interno), ora o número real, de forma
- * intermitente. Sem um canônico estável o mesmo cliente vira duas conversas e
- * o funil conta o lead duas vezes. Assim que o número real aparece uma vez,
- * memorizamos e passamos a resolver sempre para ele.
+ * Resolve quem é o contato. A implementação vive em ./contatos porque o
+ * handler de etiqueta precisa chegar exatamente ao mesmo resultado: se os
+ * dois discordarem, a etiqueta de venda não acha a conversa.
  */
-const mapaLidParaNumero = new Map<string, string>();
-
-function resolverContato(
-  instanceId: string,
-  key: any,
-): { contactKey: string; lidKey: string | null } | null {
+function resolverContato(instanceId: string, key: any) {
   const remoteJid: string = key?.remoteJid ?? "";
   if (!remoteJid || isGroupJid(remoteJid)) return null;
-
-  // remoteJidAlt existe no tipo estendido WAMessageKey (Types/Message.d.ts) e
-  // é preenchido em decode-wa-message.js quando não é grupo. É ele que traz o
-  // telefone de verdade quando o remoteJid veio como @lid.
-  const alt: string = key?.remoteJidAlt ?? "";
-
-  const chaveMapa = `${instanceId}:${remoteJid}`;
-
-  if (alt && !isLidJid(alt)) {
-    const real = contactKeyFromJid(alt);
-    if (real) {
-      if (isLidJid(remoteJid)) mapaLidParaNumero.set(chaveMapa, real);
-      return { contactKey: real, lidKey: isLidJid(remoteJid) ? remoteJid : null };
-    }
-  }
-
-  if (isLidJid(remoteJid)) {
-    const memorizado = mapaLidParaNumero.get(chaveMapa);
-    if (memorizado) return { contactKey: memorizado, lidKey: remoteJid };
-    // Ainda não sabemos o número real: usa o próprio lid como chave e
-    // consolida depois, quando o número aparecer.
-    const lidLimpo = remoteJid.replace(/@.*$/, "").replace(/\D/g, "");
-    return lidLimpo ? { contactKey: lidLimpo, lidKey: remoteJid } : null;
-  }
-
-  const direto = contactKeyFromJid(remoteJid);
-  return direto ? { contactKey: direto, lidKey: null } : null;
+  return resolverContatoDaMensagem(instanceId, remoteJid, key?.remoteJidAlt ?? null);
 }
 
 export async function processarMensagens(ctx: {
@@ -126,6 +93,7 @@ async function processarUma(
     instanceId,
     workspaceId,
     contactKey: contato.contactKey,
+    contactPhone: contato.contactPhone,
     lidKey: contato.lidKey,
     nome: typeof msg?.pushName === "string" ? msg.pushName : null,
     quando,
@@ -203,6 +171,7 @@ async function acharOuCriarConversa(p: {
   instanceId: string;
   workspaceId: string;
   contactKey: string;
+  contactPhone: string | null;
   lidKey: string | null;
   nome: string | null;
   quando: Date;
@@ -248,6 +217,7 @@ async function criar(p: {
   instanceId: string;
   workspaceId: string;
   contactKey: string;
+  contactPhone: string | null;
   lidKey: string | null;
   nome: string | null;
   quando: Date;
@@ -265,12 +235,14 @@ async function criar(p: {
   let matchConfidence = "none";
   let source = "organic";
   let gclid: string | null = null;
+  let wbraid: string | null = null;
+  let gbraid: string | null = null;
   let campaignId: string | null = null;
 
   if (codigo) {
     const clique = await db.trackClick.findUnique({
       where: { workspaceId_code: { workspaceId: p.workspaceId, code: codigo } },
-      select: { id: true, gclid: true, campaignId: true, matchedAt: true },
+      select: { id: true, gclid: true, wbraid: true, gbraid: true, campaignId: true, matchedAt: true },
     });
     if (clique) {
       clickId = clique.id;
@@ -278,6 +250,11 @@ async function criar(p: {
       matchConfidence = "high";
       source = "google";
       gclid = clique.gclid;
+      // wbraid e gbraid vêm no lugar do gclid quando o consentimento limita o
+      // identificador (iOS, PMax, YouTube). Sem copiar os três, a venda dessas
+      // campanhas nunca chega ao Google.
+      wbraid = clique.wbraid;
+      gbraid = clique.gbraid;
       campaignId = clique.campaignId;
       if (!clique.matchedAt) {
         await db.trackClick.update({ where: { id: clique.id }, data: { matchedAt: p.quando } });
@@ -299,6 +276,7 @@ async function criar(p: {
         workspaceId: p.workspaceId,
         instanceId: p.instanceId,
         contactKey: p.contactKey,
+        contactPhone: p.contactPhone,
         lidKey: p.lidKey,
         cycle: p.cycle,
         contactName: p.nome?.slice(0, 120) ?? null,
@@ -307,6 +285,8 @@ async function criar(p: {
         matchConfidence,
         source,
         gclid,
+        wbraid,
+        gbraid,
         ctwaClid: p.conteudo.ctwaClid,
         campaignId,
         adId: p.conteudo.adId,

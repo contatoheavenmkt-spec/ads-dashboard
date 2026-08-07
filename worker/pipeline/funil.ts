@@ -35,7 +35,7 @@ export async function reavaliar(p: {
     where: { id: p.conversationId },
     select: {
       id: true, stage: true, inboundCount: true, outboundCount: true,
-      labelsJson: true, contactKey: true, contactName: true, leadId: true,
+      labelsJson: true, contactKey: true, contactPhone: true, contactName: true, leadId: true,
       source: true, campaignId: true, matchConfidence: true,
     },
   });
@@ -105,6 +105,7 @@ async function sincronizarCrm(
     id: string;
     leadId: string | null;
     contactKey: string;
+    contactPhone: string | null;
     contactName: string | null;
     source: string;
     campaignId: string | null;
@@ -131,8 +132,10 @@ async function sincronizarCrm(
     const lead = await db.lead.create({
       data: {
         workspaceId,
-        name: conversa.contactName || formatPhoneDisplay(conversa.contactKey),
-        phone: conversa.contactKey,
+        // contactPhone é o número discável (com o nono dígito); contactKey é
+        // só a chave de busca e não serve para ligar de volta.
+        name: conversa.contactName || formatPhoneDisplay(conversa.contactPhone ?? conversa.contactKey),
+        phone: conversa.contactPhone ?? conversa.contactKey,
         source: conversa.source === "meta" ? "meta_messaging" : "google",
         campaignId: conversa.campaignId,
         status: statusCrm,

@@ -104,6 +104,7 @@ model Workspace {
   trackConversations TrackConversation[]
   trackTargets       TrackConversionTarget[]
   trackSettings      TrackSettings?
+  aiPolicy           AiPolicy?
 
   // Existe no banco desde a migration de soft delete, mas nunca tinha sido
   // declarado aqui. Sem esta linha, qualquer `migrate diff` propõe dropar o
@@ -453,15 +454,20 @@ model TrackClick {
 /// contato. Quem volta meses depois por outro anúncio conta como lead novo,
 /// com gclid novo — por isso o `cycle` na chave única.
 model TrackConversation {
-  id          String           @id @default(cuid())
-  workspaceId String
-  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  instanceId  String
-  instance    WhatsappInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
-  contactKey  String // telefone canônico, só dígitos
-  lidKey      String? // @lid enquanto o número real não aparece
-  cycle       Int              @default(1)
-  contactName String?
+  id           String           @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instanceId   String
+  instance     WhatsappInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  contactKey   String // chave canônica de BUSCA, só dígitos
+  // O número como o WhatsApp entregou, com o nono dígito. `contactKey`
+  // descarta o nono para as duas formas do mesmo celular convergirem numa
+  // conversa só, mas discar aquele número não funciona: o lead criado no CRM
+  // precisa deste aqui, senão nasce com telefone inexistente.
+  contactPhone String?
+  lidKey       String? // @lid enquanto o número real não aparece
+  cycle        Int              @default(1)
+  contactName  String?
 
   // atribuição
   clickId         String?
@@ -469,6 +475,12 @@ model TrackConversation {
   matchConfidence String  @default("none") // high | low | none
   source          String  @default("organic") // google | meta | organic
   gclid           String?
+  // wbraid e gbraid substituem o gclid quando o consentimento do usuário não
+  // permite o identificador completo: é o caso de boa parte do tráfego iOS,
+  // de PMax e de YouTube. Sem carregar os três, campanhas inteiras ficariam
+  // com zero conversão reportada apesar de terem vendido.
+  wbraid          String?
+  gbraid          String?
   ctwaClid        String?
   campaignId      String?
   adId            String?
@@ -629,4 +641,162 @@ model TrackSettings {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// IA DE CAMPANHAS — modo sugestão
+//
+// A IA nunca executa sozinha: observa, propõe e espera aprovação humana.
+// O que a torna diferente de um script de regras é cruzar as métricas do
+// Google Ads com a verdade do CRM (lead qualificado e venda que o Track
+// capturou do WhatsApp), então ela sabe o CPA real, não o declarado.
+// ═══════════════════════════════════════════════════════════════════
+
+/// Metas e limites por workspace. Sem isso configurado, as regras que
+/// dependem de meta simplesmente não rodam.
+model AiPolicy {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Kill switch: desligado bloqueia gerar E aplicar.
+  enabled    Boolean @default(false)
+  targetCpa  Float?
+  targetRoas Float?
+
+  /// Teto de variação por sugestão de orçamento, em porcento.
+  maxBudgetChangePct    Int     @default(20)
+  maxDailyBudgetCeiling Float?
+  /// Quantas sugestões podem ser aplicadas por dia neste workspace.
+  maxAppliedPerDay      Int     @default(5)
+  /// Amostra mínima antes de julgar CPA: com 3 conversões, qualquer número mente.
+  minConversionsForCpa  Int     @default(10)
+  lookbackDays          Int     @default(14)
+  /// JSON array de ruleCode desligados.
+  disabledRules         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recomendacoes AiRecommendation[]
+}
+
+model AiRecommendation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  policyId    String?
+  policy      AiPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+
+  /// Conta do Google, sem hífen.
+  adAccountId String
+  platform    String @default("google")
+
+  ruleCode    String
+  ruleVersion Int    @default(1)
+  severity    String @default("media")
+  /// pendente | aprovada | rejeitada | aplicando | aplicada | falhou | expirada
+  status      String @default("pendente")
+
+  /// campanha | grupo | anuncio | palavra | termo | orcamento
+  scope      String
+  entityId   String
+  entityName String
+  campaignId String?
+  adGroupId  String?
+
+  /// Título e explicação em português, para o gestor entender sem abrir o Ads.
+  titulo    String
+  porque    String
+  /// JSON com os números crus que embasaram, para a tela poder mostrar a conta.
+  evidencia String
+
+  prioridade      Int    @default(0)
+  impactoEstimado Float?
+
+  /// `${ruleCode}:${entityId}:${dia}` — impede a mesma sugestão duas vezes no dia.
+  dedupeKey String
+  /// Sugestão velha não pode ser aplicada: o número que a embasou já mudou.
+  expiresAt DateTime?
+
+  revisadaPorUserId String?
+  revisadaEm        DateTime?
+  motivoRejeicao    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  acoes AiRecommendationAction[]
+  logs  AiActionLog[]
+
+  @@unique([workspaceId, dedupeKey])
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
+  @@index([status, expiresAt])
+}
+
+/// O payload exato da mutação, montado por código determinístico e nunca por
+/// LLM: assim a ação é auditável e reproduzível.
+model AiRecommendationAction {
+  id               String           @id @default(cuid())
+  recommendationId String
+  recommendation   AiRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  ordem            Int     @default(0)
+  service          String
+  operation        String
+  resourceName     String?
+  payload          String
+  updateMask       String?
+  /// Estado anterior, gravado ANTES de aplicar. É o que permite desfazer.
+  valorAnterior    String?
+  resourceAplicado String?
+  status           String  @default("pendente")
+
+  @@index([recommendationId])
+}
+
+/// Auditoria de tudo, inclusive das simulações.
+model AiActionLog {
+  id               String            @id @default(cuid())
+  recommendationId String?
+  recommendation   AiRecommendation? @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  workspaceId      String
+
+  actorUserId String?
+  actorType   String  @default("user")
+  /// gerada | aprovada | rejeitada | simulada | aplicada | falhou | desfeita | expirada
+  evento      String
+
+  requestBody     String?
+  responseBody    String?
+  httpStatus      Int?
+  googleRequestId String?
+  erroCodigo      String?
+  erroMensagem    String?
+  duracaoMs       Int?
+  ip              String?
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([recommendationId])
+}
+
+/// Idempotência do cron: uma varredura por conta por dia.
+model AiRuleRun {
+  id          String @id @default(cuid())
+  workspaceId String
+  adAccountId String
+  /// YYYY-MM-DD no fuso BR.
+  runDate     String
+
+  regrasAvaliadas Int     @default(0)
+  geradas         Int     @default(0)
+  erros           String?
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@unique([workspaceId, adAccountId, runDate])
+  @@index([workspaceId])
 }

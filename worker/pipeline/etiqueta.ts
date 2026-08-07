@@ -1,7 +1,9 @@
 import { criarLog } from "../log";
 import { db } from "../prisma";
-import { contactKeyFromJid, isGroupJid } from "../../src/lib/track/phone";
+import { isGroupJid } from "../../src/lib/track/phone";
+import { candidatosParaEtiqueta } from "./contatos";
 import { reavaliar } from "./funil";
+import { emSerie } from "./serial";
 
 const log = criarLog("etiqueta");
 
@@ -93,40 +95,77 @@ async function aplicarAssociacao(
   // Etiqueta em grupo não é conversa de lead.
   if (isGroupJid(chatId)) return;
 
-  const contactKey = contactKeyFromJid(chatId);
-  if (!contactKey) return;
+  /*
+   * ATENÇÃO, este é o ponto mais delicado do worker.
+   *
+   * O `chatId` de labels.association é o índice cru do app state
+   * (chat-utils.js monta a partir de syncAction.index), e em conta Business
+   * ele vem como `@lid`. Só que a conversa foi gravada com o TELEFONE real,
+   * porque a mensagem trouxe `remoteJidAlt`. Procurar pelo lid como se fosse
+   * telefone não acha nada, e conta Business é justamente a única que tem
+   * etiqueta: seria o produto inteiro falhando calado no caso principal.
+   *
+   * Por isso a busca cobre três caminhos: o telefone aprendido para aquele
+   * lid, os dígitos do lid (quando o telefone nunca apareceu) e a coluna
+   * `lidKey`, que existe exatamente para esta reconciliação.
+   */
+  const { chaves, lidJid } = candidatosParaEtiqueta(instanceId, chatId);
+  if (chaves.length === 0 && !lidJid) return;
 
-  // A jornada mais recente daquele contato é a que recebe a etiqueta: o
-  // atendente está marcando a conversa que está aberta na tela dele.
+  const condicoes: Array<Record<string, unknown>> = [];
+  if (chaves.length > 0) condicoes.push({ contactKey: { in: chaves } });
+  if (lidJid) condicoes.push({ lidKey: lidJid });
+
   const conversa = await db.trackConversation.findFirst({
-    where: { instanceId, contactKey },
+    // A jornada mais recente daquele contato é a que recebe a etiqueta: o
+    // atendente está marcando a conversa que está aberta na tela dele.
+    where: { instanceId, OR: condicoes },
     orderBy: { cycle: "desc" },
     select: { id: true, labelsJson: true, stage: true },
   });
 
   if (!conversa) {
-    // Etiqueta numa conversa que o Track nunca viu (contato antigo, anterior
-    // à instalação). Não é erro, só não há a que amarrar.
-    log.info(`${instanceId}: etiqueta ${labelId} em conversa desconhecida, ignorada`);
+    // Pode ser contato anterior à instalação do Track, mas também pode ser
+    // falha de resolução de identidade. Fica em warn, e não info, porque uma
+    // etiqueta de venda perdida aqui é dinheiro que não volta pra campanha.
+    log.warn(
+      `${instanceId}: etiqueta ${labelId} num chat que não casou com conversa nenhuma ` +
+        `(chaves testadas: ${chaves.length}, lid: ${lidJid ? "sim" : "não"})`,
+    );
     return;
   }
 
-  const atuais = new Set<string>(parseLista(conversa.labelsJson));
-  if (acao === "add") atuais.add(labelId);
-  else atuais.delete(labelId);
+  /*
+   * A lista de etiquetas é lida, alterada e gravada de volta. O app state do
+   * WhatsApp entrega associações em rajada depois de uma sincronização, e sem
+   * serializar por conversa a segunda gravação sobrescreve a primeira. Quando
+   * a perdida é a "Pago", a venda nunca vira conversão e ninguém percebe,
+   * porque a etiqueta continua visível no celular do atendente.
+   */
+  const gravou = await emSerie(`labels:${conversa.id}`, async () => {
+    // Relê DENTRO da seção serial: o estado pode ter mudado na espera.
+    const atual = await db.trackConversation.findUnique({
+      where: { id: conversa.id },
+      select: { labelsJson: true },
+    });
+    const atuais = new Set<string>(parseLista(atual?.labelsJson ?? null));
+    if (acao === "add") atuais.add(labelId);
+    else atuais.delete(labelId);
 
-  try {
     await db.trackConversation.update({
       where: { id: conversa.id },
       data: { labelsJson: JSON.stringify([...atuais]) },
     });
-    log.info(
-      `${instanceId}: etiqueta ${labelId} ${acao === "add" ? "posta em" : "tirada de"} conversa ${conversa.id}`,
-    );
-  } catch (err) {
-    log.erro(`${instanceId}: falha ao atualizar etiquetas: ${(err as Error).message}`);
-    return;
-  }
+    return true;
+  }).catch((err: Error) => {
+    log.erro(`${instanceId}: falha ao atualizar etiquetas: ${err.message}`);
+    return false;
+  });
+
+  if (!gravou) return;
+  log.info(
+    `${instanceId}: etiqueta ${labelId} ${acao === "add" ? "posta em" : "tirada de"} conversa ${conversa.id}`,
+  );
 
   // Aqui a etiqueta "Pago" vira venda: é o momento em que o produto entrega o
   // que promete. Tirar a etiqueta atualiza a lista, mas não desfaz evento já

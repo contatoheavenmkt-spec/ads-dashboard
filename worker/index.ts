@@ -69,8 +69,22 @@ async function principal(): Promise<void> {
   process.on("unhandledRejection", (motivo) => {
     log.erro(`promessa rejeitada sem tratamento: ${String(motivo)}`);
   });
+  /*
+   * Exceção não capturada deixa o processo num estado que ninguém consegue
+   * auditar: os sockets podem ter morrido, mas /saude responde 200 e o PM2
+   * mostra "online". Seria o pior estado possível para este produto, porque
+   * o cliente continua pagando cliques e não chega lead nenhum, sem alarme.
+   *
+   * Melhor morrer e deixar o PM2 reiniciar: as sessões voltam sozinhas no
+   * boot, já que a credencial fica em disco.
+   */
   process.on("uncaughtException", (err) => {
-    log.erro(`exceção não capturada: ${err.message}`, err.stack);
+    log.erro(`exceção não capturada, encerrando para o PM2 reiniciar: ${err.message}`, err.stack);
+    void encerrarTudo()
+      .catch(() => {})
+      .finally(() => fecharBanco().catch(() => {}).finally(() => process.exit(1)));
+    // Rede de segurança: se o encerramento travar, sai assim mesmo.
+    setTimeout(() => process.exit(1), 5000).unref();
   });
 
   log.info("no ar");

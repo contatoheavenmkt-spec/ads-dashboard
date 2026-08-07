@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { authorizeCron } from "@/lib/cron-auth";
+import { repararEventosOrfaos } from "@/lib/track/events";
+import { parseTrackSettings } from "@/lib/track/settings";
 import {
   classificarErroDeConversao,
   formatConversionDateTime,
@@ -67,6 +69,19 @@ export async function POST(req: NextRequest) {
     data: { status: "pending", lockedAt: null },
   });
 
+  // Venda registrada que nunca chegou a virar envio, porque o processo morreu
+  // entre gravar o evento e enfileirar. Sem esta varredura ela ficaria visível
+  // no painel e ausente na campanha, que é o pior erro possível aqui: parece
+  // que deu certo.
+  const reparo = await repararEventosOrfaos(db, async (workspaceId) =>
+    parseTrackSettings(await db.trackSettings.findUnique({ where: { workspaceId } })),
+  );
+  if (reparo.enfileirados > 0) {
+    console.warn(
+      `[cron/track-dispatch] reparei ${reparo.enfileirados} conversão(ões) órfã(s) de ${reparo.reparados} evento(s)`,
+    );
+  }
+
   const candidatos = await db.trackDispatch.findMany({
     where: { status: "pending", nextAttemptAt: { lte: agora }, notBeforeAt: { lte: agora } },
     orderBy: { nextAttemptAt: "asc" },
@@ -95,7 +110,7 @@ export async function POST(req: NextRequest) {
       event: {
         select: {
           stage: true, value: true, currency: true, occurredAt: true,
-          conversation: { select: { gclid: true, clickId: true, firstMessageAt: true } },
+          conversation: { select: { gclid: true, wbraid: true, gbraid: true, clickId: true, firstMessageAt: true } },
         },
       },
     },
@@ -112,9 +127,12 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    const gclid = d.event.conversation.gclid;
-    if (!gclid) {
-      await marcar(d.id, "skipped", "conversa sem gclid", d.attempts);
+    // wbraid e gbraid substituem o gclid quando o consentimento limita o
+    // identificador: iOS, PMax e YouTube. Aceitar só gclid deixaria essas
+    // campanhas sem nenhuma conversão reportada.
+    const c = d.event.conversation;
+    if (!c.gclid && !c.wbraid && !c.gbraid) {
+      await marcar(d.id, "skipped", "conversa sem identificador de clique do Google", d.attempts);
       resumo.ignorados++;
       continue;
     }
@@ -166,7 +184,7 @@ type Despacho = {
     value: number | null;
     currency: string;
     occurredAt: Date;
-    conversation: { gclid: string | null };
+    conversation: { gclid: string | null; wbraid: string | null; gbraid: string | null };
   };
 };
 
@@ -211,7 +229,12 @@ async function enviarGrupo(
 
   const resourceAction = `customers/${contaDeConversao}/conversionActions/${alvo.conversionActionId}`;
   const conversoes: ClickConversion[] = grupo.map((d) => ({
-    gclid: d.event.conversation.gclid!,
+    // Exatamente UM identificador por conversão: mandar dois faz a API recusar.
+    ...(d.event.conversation.gclid
+      ? { gclid: d.event.conversation.gclid }
+      : d.event.conversation.wbraid
+        ? { wbraid: d.event.conversation.wbraid }
+        : { gbraid: d.event.conversation.gbraid! }),
     conversionAction: resourceAction,
     conversionDateTime: formatConversionDateTime(d.event.occurredAt),
     ...(alvo.sendValue && d.event.value != null

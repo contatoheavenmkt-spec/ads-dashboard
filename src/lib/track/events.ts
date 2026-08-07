@@ -52,7 +52,7 @@ export async function registrarStage(p: RegistrarStageParams): Promise<Resultado
     where: { id: conversationId },
     select: {
       id: true, stage: true, clickId: true, matchConfidence: true,
-      gclid: true, ctwaClid: true, source: true, leadId: true,
+      gclid: true, wbraid: true, gbraid: true, ctwaClid: true, source: true, leadId: true,
       firstMessageAt: true,
     },
   });
@@ -87,38 +87,115 @@ export async function registrarStage(p: RegistrarStageParams): Promise<Resultado
     }
   }
 
-  if (criados.length === 0) {
-    return { criados: [], despachos: 0, motivoSemDespacho: "nenhum estágio novo" };
-  }
+  /*
+   * Não sair aqui quando `criados` está vazio.
+   *
+   * O evento e o despacho são duas escritas separadas. Se a primeira comitou e
+   * a segunda falhou (banco piscou, processo morreu, deploy no meio), o evento
+   * fica órfão: existe uma venda registrada que nunca vai subir para o Google.
+   * Como toda reavaliação passa por aqui, deixar o enfileiramento rodar de
+   * novo transforma qualquer chamada seguinte numa chance de reparo, e o
+   * unique [eventId, targetId] garante que repetir não duplica.
+   */
+  const nadaNovo = criados.length === 0;
 
   // Espelha o estágio na conversa: o painel lê daqui sem precisar de join.
-  const camposDeData: Record<string, unknown> = { stage };
-  if (alvos.includes("respondeu")) camposDeData.respondedAt = camposDeData.respondedAt ?? quando;
-  if (stage === "qualificado" || alvos.includes("qualificado")) {
-    camposDeData.qualifiedAt = quando;
-    camposDeData.qualifiedBy = p.origem;
+  // Só quando algo mudou, para não reescrever timestamps de venda a cada
+  // reavaliação e fazer a data de fechamento andar sozinha.
+  if (!nadaNovo) {
+    const camposDeData: Record<string, unknown> = { stage };
+    if (alvos.includes("respondeu")) camposDeData.respondedAt = camposDeData.respondedAt ?? quando;
+    if (stage === "qualificado" || alvos.includes("qualificado")) {
+      camposDeData.qualifiedAt = quando;
+      camposDeData.qualifiedBy = p.origem;
+    }
+    if (stage === "venda") {
+      camposDeData.saleAt = quando;
+      camposDeData.saleValue = p.valor ?? null;
+      camposDeData.saleBy = p.origem;
+      camposDeData.closedAt = quando;
+    }
+    await db.trackConversation.update({ where: { id: conversationId }, data: camposDeData });
   }
-  if (stage === "venda") {
-    camposDeData.saleAt = quando;
-    camposDeData.saleValue = p.valor ?? null;
-    camposDeData.saleBy = p.origem;
-    camposDeData.closedAt = quando;
-  }
-  await db.trackConversation.update({ where: { id: conversationId }, data: camposDeData });
 
+  // O enfileiramento roda sempre, sobre TODOS os estágios já alcançados e não
+  // só os criados agora: é o que repara evento órfão de uma tentativa
+  // anterior que morreu entre as duas escritas.
   const despachos = await enfileirarConversoes({
     db, workspaceId, conversationId, cfg, quando,
-    stagesNovos: criados,
+    stagesNovos: alvos,
     conversa,
   });
 
-  return { criados, despachos: despachos.total, motivoSemDespacho: despachos.motivo };
+  return {
+    criados,
+    despachos: despachos.total,
+    motivoSemDespacho: despachos.motivo,
+  };
+}
+
+/**
+ * Procura eventos que deveriam ter virado envio e não viraram, e os enfileira.
+ *
+ * Existe porque evento e despacho são escritas separadas: se o processo morreu
+ * entre as duas, a venda fica registrada no painel e nunca chega ao Google.
+ * Sem esta varredura, o cliente veria a venda na tela e a campanha continuaria
+ * sem o sinal, que é o pior tipo de erro aqui, porque parece que funcionou.
+ *
+ * Roda no início do cron de despacho. É barata: só olha o que não tem envio.
+ */
+export async function repararEventosOrfaos(
+  db: Db,
+  cfgPorWorkspace: (workspaceId: string) => Promise<TrackConfig>,
+  limite = 200,
+): Promise<{ reparados: number; enfileirados: number }> {
+  const orfaos = await db.trackEvent.findMany({
+    where: {
+      dispatches: { none: {} },
+      // Dá tempo para o fluxo normal terminar antes de considerar órfão.
+      createdAt: { lt: new Date(Date.now() - 10 * 60_000) },
+    },
+    orderBy: { createdAt: "asc" },
+    take: limite,
+    select: {
+      id: true, workspaceId: true, stage: true, occurredAt: true,
+      conversation: {
+        select: {
+          id: true, clickId: true, matchConfidence: true, gclid: true,
+          wbraid: true, gbraid: true, ctwaClid: true, source: true, firstMessageAt: true,
+        },
+      },
+    },
+  });
+
+  let enfileirados = 0;
+  for (const evento of orfaos) {
+    try {
+      const cfg = await cfgPorWorkspace(evento.workspaceId);
+      const r = await enfileirarConversoes({
+        db,
+        workspaceId: evento.workspaceId,
+        conversationId: evento.conversation.id,
+        cfg,
+        quando: evento.occurredAt,
+        stagesNovos: [evento.stage as Stage],
+        conversa: evento.conversation,
+      });
+      enfileirados += r.total;
+    } catch (err) {
+      console.error(`[track/reparo] evento ${evento.id}: ${(err as Error).message}`);
+    }
+  }
+
+  return { reparados: orfaos.length, enfileirados };
 }
 
 interface ConversaParaDespacho {
   clickId: string | null;
   matchConfidence: string;
   gclid: string | null;
+  wbraid: string | null;
+  gbraid: string | null;
   ctwaClid: string | null;
   source: string;
   firstMessageAt: Date;
@@ -156,8 +233,13 @@ async function enfileirarConversoes(p: {
 
   let total = 0;
   for (const alvo of alvos) {
-    // Sem click id não existe conversão para o Google: ele casa pelo gclid.
-    if (alvo.platform === "google" && !conversa.gclid) continue;
+    // Sem identificador de clique não existe conversão para o Google.
+    // Precisa aceitar os três: wbraid e gbraid substituem o gclid quando o
+    // consentimento do usuário não permite o identificador completo, o que
+    // cobre boa parte do tráfego iOS, PMax e YouTube. Checar só o gclid
+    // deixaria campanhas inteiras com zero conversão apesar de terem vendido.
+    const temIdDeClique = Boolean(conversa.gclid || conversa.wbraid || conversa.gbraid);
+    if (alvo.platform === "google" && !temIdDeClique) continue;
     if (alvo.platform === "meta" && !conversa.ctwaClid) continue;
 
     const evento = await db.trackEvent.findUnique({

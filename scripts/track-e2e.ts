@@ -20,6 +20,8 @@ import { extractCode } from "../src/lib/track/code";
 import { registrarStage } from "../src/lib/track/events";
 import { avaliarConversa } from "../src/lib/track/rules";
 import { parseTrackSettings, serializeTrackSettings } from "../src/lib/track/settings";
+import { processarEtiqueta } from "../worker/pipeline/etiqueta";
+import { fecharBanco } from "../worker/prisma";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? process.env.DIRECT_URL });
 const db = new PrismaClient({ adapter: new PrismaPg(pool) });
@@ -160,11 +162,46 @@ async function main() {
   });
 
   // ─── 4. a etiqueta "Pago" ───────────────────────────────────────
-  console.log("\n4. atendente coloca a etiqueta Pago");
+  //
+  // Passa pelo handler DE VERDADE, com o payload no formato que o Baileys
+  // emite. A versão anterior deste ensaio escrevia labelsJson direto no banco
+  // e por isso ficava verde enquanto o caminho real estava quebrado: em conta
+  // Business o chatId chega como @lid e a busca não achava a conversa.
+  console.log("\n4. atendente coloca a etiqueta Pago (pelo handler real)");
+
+  // A conversa foi gravada com o telefone real e o lid guardado à parte,
+  // exatamente como o handler de mensagem faz numa conta Business.
+  const LID_DO_CONTATO = "185432109876543@lid";
   await db.trackConversation.update({
     where: { id: conversa.id },
-    data: { labelsJson: JSON.stringify([ETIQUETA_PAGO]) },
+    data: { lidKey: LID_DO_CONTATO },
   });
+
+  await processarEtiqueta({
+    instanceId: instancia.id,
+    workspaceId: ws.id,
+    evento: "association",
+    payload: {
+      // O `type` de fora é add/remove; o de dentro é o tipo da associação.
+      type: "add",
+      association: { type: "label_jid", chatId: LID_DO_CONTATO, labelId: ETIQUETA_PAGO },
+    },
+  });
+
+  const depoisDaEtiqueta = await db.trackConversation.findUnique({
+    where: { id: conversa.id },
+    select: { labelsJson: true, stage: true },
+  });
+  checa(
+    "o handler achou a conversa pelo @lid",
+    JSON.parse(depoisDaEtiqueta?.labelsJson ?? "[]").includes(ETIQUETA_PAGO),
+    `(labelsJson: ${depoisDaEtiqueta?.labelsJson})`,
+  );
+  checa(
+    "e a etiqueta virou venda sozinha",
+    depoisDaEtiqueta?.stage === "venda",
+    `(stage: ${depoisDaEtiqueta?.stage})`,
+  );
 
   const detVenda = avaliarConversa(cfg, {
     stage: "respondeu", inboundCount: 2, outboundCount: 1,
@@ -172,13 +209,13 @@ async function main() {
   });
   checa("etiqueta Pago vira venda", detVenda?.stage === "venda" && detVenda.origem === "label");
 
+  // O handler ja registrou tudo. Repetir aqui prova a idempotencia e devolve
+  // o estado para conferencia.
   const res = await registrarStage({
     db, workspaceId: ws.id, conversationId: conversa.id,
     stage: "venda", origem: "label", cfg, valor: 500,
   });
-  checa("venda registrada", res.criados.includes("venda"));
-  checa("qualificado veio retroativo", res.criados.includes("qualificado"), `(criados: ${res.criados.join(", ")})`);
-  checa("uma conversão entrou na fila", res.despachos === 1, `(${res.despachos}, motivo: ${res.motivoSemDespacho ?? "-"})`);
+  checa("repetir nao cria evento novo", res.criados.length === 0, `(criados: ${res.criados.join(", ")})`);
 
   // ─── 5. o funil fecha a conta ───────────────────────────────────
   console.log("\n5. conferindo o funil e a fila");
@@ -260,6 +297,7 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
+    await fecharBanco();
     await db.$disconnect();
     await pool.end();
   });
