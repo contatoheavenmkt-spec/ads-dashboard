@@ -3,12 +3,15 @@ import { db } from "@/lib/db";
 import { auth } from "@/auth";
 import bcrypt from "bcryptjs";
 import { normalizeEmail } from "@/lib/email";
+import { bloqueioDeEscrita } from "@/lib/impersonation";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id || session.user.role !== "AGENCY") {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }

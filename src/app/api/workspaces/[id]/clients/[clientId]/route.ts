@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auth } from "@/auth";
+import { bloqueioDeEscrita } from "@/lib/impersonation";
 
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; clientId: string }> }
 ) {
   const session = await auth();
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id || session.user.role !== "AGENCY") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }

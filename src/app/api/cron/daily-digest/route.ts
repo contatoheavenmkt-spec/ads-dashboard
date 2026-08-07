@@ -40,8 +40,11 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
+    // Contas marcadas como "error" pela reconciliação ficam de fora: além de
+    // gastar chamada à toa, elas entrariam no digest como zero e puxariam o
+    // resumo do cliente para baixo sem motivo real.
     const accountIds = ws.integrations
-      .filter((wi) => wi.integration.platform === "meta")
+      .filter((wi) => wi.integration.platform === "meta" && wi.integration.status === "active")
       .map((wi) => wi.integration.adAccountId);
     if (accountIds.length === 0) {
       skipped++;

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { resolveCrmAccess, isValidStatus } from "@/lib/crm-access";
 import { parseLeadSources } from "@/lib/lead-sources";
 import { clampString } from "@/lib/utils";
+import { bloqueioDeEscrita } from "@/lib/impersonation";
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -56,6 +57,8 @@ interface CreateLeadBody {
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }

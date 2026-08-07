@@ -3,12 +3,15 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { buildCheckoutUrl } from "@/lib/cakto";
 import { type PlanKey } from "@/lib/plans";
+import { bloqueioDeEscrita } from "@/lib/impersonation";
 
 const VALID_PLANS: PlanKey[] = ["start", "plus", "premium"];
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
+    const bloqueio = bloqueioDeEscrita(session);
+    if (bloqueio) return bloqueio;
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }

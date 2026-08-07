@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { metaLoginConfig, createOAuthState } from "@/lib/meta-oauth";
+import { bloqueioDeEscrita } from "@/lib/impersonation";
 
 function htmlError(message: string) {
   return new NextResponse(
@@ -17,6 +18,9 @@ function htmlError(message: string) {
 
 export async function GET() {
   const session = await auth();
+  // É GET, mas conecta uma conta de anúncios ao usuário — bloquear é obrigatório.
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id) {
     return htmlError("Não autenticado. Faça login primeiro.");
   }
@@ -28,8 +32,17 @@ export async function GET() {
     return htmlError("Configuração do servidor incompleta. Contate o suporte.");
   }
 
-  // State seguro: assinado com HMAC, contém userId + nonce + timestamp
-  const state = createOAuthState(session.user.id);
+  // State seguro: assinado com HMAC, contém userId + nonce + timestamp.
+  // createOAuthState lança se AUTH_SECRET faltar (falha fechada) — sem isso o
+  // usuário veria um 500 cru do Next em vez da mesma tela de erro das outras
+  // faltas de configuração logo acima.
+  let state: string;
+  try {
+    state = createOAuthState(session.user.id);
+  } catch {
+    console.error("[meta/oauth/start] AUTH_SECRET ausente — state não pode ser assinado");
+    return htmlError("Configuração do servidor incompleta. Contate o suporte.");
+  }
 
   const url = new URL("https://www.facebook.com/v21.0/dialog/oauth");
   url.searchParams.set("client_id",     appId);

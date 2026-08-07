@@ -43,8 +43,11 @@ export async function POST(req: NextRequest) {
     const token = await getStoredMetaToken(ws.ownerId);
     if (!token) continue;
 
+    // O filtro do findMany só garante que o workspace tem ALGUMA conta ativa.
+    // Sem checar o status aqui também, um workspace com 9 contas boas e 2
+    // mortas seguia chamando a Meta pelas 2 mortas a cada rodada.
     const accountIds = ws.integrations
-      .filter((wi) => wi.integration.platform === "meta")
+      .filter((wi) => wi.integration.platform === "meta" && wi.integration.status === "active")
       .map((wi) => wi.integration.adAccountId);
 
     // Coleta campanhas atuais
