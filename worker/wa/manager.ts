@@ -137,6 +137,38 @@ export async function conectar(
   const existente = instancias.get(instanceId);
   if (existente && ["open", "connecting", "qr"].includes(existente.estado)) return;
 
+  /*
+   * Trava de subida.
+   *
+   * Entre a checagem acima e o `instancias.set` lá embaixo existem dois await
+   * (a leitura da credencial e a busca da versão do WhatsApp). Sem esta trava,
+   * duas chamadas concorrentes (o loop de reconciliação e o timer de backoff,
+   * por exemplo) passam as duas pela guarda e abrem DOIS sockets sobre a mesma
+   * credencial. Os dois escrevem na mesma pasta de auth, um corrompe a sessão
+   * do outro, e o órfão fica vazando descritor e keepalive para sempre.
+   */
+  if (subindo.has(instanceId)) {
+    log.info(`${instanceId}: já está subindo, ignorando pedido duplicado`);
+    return;
+  }
+  subindo.add(instanceId);
+
+  try {
+    await conectarDeVerdade(instanceId, workspaceId, opts, existente);
+  } finally {
+    subindo.delete(instanceId);
+  }
+}
+
+/** Instâncias em processo de subida, para não abrir socket em duplicidade. */
+const subindo = new Set<string>();
+
+async function conectarDeVerdade(
+  instanceId: string,
+  workspaceId: string,
+  opts: { pairPhone?: string | null },
+  existente: Instancia | undefined,
+): Promise<void> {
   if (instancias.size >= env.maxInstances && !existente) {
     log.erro(
       `teto de ${env.maxInstances} sessões atingido, ${instanceId} não vai subir. Aumente TRACK_MAX_INSTANCES ou distribua em outro worker.`,
@@ -146,6 +178,18 @@ export async function conectar(
       lastError: "Teto de sessões do worker atingido",
     });
     return;
+  }
+
+  // Sobrou socket de uma tentativa anterior que caiu: fecha antes de abrir
+  // outro, senão os dois disputam a mesma credencial.
+  if (existente) {
+    if (existente.timerReconexao) clearTimeout(existente.timerReconexao);
+    try {
+      existente.sock.end(undefined);
+    } catch {
+      // já estava morto
+    }
+    instancias.delete(instanceId);
   }
 
   const dir = pastaAuth(instanceId);

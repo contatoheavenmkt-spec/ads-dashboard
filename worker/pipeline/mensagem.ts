@@ -42,6 +42,31 @@ function resolverContato(instanceId: string, key: any) {
   return resolverContatoDaMensagem(instanceId, remoteJid, key?.remoteJidAlt ?? null);
 }
 
+/**
+ * Erro de banco vale nova tentativa; erro de dado, não.
+ *
+ * A distinção importa porque a PRIMEIRA mensagem é a que carrega o código de
+ * rastreio: perdê-la por um soluço de rede de dois segundos significa que o
+ * cliente pagou o clique no Google e a venda nunca vai voltar para a campanha.
+ * Já uma mensagem malformada vai falhar igual nas dez tentativas seguintes.
+ */
+function valeTentarDeNovo(err: unknown): boolean {
+  const e = err as { code?: string; message?: string };
+  const codigo = e?.code ?? "";
+  // P1001/P1002/P1008/P1017 = banco inalcançável, timeout ou conexão fechada.
+  if (["P1001", "P1002", "P1008", "P1017"].includes(codigo)) return true;
+  const msg = (e?.message ?? "").toLowerCase();
+  return (
+    msg.includes("connection") ||
+    msg.includes("timeout") ||
+    msg.includes("econnreset") ||
+    msg.includes("terminating connection") ||
+    msg.includes("too many clients")
+  );
+}
+
+const ESPERAS_MS = [500, 2000, 5000];
+
 export async function processarMensagens(ctx: {
   instanceId: string;
   workspaceId: string;
@@ -49,11 +74,31 @@ export async function processarMensagens(ctx: {
   tipo: string;
 }): Promise<void> {
   for (const msg of ctx.mensagens) {
-    try {
-      await processarUma(ctx.instanceId, ctx.workspaceId, msg, ctx.tipo);
-    } catch (err) {
-      // Uma mensagem problemática não pode derrubar o lote inteiro.
-      log.erro(`${ctx.instanceId}: falha ao processar mensagem: ${(err as Error).message}`);
+    let ultimoErro: unknown = null;
+
+    for (let tentativa = 0; tentativa <= ESPERAS_MS.length; tentativa++) {
+      try {
+        await processarUma(ctx.instanceId, ctx.workspaceId, msg, ctx.tipo);
+        ultimoErro = null;
+        break;
+      } catch (err) {
+        ultimoErro = err;
+        if (!valeTentarDeNovo(err) || tentativa === ESPERAS_MS.length) break;
+        const espera = ESPERAS_MS[tentativa];
+        log.warn(
+          `${ctx.instanceId}: banco indisponível, tentando de novo em ${espera}ms ` +
+            `(tentativa ${tentativa + 1}/${ESPERAS_MS.length})`,
+        );
+        await new Promise((r) => setTimeout(r, espera));
+      }
+    }
+
+    if (ultimoErro) {
+      // Uma mensagem problemática não pode derrubar o lote inteiro, mas
+      // perder lead é grave o bastante para sair como erro no log.
+      log.erro(
+        `${ctx.instanceId}: LEAD PERDIDO, não consegui processar a mensagem: ${(ultimoErro as Error).message}`,
+      );
     }
   }
 }
@@ -100,6 +145,7 @@ async function processarUma(
     conteudo,
     daAgencia,
     journeyResetDays: cfg.journeyResetDays,
+    ehTelefoneReal: contato.ehTelefoneReal,
   });
   if (!conversa) return;
 
@@ -178,7 +224,60 @@ async function acharOuCriarConversa(p: {
   conteudo: ReturnType<typeof lerConteudo>;
   daAgencia: boolean;
   journeyResetDays: number;
+  ehTelefoneReal?: boolean;
 }): Promise<ConversaResumo | null> {
+  /*
+   * Consolidação do @lid.
+   *
+   * Quando a primeira mensagem chega sem `remoteJidAlt`, a conversa nasce com
+   * os dígitos do lid como chave. Assim que o telefone real aparece, uma
+   * segunda conversa nasceria para a MESMA pessoa: a atribuição (o gclid)
+   * ficaria numa e a etiqueta cairia na outra, e a venda nunca subiria.
+   *
+   * Aqui a conversa provisória é promovida para a chave definitiva.
+   */
+  if (p.lidKey && p.ehTelefoneReal) {
+    const provisoria = await db.trackConversation.findFirst({
+      where: {
+        instanceId: p.instanceId,
+        lidKey: p.lidKey,
+        contactKey: { not: p.contactKey },
+      },
+      orderBy: { cycle: "desc" },
+      select: { id: true, contactKey: true, cycle: true },
+    });
+
+    if (provisoria) {
+      const jaExisteDefinitiva = await db.trackConversation.findUnique({
+        where: {
+          instanceId_contactKey_cycle: {
+            instanceId: p.instanceId,
+            contactKey: p.contactKey,
+            cycle: provisoria.cycle,
+          },
+        },
+        select: { id: true },
+      });
+
+      if (!jaExisteDefinitiva) {
+        await db.trackConversation.update({
+          where: { id: provisoria.id },
+          data: { contactKey: p.contactKey, contactPhone: p.contactPhone },
+        });
+        log.info(
+          `conversa ${provisoria.id} promovida do lid provisório para o telefone real ${tel(p.contactKey)}`,
+        );
+      } else {
+        // Já existem as duas. Consolidar de verdade exigiria mover mensagens e
+        // eventos, o que é arriscado no meio do fluxo: fica registrado para o
+        // painel poder mostrar e alguém decidir.
+        log.warn(
+          `contato ${tel(p.contactKey)} tem conversa duplicada (lid ${provisoria.id} e telefone ${jaExisteDefinitiva.id})`,
+        );
+      }
+    }
+  }
+
   const existente = await db.trackConversation.findFirst({
     where: { instanceId: p.instanceId, contactKey: p.contactKey },
     orderBy: { cycle: "desc" },
@@ -244,7 +343,25 @@ async function criar(p: {
       where: { workspaceId_code: { workspaceId: p.workspaceId, code: codigo } },
       select: { id: true, gclid: true, wbraid: true, gbraid: true, campaignId: true, matchedAt: true },
     });
-    if (clique) {
+    if (clique?.matchedAt) {
+      /*
+       * O clique já foi consumido por outra conversa.
+       *
+       * Acontece quando alguém encaminha a mensagem pronta para um conhecido,
+       * ou quando a mesma pessoa reabre a jornada depois do prazo de reset com
+       * o texto antigo ainda na tela. Reaproveitar o clique mandaria DUAS
+       * conversões com o mesmo gclid: com a ação configurada em "contar
+       * todas", o CPA aparente cai pela metade e o Smart Bidding sobe o lance
+       * numa campanha que na verdade não melhorou.
+       *
+       * A conversa nasce sem atribuição automática e aparece no painel para o
+       * gestor decidir, que é o erro mais barato dos dois.
+       */
+      log.warn(
+        `código ${codigo} já tinha sido usado em ${clique.matchedAt.toISOString()}; ` +
+          `a nova conversa fica sem atribuição automática`,
+      );
+    } else if (clique) {
       clickId = clique.id;
       matchType = "code";
       matchConfidence = "high";

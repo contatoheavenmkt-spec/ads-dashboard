@@ -147,47 +147,76 @@ export async function registrarStage(p: RegistrarStageParams): Promise<Resultado
 export async function repararEventosOrfaos(
   db: Db,
   cfgPorWorkspace: (workspaceId: string) => Promise<TrackConfig>,
-  limite = 200,
+  limitePorDestino = 200,
 ): Promise<{ reparados: number; enfileirados: number }> {
-  const orfaos = await db.trackEvent.findMany({
-    where: {
-      dispatches: { none: {} },
-      // Dá tempo para o fluxo normal terminar antes de considerar órfão.
-      createdAt: { lt: new Date(Date.now() - 10 * 60_000) },
-    },
-    orderBy: { createdAt: "asc" },
-    take: limite,
-    select: {
-      id: true, workspaceId: true, stage: true, occurredAt: true,
-      conversation: {
-        select: {
-          id: true, clickId: true, matchConfidence: true, gclid: true,
-          wbraid: true, gbraid: true, ctwaClid: true, source: true, firstMessageAt: true,
-        },
-      },
-    },
+  /*
+   * A varredura é POR DESTINO, e não "eventos sem nenhum envio".
+   *
+   * A diferença importa em dois casos reais:
+   *
+   * 1. A agência liga o destino de conversão depois de o Track já estar
+   *    rodando alguns dias, que é o normal (primeiro observa, depois conecta).
+   *    Sem isso, as vendas daqueles primeiros dias, justamente os de maior
+   *    escrutínio, nunca subiriam e só sairiam com SQL na mão.
+   * 2. O evento já tem envio para o estágio "venda" mas o destino de
+   *    "qualificado" foi habilitado depois: olhar só quem não tem nenhum
+   *    despacho deixaria esse de fora.
+   */
+  const destinos = await db.trackConversionTarget.findMany({
+    where: { enabled: true, workspace: { deletedAt: null } },
+    select: { id: true, workspaceId: true, stage: true },
+    take: 200,
   });
 
+  let reparados = 0;
   let enfileirados = 0;
-  for (const evento of orfaos) {
-    try {
-      const cfg = await cfgPorWorkspace(evento.workspaceId);
-      const r = await enfileirarConversoes({
-        db,
-        workspaceId: evento.workspaceId,
-        conversationId: evento.conversation.id,
-        cfg,
-        quando: evento.occurredAt,
-        stagesNovos: [evento.stage as Stage],
-        conversa: evento.conversation,
-      });
-      enfileirados += r.total;
-    } catch (err) {
-      console.error(`[track/reparo] evento ${evento.id}: ${(err as Error).message}`);
+
+  for (const destino of destinos) {
+    const pendentes = await db.trackEvent.findMany({
+      where: {
+        workspaceId: destino.workspaceId,
+        stage: destino.stage,
+        // Nenhum envio para ESTE destino.
+        dispatches: { none: { targetId: destino.id } },
+        // Dá tempo para o fluxo normal terminar antes de considerar órfão.
+        createdAt: { lt: new Date(Date.now() - 10 * 60_000) },
+      },
+      orderBy: { createdAt: "asc" },
+      take: limitePorDestino,
+      select: {
+        id: true, workspaceId: true, stage: true, occurredAt: true,
+        conversation: {
+          select: {
+            id: true, clickId: true, matchConfidence: true, gclid: true,
+            wbraid: true, gbraid: true, ctwaClid: true, source: true, firstMessageAt: true,
+          },
+        },
+      },
+    });
+
+    if (pendentes.length === 0) continue;
+    reparados += pendentes.length;
+
+    const cfg = await cfgPorWorkspace(destino.workspaceId);
+    for (const evento of pendentes) {
+      try {
+        const r = await enfileirarConversoes({
+          db,
+          workspaceId: evento.workspaceId,
+          conversationId: evento.conversation.id,
+          cfg,
+          quando: evento.occurredAt,
+          stagesNovos: [evento.stage as Stage],
+          conversa: evento.conversation,
+        });
+        enfileirados += r.total;
+      } catch (err) {
+        console.error(`[track/reparo] evento ${evento.id}: ${(err as Error).message}`);
+      }
     }
   }
 
-  return { reparados: orfaos.length, enfileirados };
+  return { reparados, enfileirados };
 }
 
 interface ConversaParaDespacho {
