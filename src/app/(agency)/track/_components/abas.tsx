@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Link2, Settings, Smartphone } from "lucide-react";
+import { BarChart3, Brain, Link2, Settings, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ABAS = [
@@ -10,6 +10,7 @@ const ABAS = [
   { href: "/track/links", label: "Links", icon: Link2 },
   { href: "/track/whatsapp", label: "WhatsApp", icon: Smartphone },
   { href: "/track/config", label: "Regras", icon: Settings },
+  { href: "/track/ia", label: "IA", icon: Brain },
 ];
 
 export function AbasTrack() {

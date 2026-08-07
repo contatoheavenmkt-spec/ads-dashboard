@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle2, Clock, Loader2, MessageSquare, MousePointerClick,
+  CheckCircle2, Clock, MessageSquare, MousePointerClick,
   TriangleAlert, TrendingUp, Users, XCircle,
 } from "lucide-react";
 import { Header } from "@/components/layout/header";
