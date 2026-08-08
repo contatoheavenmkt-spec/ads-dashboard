@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { clampString } from "@/lib/utils";
 import { bloqueioDeEscrita } from "@/lib/impersonation";
 import { normalizePhone } from "@/lib/track/phone";
+import { invalidarCache } from "@/lib/track/cache-links";
 
 /**
  * Edição e remoção de um link de rastreio.
@@ -102,6 +103,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ linkId: s
     },
   });
 
+  // Sem isto, trocar o número de destino ou desativar o link só valeria
+  // quando o cache expirasse, e nesse intervalo conversa de lead continuaria
+  // indo para o WhatsApp antigo.
+  invalidarCache(atualizado.slug);
+
   return NextResponse.json({ link: atualizado });
 }
 
@@ -122,13 +128,15 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ linkId: 
   // não recebe mais tráfego, mas o funil histórico continua de pé.
   const cliques = await db.trackClick.count({ where: { linkId } });
   if (cliques > 0) {
-    await db.trackLink.update({ where: { id: linkId }, data: { active: false } });
+    const desativado = await db.trackLink.update({ where: { id: linkId }, data: { active: false } });
+    invalidarCache(desativado.slug);
     return NextResponse.json({
       desativado: true,
       motivo: `O link já recebeu ${cliques} clique(s), então foi desativado em vez de apagado para preservar o histórico de atribuição.`,
     });
   }
 
-  await db.trackLink.delete({ where: { id: linkId } });
+  const apagado = await db.trackLink.delete({ where: { id: linkId } });
+  invalidarCache(apagado.slug);
   return NextResponse.json({ ok: true });
 }

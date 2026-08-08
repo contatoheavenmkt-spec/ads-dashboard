@@ -2,6 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { generateCode, renderMessage } from "@/lib/track/code";
 import { rateLimit } from "@/lib/rate-limit";
+import { gravarCache, lerCache } from "@/lib/track/cache-links";
 
 /**
  * Redirecionador do link rastreável: /r/<slug>
@@ -20,40 +21,6 @@ import { rateLimit } from "@/lib/rate-limit";
  */
 
 export const dynamic = "force-dynamic";
-
-/** Cache do link em processo: o mesmo anúncio manda muita gente para o mesmo slug. */
-type CachedLink = {
-  id: string;
-  workspaceId: string;
-  destinationPhone: string;
-  messageTemplate: string;
-  active: boolean;
-  fallbackUrl: string | null;
-  workspace: { deletedAt: Date | null } | null;
-} | null;
-
-const linkCache = new Map<string, { value: CachedLink; expiresAt: number }>();
-const CACHE_TTL_MS = 60_000;
-const CACHE_MAX = 500;
-
-function cacheGet(slug: string): CachedLink | undefined {
-  const hit = linkCache.get(slug);
-  if (!hit) return undefined;
-  if (hit.expiresAt < Date.now()) {
-    linkCache.delete(slug);
-    return undefined;
-  }
-  return hit.value;
-}
-
-function cacheSet(slug: string, value: CachedLink): void {
-  // Cap simples: sem LRU de verdade, só evita crescer sem limite num processo longo.
-  if (linkCache.size >= CACHE_MAX) {
-    const oldest = linkCache.keys().next().value;
-    if (oldest) linkCache.delete(oldest);
-  }
-  linkCache.set(slug, { value, expiresAt: Date.now() + CACHE_TTL_MS });
-}
 
 /**
  * O Google Ads revisa cada anúncio buscando a URL final, e o WhatsApp busca
@@ -93,7 +60,7 @@ export async function HEAD() {
 export async function GET(req: NextRequest, ctx: { params: Promise<{ code: string }> }) {
   const { code: slug } = await ctx.params;
 
-  let link = cacheGet(slug);
+  let link = lerCache(slug);
   if (link === undefined) {
     let falhouOBanco = false;
     link = await db.trackLink
@@ -123,7 +90,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ code: strin
     // Só cacheia ausência REAL. Cachear falha de banco transformaria um
     // soluço de dois segundos em 404 fixo por um minuto inteiro, e aí o
     // cliente perde a visita, não só a atribuição.
-    if (!falhouOBanco) cacheSet(slug, link);
+    if (!falhouOBanco) gravarCache(slug, link);
   }
 
   if (!link || !link.active) {
