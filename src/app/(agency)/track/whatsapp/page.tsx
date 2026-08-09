@@ -60,14 +60,30 @@ export default function TrackWhatsApp() {
 
   useEffect(() => { void carregar(); }, [carregar]);
 
-  // Enquanto houver QR na tela, recarrega de perto: o QR do WhatsApp vence em
-  // cerca de 20 segundos e é trocado por um novo.
-  const esperandoQr = instancias.some((i) => i.state === "qr" || i.state === "connecting");
+  /*
+   * Recarrega de perto sempre que existe algo EM TRANSIÇÃO, e não só quando o
+   * QR já está na tela.
+   *
+   * A versão anterior ligava o polling apenas em `qr` e `connecting`, o que
+   * criava um impasse: ao clicar em Conectar o estado ainda é `close` (o
+   * painel só grava `desiredState`, quem age é o worker), então o polling
+   * nunca ligava, e o QR que chegava ao banco 20 segundos depois não era
+   * buscado por ninguém. A tela ficava presa em "Desligado" para sempre.
+   *
+   * Agora a condição inclui "quero ligado mas ainda não está aberto", que é
+   * exatamente a janela entre o clique e o worker responder.
+   */
+  const emTransicao = instancias.some(
+    (i) =>
+      i.state === "qr" ||
+      i.state === "connecting" ||
+      (i.desiredState === "on" && i.state !== "open"),
+  );
   useEffect(() => {
-    if (!esperandoQr) return;
+    if (!emTransicao) return;
     const t = setInterval(() => void carregar(), 3000);
     return () => clearInterval(t);
-  }, [esperandoQr, carregar]);
+  }, [emTransicao, carregar]);
 
   async function acao(id: string, acao: "conectar" | "desconectar" | "deslogar") {
     setOcupado(id);
@@ -140,7 +156,16 @@ export default function TrackWhatsApp() {
         ) : (
           <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
             {instancias.map((inst) => {
-              const est = ESTADO[inst.state] ?? ESTADO.close;
+              /*
+               * "Desligado" com o envio ligado seria mentira: o painel só
+               * grava a intenção, e quem sobe a sessão é o worker, que leva
+               * até 20 segundos para responder. Nessa janela o certo é dizer
+               * que está subindo, senão parece que o clique não funcionou.
+               */
+              const subindo = inst.desiredState === "on" && inst.state === "close";
+              const est = subindo
+                ? { texto: "Subindo a sessão", cor: "text-amber-400", ponto: "bg-amber-400 animate-pulse" }
+                : ESTADO[inst.state] ?? ESTADO.close;
               const ligado = inst.desiredState === "on";
               return (
                 <div key={inst.id} className="glass-panel flex flex-col rounded-2xl p-4">
