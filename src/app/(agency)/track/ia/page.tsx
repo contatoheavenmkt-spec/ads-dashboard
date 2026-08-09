@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Brain, ChevronDown, ChevronRight, Loader2, ShieldCheck,
-  Sparkles, ThumbsDown, TriangleAlert,
+  Settings, Sparkles, ThumbsDown, TriangleAlert,
 } from "lucide-react";
+import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { cn, formatCurrency } from "@/lib/utils";
 import { AbasTrack } from "../_components/abas";
@@ -184,6 +185,13 @@ export default function IaSugestoes() {
               </button>
             ))}
           </div>
+          <Link
+            href="/track/ia/config"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 px-3 py-2 text-[11px] font-semibold text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+          >
+            <Settings size={12} />
+            Configurar
+          </Link>
           <div className="flex-1" />
           {totalImpacto > 0 ? (
             <span className="text-xs text-slate-400">
@@ -203,9 +211,15 @@ export default function IaSugestoes() {
             <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-slate-500">
               Ela cruza o que o Google Ads reporta com as vendas que o Track capturou no WhatsApp,
               e é esse cruzamento que permite dizer coisas como &quot;esta campanha mostra 30
-              conversões e não fechou nenhuma venda&quot;. Para começar, defina a meta de CPA do
-              cliente na aba Regras.
+              conversões e não fechou nenhuma venda&quot;.
             </p>
+            <Link
+              href="/track/ia/config"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-4 py-2 text-xs font-bold text-white hover:bg-cyan-500"
+            >
+              <Settings size={13} />
+              Ligar a IA
+            </Link>
           </div>
         ) : sugestoes.length === 0 ? (
           <div className="glass-panel rounded-2xl p-12 text-center">
