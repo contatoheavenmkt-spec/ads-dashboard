@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check, Copy, Link2, Loader2, MessageSquare, MousePointerClick,
-  Plus, Power, Target, Trash2, TriangleAlert, Users, X,
+  Code, Plus, Power, Target, Trash2, TriangleAlert, Users, X,
 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { cn } from "@/lib/utils";
@@ -294,7 +294,15 @@ export default function TrackPage() {
           </div>
         )}
 
-        {visiveis.length > 0 ? <ComoUsar template={TRACKING_TEMPLATE} onCopiar={copiar} copiado={copiado} /> : null}
+        {visiveis.length > 0 ? (
+          <ComoUsar
+            template={TRACKING_TEMPLATE}
+            onCopiar={copiar}
+            copiado={copiado}
+            baseUrl={baseUrl}
+            primeiroSlug={visiveis.find((l) => l.active)?.slug ?? visiveis[0]?.slug ?? null}
+          />
+        ) : null}
       </div>
 
       {criando ? (
@@ -353,12 +361,21 @@ function ComoUsar({
   template,
   onCopiar,
   copiado,
+  baseUrl,
+  primeiroSlug,
 }: {
   template: string;
   onCopiar: (t: string, id: string) => void;
   copiado: string | null;
+  baseUrl: string;
+  primeiroSlug: string | null;
 }) {
+  const snippet = primeiroSlug
+    ? `<script src="${baseUrl}/track.js" data-track="${primeiroSlug}" defer></script>`
+    : null;
+
   return (
+    <div className="space-y-4">
     <div className="glass-panel rounded-2xl p-5">
       <h2 className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-200">
         <Target size={14} className="text-cyan-400" />
@@ -396,6 +413,44 @@ function ComoUsar({
         A coluna Conversas mostra quantos cliques viraram conversa rastreada. Quando essa taxa cai,
         costuma ser gente apagando a mensagem pronta antes de enviar.
       </p>
+    </div>
+
+    {/* O caso em que o anúncio leva ao SITE antes do WhatsApp. Sem o script,
+        o gclid chega na página e se perde no caminho até o botão, e a venda
+        não tem como voltar para a campanha. */}
+    <div className="glass-panel rounded-2xl p-5">
+      <h2 className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-200">
+        <Code size={14} className="text-cyan-400" />
+        Se o anúncio leva ao site antes do WhatsApp
+      </h2>
+      <p className="text-xs leading-relaxed text-slate-400">
+        Nesse caso a URL final do anúncio continua sendo o site, não o link acima. Cole este trecho
+        no <span className="text-slate-300">&lt;head&gt;</span> do site: ele guarda o identificador
+        da campanha na chegada e passa adiante quando a pessoa clica no botão de WhatsApp, mesmo que
+        ela navegue por várias páginas antes.
+      </p>
+      {snippet ? (
+        <button
+          onClick={() => onCopiar(snippet, "snippet")}
+          className="mt-3 flex w-full items-start gap-2 rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-left font-mono text-[10px] leading-relaxed text-cyan-300 transition-colors hover:border-cyan-500/40"
+        >
+          {copiado === "snippet" ? (
+            <Check size={12} className="mt-0.5 shrink-0 text-emerald-400" />
+          ) : (
+            <Copy size={12} className="mt-0.5 shrink-0 text-slate-500" />
+          )}
+          <span className="break-all">{snippet}</span>
+        </button>
+      ) : (
+        <p className="mt-3 text-[11px] text-slate-500">Crie um link acima para gerar o trecho.</p>
+      )}
+      <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+        Ele reescreve sozinho os links de <span className="font-mono">wa.me</span> da página,
+        inclusive os de widget flutuante que aparecem depois. Para botão feito em JavaScript, use
+        <span className="font-mono text-slate-400"> window.dashfysTrack.url()</span> no lugar de
+        montar o link na mão.
+      </p>
+    </div>
     </div>
   );
 }
