@@ -254,37 +254,61 @@ export async function PUT(req: NextRequest) {
   const platform = body.platform === "meta" ? "meta" : "google";
 
   // Ligar sem destino escolhido deixaria a fila acumulando e falhando em
-  // silêncio: é melhor recusar aqui, com a causa na tela.
-  if (body.enabled && platform === "google" && !body.conversionActionId) {
-    return NextResponse.json(
-      { error: "Escolha a ação de conversão antes de ligar o envio." },
-      { status: 400 },
-    );
-  }
-  if (body.enabled && platform === "meta" && !body.datasetId) {
-    return NextResponse.json(
-      { error: "Informe o ID do dataset do Meta antes de ligar o envio." },
-      { status: 400 },
-    );
+  // silêncio. A checagem olha o estado FINAL (linha existente + o que veio
+  // agora): com PATCH semântico, ligar sem reenviar o dataset é válido se a
+  // linha já o tem.
+  if (body.enabled) {
+    const existente = await db.trackConversionTarget.findUnique({
+      where: {
+        workspaceId_stage_platform: { workspaceId: body.workspaceId, stage: stage as Stage, platform },
+      },
+      select: { conversionActionId: true, datasetId: true },
+    });
+    const acaoFinal = body.conversionActionId !== undefined ? body.conversionActionId : existente?.conversionActionId;
+    const datasetFinal = body.datasetId !== undefined ? body.datasetId : existente?.datasetId;
+    if (platform === "google" && !acaoFinal) {
+      return NextResponse.json(
+        { error: "Escolha a ação de conversão antes de ligar o envio." },
+        { status: 400 },
+      );
+    }
+    if (platform === "meta" && !datasetFinal) {
+      return NextResponse.json(
+        { error: "Informe o dataset do Meta antes de ligar o envio." },
+        { status: 400 },
+      );
+    }
   }
 
-  const dados = {
-    enabled: Boolean(body.enabled),
-    conversionActionId: body.conversionActionId || null,
-    conversionActionName: body.conversionActionName?.slice(0, 200) || null,
-    customerId: body.customerId?.replace(/-/g, "") || null,
-    loginCustomerId: body.loginCustomerId?.replace(/-/g, "") || null,
-    datasetId: body.datasetId?.replace(/\D/g, "") || null,
-    eventName: body.eventName?.slice(0, 60) || null,
-    // Token vazio na requisição significa "não mexer": assim editar o evento
-    // não apaga o token que já estava salvo.
-    ...(body.apiToken !== undefined && body.apiToken !== ""
-      ? { apiToken: body.apiToken }
-      : {}),
-    sendValue: Boolean(body.sendValue),
-    defaultValue:
-      typeof body.defaultValue === "number" && body.defaultValue >= 0 ? body.defaultValue : null,
-  };
+  /*
+   * Semântica de PATCH: campo AUSENTE do body significa "não mexer".
+   *
+   * A versão anterior montava a linha inteira a partir do estado da tela, e
+   * três salvamentos concorrentes (o burst de escolher um dataset dispara um
+   * por estágio) com estado velho revertiam o enabled e o eventName um do
+   * outro. Agora cada chamada só toca no que declarou.
+   */
+  const dados: Record<string, unknown> = {};
+  if (body.enabled !== undefined) dados.enabled = Boolean(body.enabled);
+  if (body.conversionActionId !== undefined) dados.conversionActionId = body.conversionActionId || null;
+  if (body.conversionActionName !== undefined) dados.conversionActionName = body.conversionActionName?.slice(0, 200) || null;
+  if (body.datasetId !== undefined) dados.datasetId = body.datasetId?.replace(/[^0-9]/g, "") || null;
+  if (body.eventName !== undefined) dados.eventName = body.eventName?.slice(0, 60) || null;
+  if (body.sendValue !== undefined) dados.sendValue = Boolean(body.sendValue);
+  if (body.defaultValue !== undefined) {
+    dados.defaultValue =
+      typeof body.defaultValue === "number" && body.defaultValue >= 0 ? body.defaultValue : null;
+  }
+  // Token: string preenche, null explícito LIMPA (é o único jeito de tirar um
+  // token errado pela tela), undefined/"" não mexe.
+  if (body.apiToken === null) dados.apiToken = null;
+  else if (typeof body.apiToken === "string" && body.apiToken !== "") dados.apiToken = body.apiToken;
+  // customerId é coisa do Google: a linha do Meta não ganha conta do Google
+  // por acidente.
+  if (platform === "google") {
+    if (body.customerId !== undefined) dados.customerId = body.customerId?.replace(/-/g, "") || null;
+    if (body.loginCustomerId !== undefined) dados.loginCustomerId = body.loginCustomerId?.replace(/-/g, "") || null;
+  }
 
   const destino = await db.trackConversionTarget.upsert({
     where: {

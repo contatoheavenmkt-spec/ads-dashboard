@@ -31,9 +31,14 @@
       return null;
     })();
 
-  var SLUG = script ? script.getAttribute("data-track") : null;
-  if (!SLUG) {
-    console.warn("[dashfys-track] falta o data-track no script. Nada foi feito.");
+  var SLUG = script ? (script.getAttribute("data-track") || "").trim().toLowerCase() : "";
+  // Espaço colado junto, maiúscula ou lixo no atributo geraria /r/ errado e
+  // 404 em TODO clique do site. Melhor validar aqui e avisar no console do
+  // que falhar em silêncio na frente do visitante.
+  if (!SLUG || !/^[a-z0-9]{4,16}$/.test(SLUG)) {
+    console.warn(
+      "[dashfys-track] data-track ausente ou inválido (" + JSON.stringify(SLUG) + "). Nada foi feito."
+    );
     return;
   }
 

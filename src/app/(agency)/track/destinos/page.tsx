@@ -113,7 +113,6 @@ export default function TrackDestinos() {
   useEffect(() => { void carregar(ws); }, [carregar, ws]);
 
   async function salvar(stage: string, mudanca: Partial<Destino>) {
-    const atual = destinos.find((d) => d.stage === stage && d.platform === plataforma);
     const conta = contas[0];
     setSalvando(stage);
     setErro(null);
@@ -122,20 +121,21 @@ export default function TrackDestinos() {
       const res = await fetch("/api/agency/track/destinos", {
         method: "PUT",
         headers: { "content-type": "application/json" },
+        // Só a MUDANÇA vai no corpo: a API tem semântica de PATCH, e mandar
+        // a linha inteira do estado da tela fazia salvamentos concorrentes
+        // reverterem o enabled um do outro com dados velhos.
         body: JSON.stringify({
           workspaceId: ws,
           stage,
           platform: plataforma,
-          datasetId: mudanca.datasetId ?? atual?.datasetId ?? null,
-          eventName: mudanca.eventName ?? atual?.eventName ?? null,
-          apiToken: tokenMeta || undefined,
-          enabled: mudanca.enabled ?? atual?.enabled ?? false,
-          conversionActionId: mudanca.conversionActionId ?? atual?.conversionActionId ?? null,
-          conversionActionName: mudanca.conversionActionName ?? atual?.conversionActionName ?? null,
-          customerId: contaDeConversao ?? conta?.adAccountId ?? null,
-          loginCustomerId: conta?.loginCustomerId ?? null,
-          sendValue: mudanca.sendValue ?? atual?.sendValue ?? false,
-          defaultValue: mudanca.defaultValue ?? atual?.defaultValue ?? null,
+          ...mudanca,
+          ...(tokenMeta ? { apiToken: tokenMeta } : {}),
+          ...(plataforma === "google" && (mudanca.enabled || mudanca.conversionActionId)
+            ? {
+                customerId: contaDeConversao ?? conta?.adAccountId ?? undefined,
+                loginCustomerId: conta?.loginCustomerId ?? undefined,
+              }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -326,11 +326,17 @@ export default function TrackDestinos() {
                 {datasets.length > 0 ? (
                   <select
                     value={datasetLocal}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const v = e.target.value;
                       setDatasetLocal(v);
                       setResultadoTeste(null);
-                      if (v) ESTAGIOS.forEach((et) => void salvar(et.id, { datasetId: v }));
+                      if (v) {
+                        // Sequencial, e recarrega no fim: se um dos três
+                        // falhar, a tela mostra o que REALMENTE ficou no
+                        // servidor em vez de mascarar a divergência.
+                        for (const et of ESTAGIOS) await salvar(et.id, { datasetId: v });
+                        await carregar(ws);
+                      }
                     }}
                     className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-300 focus:border-cyan-500/60 focus:outline-none"
                   >
@@ -356,12 +362,43 @@ export default function TrackDestinos() {
                   </p>
                 ) : null}
 
-                {temTokenConexao && !mostrarManual ? (
-                  <p className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
-                    <CheckCircle2 size={11} className="text-emerald-500" />
-                    Usando o acesso da BM que você já conectou. Nenhum token a colar.
-                  </p>
-                ) : null}
+                {(() => {
+                  // O aviso precisa dizer a VERDADE sobre qual credencial o
+                  // envio usa: o cron prefere o token salvo na linha. Dizer
+                  // "usando o acesso da BM" com um token colado por cima
+                  // esconderia exatamente a credencial que pode estar errada.
+                  const temTokenSalvo = destinos.some((d) => d.platform === "meta" && d.temToken);
+                  if (temTokenSalvo) {
+                    return (
+                      <p className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                        <span className="inline-flex items-center gap-1.5">
+                          <CheckCircle2 size={11} className="text-amber-400" />
+                          Usando um token colado manualmente (tem prioridade sobre o acesso da BM).
+                        </span>
+                        <button
+                          onClick={async () => {
+                            for (const et of ESTAGIOS) {
+                              await salvar(et.id, { apiToken: null } as unknown as Partial<Destino>);
+                            }
+                            await carregar(ws);
+                          }}
+                          className="font-semibold text-red-300 underline-offset-2 hover:underline"
+                        >
+                          Remover token e voltar ao acesso da BM
+                        </button>
+                      </p>
+                    );
+                  }
+                  if (temTokenConexao && !mostrarManual) {
+                    return (
+                      <p className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
+                        <CheckCircle2 size={11} className="text-emerald-500" />
+                        Usando o acesso da BM que você já conectou. Nenhum token a colar.
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
 
                 {/* Teste real de escrita: listar o dataset não prova permissão,
                     e descobrir isso só quando a venda acontecer é caro. */}
