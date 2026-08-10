@@ -21,9 +21,19 @@ interface Destino {
   conversionActionId: string | null;
   conversionActionName: string | null;
   customerId: string | null;
+  datasetId: string | null;
+  eventName: string | null;
+  temToken: boolean;
   sendValue: boolean;
   defaultValue: number | null;
 }
+
+/** O que o Meta entende melhor em cada etapa do funil. */
+const EVENTO_SUGERIDO: Record<string, string> = {
+  respondeu: "Contact",
+  qualificado: "Lead",
+  venda: "Purchase",
+};
 
 const ESTAGIOS: { id: string; nome: string; ajuda: string }[] = [
   {
@@ -56,6 +66,9 @@ export default function TrackDestinos() {
   const [salvando, setSalvando] = useState<string | null>(null);
   const [recado, setRecado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [plataforma, setPlataforma] = useState<"google" | "meta">("google");
+  const [tokenMeta, setTokenMeta] = useState("");
+  const [datasetLocal, setDatasetLocal] = useState("");
 
   const carregar = useCallback(async (workspaceId: string, comAcoes = false) => {
     setLoading(true);
@@ -68,6 +81,8 @@ export default function TrackDestinos() {
       const data = await res.json();
       setWorkspaces(data.workspaces ?? []);
       setDestinos(data.destinos ?? []);
+      const comDataset = (data.destinos ?? []).find((d: Destino) => d.platform === "meta" && d.datasetId);
+      if (comDataset) setDatasetLocal(comDataset.datasetId ?? "");
       setContas(data.contas ?? []);
       if (comAcoes) {
         setAcoes(data.acoes ?? []);
@@ -86,7 +101,7 @@ export default function TrackDestinos() {
   useEffect(() => { void carregar(ws); }, [carregar, ws]);
 
   async function salvar(stage: string, mudanca: Partial<Destino>) {
-    const atual = destinos.find((d) => d.stage === stage);
+    const atual = destinos.find((d) => d.stage === stage && d.platform === plataforma);
     const conta = contas[0];
     setSalvando(stage);
     setErro(null);
@@ -98,6 +113,10 @@ export default function TrackDestinos() {
         body: JSON.stringify({
           workspaceId: ws,
           stage,
+          platform: plataforma,
+          datasetId: mudanca.datasetId ?? atual?.datasetId ?? null,
+          eventName: mudanca.eventName ?? atual?.eventName ?? null,
+          apiToken: tokenMeta || undefined,
           enabled: mudanca.enabled ?? atual?.enabled ?? false,
           conversionActionId: mudanca.conversionActionId ?? atual?.conversionActionId ?? null,
           conversionActionName: mudanca.conversionActionName ?? atual?.conversionActionName ?? null,
@@ -110,7 +129,7 @@ export default function TrackDestinos() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Falha ao salvar");
       setDestinos((ds) => {
-        const outros = ds.filter((d) => d.stage !== stage);
+        const outros = ds.filter((d) => !(d.stage === stage && d.platform === plataforma));
         return [...outros, data.destino];
       });
       if (data.pendentesParaBackfill > 0) {
@@ -156,17 +175,38 @@ export default function TrackDestinos() {
           >
             {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
-          <button
-            onClick={() => carregar(ws, true)}
-            disabled={buscandoAcoes || contas.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 disabled:opacity-40"
-          >
-            {buscandoAcoes ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-            Buscar ações de conversão
-          </button>
+          <div className="flex gap-1">
+            {[
+              { id: "google" as const, nome: "Google Ads" },
+              { id: "meta" as const, nome: "Meta" },
+            ].map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setPlataforma(p.id)}
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-xs font-bold transition-colors",
+                  plataforma === p.id
+                    ? "border-cyan-500/50 bg-cyan-500/15 text-cyan-300"
+                    : "border-slate-800 text-slate-400 hover:bg-slate-800",
+                )}
+              >
+                {p.nome}
+              </button>
+            ))}
+          </div>
+          {plataforma === "google" ? (
+            <button
+              onClick={() => carregar(ws, true)}
+              disabled={buscandoAcoes || contas.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+            >
+              {buscandoAcoes ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              Buscar ações de conversão
+            </button>
+          ) : null}
         </div>
 
-        {contas.length === 0 && !loading ? (
+        {plataforma === "google" && contas.length === 0 && !loading ? (
           <div className="glass-panel rounded-2xl p-10 text-center">
             <p className="text-sm text-slate-300">Este cliente não tem conta do Google Ads ligada.</p>
             <p className="mt-1 text-xs text-slate-500">
@@ -175,7 +215,7 @@ export default function TrackDestinos() {
           </div>
         ) : null}
 
-        {aviso ? (
+        {plataforma === "google" && aviso ? (
           <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
             <TriangleAlert size={14} className="mt-0.5 shrink-0" />
             <div className="flex-1">
@@ -199,19 +239,91 @@ export default function TrackDestinos() {
             <Upload size={14} className="text-cyan-400" />
             Antes de ligar
           </h2>
-          <p className="text-xs leading-relaxed text-slate-400">
-            No Google Ads, a ação que recebe venda vinda de fora precisa ser do tipo
-            <span className="text-slate-200"> Importação de cliques</span> (Ferramentas &gt;
-            Conversões &gt; Nova &gt; Importar &gt; Cliques). Uma ação normal de tag do site
-            recusa o envio, e o erro só apareceria horas depois, quando a venda já tivesse
-            acontecido. Por isso a lista abaixo mostra só as que servem.
-          </p>
-          {contaDeConversao ? (
-            <p className="mt-2 text-[11px] text-slate-500">
-              As conversões vão para a conta <span className="font-mono text-slate-400">{contaDeConversao}</span>,
-              que é a conta de conversão resolvida para este cliente.
-            </p>
-          ) : null}
+          {plataforma === "google" ? (
+            <>
+              <p className="text-xs leading-relaxed text-slate-400">
+                No Google Ads, a ação que recebe venda vinda de fora precisa ser do tipo
+                <span className="text-slate-200"> Importação de cliques</span> (Ferramentas &gt;
+                Conversões &gt; Nova &gt; Importar &gt; Cliques). Uma ação normal de tag do site
+                recusa o envio, e o erro só apareceria horas depois, quando a venda já tivesse
+                acontecido. Por isso a lista abaixo mostra só as que servem.
+              </p>
+              {contaDeConversao ? (
+                <p className="mt-2 text-[11px] text-slate-500">
+                  As conversões vão para a conta <span className="font-mono text-slate-400">{contaDeConversao}</span>,
+                  que é a conta de conversão resolvida para este cliente.
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <p className="text-xs leading-relaxed text-slate-400">
+                No Meta não existe link rastreável: quem clica num anúncio de WhatsApp já chega com
+                o identificador dentro da própria mensagem, e o Track captura sozinho. O que falta
+                configurar é só o destino.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                Você precisa de duas coisas do Gerenciador de Eventos: o
+                <span className="text-slate-200"> ID do dataset</span> ligado à conta de WhatsApp
+                que atende, e um <span className="text-slate-200">token de system user</span> com
+                permissão nele. O token da conexão normal de login costuma não ter essa permissão.
+              </p>
+              <a
+                href="https://business.facebook.com/events_manager2"
+                target="_blank"
+                rel="noreferrer noopener"
+                className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-400 hover:text-cyan-300"
+              >
+                Abrir o Gerenciador de Eventos <ExternalLink size={11} />
+              </a>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    ID do dataset
+                  </label>
+                  <input
+                    value={datasetLocal}
+                    onChange={(e) => setDatasetLocal(e.target.value.replace(/[^0-9]/g, ""))}
+                    onBlur={() => {
+                      if (datasetLocal) {
+                        ESTAGIOS.forEach((et) => void salvar(et.id, { datasetId: datasetLocal }));
+                      }
+                    }}
+                    inputMode="numeric"
+                    placeholder="1234567890123456"
+                    className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 font-mono text-xs text-slate-300 placeholder-slate-600 focus:border-cyan-500/60 focus:outline-none"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">Vale para todos os estágios.</p>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Token de system user
+                  </label>
+                  <input
+                    value={tokenMeta}
+                    onChange={(e) => setTokenMeta(e.target.value)}
+                    onBlur={() => {
+                      if (tokenMeta) {
+                        ESTAGIOS.forEach((et) => void salvar(et.id, {}));
+                        setTokenMeta("");
+                      }
+                    }}
+                    type="password"
+                    placeholder={
+                      destinos.some((d) => d.platform === "meta" && d.temToken)
+                        ? "token salvo (digite para trocar)"
+                        : "EAAG..."
+                    }
+                    className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 font-mono text-xs text-slate-300 placeholder-slate-600 focus:border-cyan-500/60 focus:outline-none"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Guardado no servidor e nunca devolvido para o navegador.
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {loading && destinos.length === 0 ? (
@@ -221,7 +333,7 @@ export default function TrackDestinos() {
         ) : (
           <div className="space-y-3">
             {ESTAGIOS.map((et) => {
-              const d = destinos.find((x) => x.stage === et.id);
+              const d = destinos.find((x) => x.stage === et.id && x.platform === plataforma);
               const ligado = d?.enabled ?? false;
               return (
                 <div key={et.id} className="glass-panel rounded-2xl p-5">
@@ -243,8 +355,8 @@ export default function TrackDestinos() {
                     </div>
                     <button
                       onClick={() => salvar(et.id, { enabled: !ligado })}
-                      disabled={salvando === et.id || (!ligado && !d?.conversionActionId)}
-                      title={!ligado && !d?.conversionActionId ? "Escolha a ação de conversão primeiro" : ""}
+                      disabled={salvando === et.id || (!ligado && (plataforma === "google" ? !d?.conversionActionId : !datasetLocal))}
+                      title={!ligado && (plataforma === "google" ? !d?.conversionActionId : !datasetLocal) ? "Configure o destino primeiro" : ""}
                       className={cn(
                         "shrink-0 rounded-lg px-3 py-2 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40",
                         ligado
@@ -259,6 +371,7 @@ export default function TrackDestinos() {
                   </div>
 
                   <div className="mt-4 space-y-3 border-t border-slate-800 pt-4">
+                    {plataforma === "google" ? (
                     <div>
                       <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Ação de conversão no Google Ads
@@ -288,6 +401,25 @@ export default function TrackDestinos() {
                         </p>
                       )}
                     </div>
+                    ) : (
+                      <div>
+                        <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Nome do evento no Meta
+                        </label>
+                        <select
+                          value={d?.eventName ?? EVENTO_SUGERIDO[et.id] ?? "Lead"}
+                          onChange={(e) => void salvar(et.id, { eventName: e.target.value })}
+                          className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-300 focus:border-cyan-500/60 focus:outline-none"
+                        >
+                          {["Purchase", "Lead", "Contact", "Schedule", "SubmitApplication"].map((n) => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          É como o evento aparece no Gerenciador de Eventos e nas campanhas.
+                        </p>
+                      </div>
+                    )}
 
                     {et.id === "venda" ? (
                       <div className="flex flex-wrap items-end gap-4">

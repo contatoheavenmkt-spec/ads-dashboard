@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { authorizeCron } from "@/lib/cron-auth";
 import { repararEventosOrfaos } from "@/lib/track/events";
 import { parseTrackSettings } from "@/lib/track/settings";
+import { classificarErroCapi, enviarEventosCapi, EVENTO_PADRAO } from "@/lib/meta-capi";
+import { getStoredMetaToken } from "@/lib/meta-token";
 import {
   classificarErroDeConversao,
   formatConversionDateTime,
@@ -45,6 +47,11 @@ const TAMANHO_LOTE_API = 200;
 const LOCK_MORTO_MS = 10 * 60_000;
 /** gclid vale 90 dias. Depois disso não adianta tentar. */
 const JANELA_GCLID_DIAS = 90;
+/**
+ * O Meta recusa evento com mais de 7 dias na Conversions API. Insistir depois
+ * disso só gasta chamada e enche a fila de retry que nunca vai passar.
+ */
+const JANELA_CTWA_DIAS = 7;
 const MAX_TENTATIVAS = 8;
 
 /** 5min, 15min, 1h, 6h, 24h, e daí em diante 24h. */
@@ -110,7 +117,12 @@ export async function POST(req: NextRequest) {
       event: {
         select: {
           stage: true, value: true, currency: true, occurredAt: true,
-          conversation: { select: { gclid: true, wbraid: true, gbraid: true, clickId: true, firstMessageAt: true } },
+          conversation: {
+            select: {
+              gclid: true, wbraid: true, gbraid: true, ctwaClid: true,
+              clickId: true, firstMessageAt: true,
+            },
+          },
         },
       },
     },
@@ -120,31 +132,39 @@ export async function POST(req: NextRequest) {
   const resumo = { enviados: 0, falhos: 0, expirados: 0, ignorados: 0, destravados: destravados.count };
 
   for (const d of despachos) {
-    if (d.platform !== "google") {
-      // Meta entra numa fase seguinte; por ora sai da fila sem tentar.
-      await marcar(d.id, "skipped", "plataforma ainda não suportada", d.attempts);
-      resumo.ignorados++;
-      continue;
-    }
-
-    // wbraid e gbraid substituem o gclid quando o consentimento limita o
-    // identificador: iOS, PMax e YouTube. Aceitar só gclid deixaria essas
-    // campanhas sem nenhuma conversão reportada.
     const c = d.event.conversation;
-    if (!c.gclid && !c.wbraid && !c.gbraid) {
-      await marcar(d.id, "skipped", "conversa sem identificador de clique do Google", d.attempts);
+
+    if (d.platform === "meta") {
+      // No Meta a atribuição vem dentro da própria mensagem, não da URL.
+      if (!c.ctwaClid) {
+        await marcar(d.id, "skipped", "conversa não veio de anúncio do Meta", d.attempts);
+        resumo.ignorados++;
+        continue;
+      }
+    } else if (d.platform === "google") {
+      // wbraid e gbraid substituem o gclid quando o consentimento limita o
+      // identificador: iOS, PMax e YouTube. Aceitar só gclid deixaria essas
+      // campanhas sem nenhuma conversão reportada.
+      if (!c.gclid && !c.wbraid && !c.gbraid) {
+        await marcar(d.id, "skipped", "conversa sem identificador de clique do Google", d.attempts);
+        resumo.ignorados++;
+        continue;
+      }
+    } else {
+      await marcar(d.id, "skipped", `plataforma ${d.platform} não suportada`, d.attempts);
       resumo.ignorados++;
       continue;
     }
 
-    // Idade do CLIQUE, não do evento: é o gclid que expira.
+    // Idade do CLIQUE, não do evento: é o identificador que expira.
     const nascimento = d.event.conversation.firstMessageAt;
     const idadeDias = (Date.now() - nascimento.getTime()) / 86400_000;
-    if (idadeDias > JANELA_GCLID_DIAS) {
+    const janela = d.platform === "meta" ? JANELA_CTWA_DIAS : JANELA_GCLID_DIAS;
+    if (idadeDias > janela) {
       await marcar(
         d.id,
         "expired",
-        `clique tem ${Math.round(idadeDias)} dias, passou da janela de ${JANELA_GCLID_DIAS} do gclid`,
+        `clique tem ${Math.round(idadeDias)} dias, passou da janela de ${janela} da plataforma`,
         d.attempts,
       );
       resumo.expirados++;
@@ -160,7 +180,9 @@ export async function POST(req: NextRequest) {
   for (const [chave, grupo] of porConta) {
     const [workspaceId, targetId] = chave.split("::");
     try {
-      const r = await enviarGrupo(workspaceId, targetId, grupo, simular);
+      const r = grupo[0]?.platform === "meta"
+        ? await enviarGrupoMeta(workspaceId, targetId, grupo, simular)
+        : await enviarGrupo(workspaceId, targetId, grupo, simular);
       resumo.enviados += r.ok;
       resumo.falhos += r.falhos;
     } catch (err) {
@@ -179,12 +201,18 @@ export async function POST(req: NextRequest) {
 type Despacho = {
   id: string;
   attempts: number;
+  platform: string;
   event: {
     stage: string;
     value: number | null;
     currency: string;
     occurredAt: Date;
-    conversation: { gclid: string | null; wbraid: string | null; gbraid: string | null };
+    conversation: {
+      gclid: string | null;
+      wbraid: string | null;
+      gbraid: string | null;
+      ctwaClid: string | null;
+    };
   };
 };
 
@@ -309,6 +337,97 @@ async function enviarGrupo(
   }
 
   return { ok, falhos };
+}
+
+/**
+ * Envia um grupo de conversões para o Meta.
+ *
+ * A diferença de fundo em relação ao Google: não existe link rastreável nem
+ * nada a configurar no anúncio. O `ctwa_clid` vem dentro da própria mensagem
+ * de quem clicou, então o que precisa ser configurado é só o destino.
+ */
+async function enviarGrupoMeta(
+  workspaceId: string,
+  targetId: string,
+  grupo: Despacho[],
+  simular: boolean,
+): Promise<{ ok: number; falhos: number }> {
+  const alvo = await db.trackConversionTarget.findUnique({ where: { id: targetId } });
+  if (!alvo?.enabled || !alvo.datasetId) {
+    for (const d of grupo) {
+      await marcar(d.id, "skipped", "destino do Meta incompleto ou desligado", d.attempts);
+    }
+    return { ok: 0, falhos: 0 };
+  }
+
+  /*
+   * O token do próprio destino vem primeiro.
+   *
+   * O token de usuário da conexão OAuth costuma NÃO ter permissão no dataset
+   * de mensagens: o caminho normal é um token de system user gerado por
+   * cliente. Cair na conexão do dono é só uma conveniência para quem tiver a
+   * permissão certa.
+   */
+  let token = alvo.apiToken;
+  if (!token) {
+    const ws = await db.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { ownerId: true },
+    });
+    token = ws?.ownerId ? await getStoredMetaToken(ws.ownerId) : null;
+  }
+  if (!token) {
+    for (const d of grupo) {
+      await falhar(d.id, d.attempts, "sem token do Meta. Cole um token de system user na aba Envio.");
+    }
+    return { ok: 0, falhos: grupo.length };
+  }
+
+  const eventos = grupo.map((d) => ({
+    eventName: alvo.eventName || EVENTO_PADRAO[d.event.stage] || "Lead",
+    // Em segundos, e do momento em que o fato aconteceu.
+    eventTime: Math.floor(d.event.occurredAt.getTime() / 1000),
+    // Deduplicação do lado do Meta, igual ao orderId do Google.
+    eventId: d.id,
+    ctwaClid: d.event.conversation.ctwaClid!,
+    valor: alvo.sendValue ? d.event.value : null,
+    moeda: d.event.currency || "BRL",
+  }));
+
+  const resultado = await enviarEventosCapi({
+    datasetId: alvo.datasetId,
+    accessToken: token,
+    eventos,
+    // Em simulação o evento vai marcado como teste: aparece no Gerenciador
+    // de Eventos para conferência e não entra na otimização da campanha.
+    testEventCode: simular ? "TEST_DASHFYS" : null,
+  });
+
+  const pedido = JSON.stringify({ dataset: alvo.datasetId, eventos }).slice(0, 4000);
+  const resposta = JSON.stringify(resultado.respostaCrua).slice(0, 4000);
+
+  if (!resultado.ok && resultado.erro) {
+    const tipo = classificarErroCapi(resultado.erro.codigo, resultado.erro.tipo);
+    for (const d of grupo) {
+      const msg = `${resultado.erro.codigo}: ${resultado.erro.mensagem}`;
+      if (tipo === "permanente") await marcar(d.id, "failed", msg, d.attempts, pedido, resposta);
+      else await falhar(d.id, d.attempts, msg, pedido, resposta);
+    }
+    return { ok: 0, falhos: grupo.length };
+  }
+
+  for (const d of grupo) {
+    if (simular) {
+      // Nada foi contabilizado de verdade: a linha volta para a fila.
+      await db.trackDispatch.update({
+        where: { id: d.id },
+        data: { status: "pending", lockedAt: null, lastError: null, responsePayload: resposta },
+      });
+    } else {
+      await marcar(d.id, "sent", null, d.attempts, pedido, resposta);
+    }
+  }
+  return { ok: grupo.length, falhos: 0 };
 }
 
 async function marcar(

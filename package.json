@@ -10,7 +10,7 @@
     "seed": "ts-node --project tsconfig.json prisma/seed.ts",
     "db:seed": "npx tsx prisma/seed.ts",
     "worker": "node --import tsx worker/index.ts",
-    "track:check": "tsx scripts/track-check.ts && tsx scripts/track-check-funil.ts && tsx scripts/track-check-mensagem.ts && tsx scripts/track-check-rules.ts && tsx scripts/track-check-dispatch.ts && tsx scripts/track-check-contatos.ts",
+    "track:check": "tsx scripts/track-check.ts && tsx scripts/track-check-funil.ts && tsx scripts/track-check-mensagem.ts && tsx scripts/track-check-rules.ts && tsx scripts/track-check-dispatch.ts && tsx scripts/track-check-contatos.ts && tsx scripts/track-check-meta.ts",
     "track:e2e": "tsx scripts/track-e2e.ts && tsx scripts/track-check-claim.ts",
     "ai:check": "tsx scripts/ai-check-regras.ts"
   },

@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
   const destinos = await db.trackConversionTarget.findMany({
     where: { workspaceId },
-    orderBy: { stage: "asc" },
+    orderBy: [{ platform: "asc" }, { stage: "asc" }],
   });
 
   // Contas Google ligadas a este cliente.
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     workspaces,
-    destinos,
+    destinos: destinos.map(({ apiToken, ...d }) => ({ ...d, temToken: Boolean(apiToken) })),
     acoes,
     avisoAcoes,
     contaDeConversao,
@@ -112,7 +112,11 @@ export async function GET(req: NextRequest) {
 interface SalvarBody {
   workspaceId?: string;
   stage?: string;
+  platform?: string;
   enabled?: boolean;
+  datasetId?: string | null;
+  eventName?: string | null;
+  apiToken?: string | null;
   conversionActionId?: string | null;
   conversionActionName?: string | null;
   customerId?: string | null;
@@ -153,11 +157,19 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Estágio inválido" }, { status: 400 });
   }
 
-  // Ligar sem ação escolhida deixaria a fila acumulando e falhando em
+  const platform = body.platform === "meta" ? "meta" : "google";
+
+  // Ligar sem destino escolhido deixaria a fila acumulando e falhando em
   // silêncio: é melhor recusar aqui, com a causa na tela.
-  if (body.enabled && !body.conversionActionId) {
+  if (body.enabled && platform === "google" && !body.conversionActionId) {
     return NextResponse.json(
       { error: "Escolha a ação de conversão antes de ligar o envio." },
+      { status: 400 },
+    );
+  }
+  if (body.enabled && platform === "meta" && !body.datasetId) {
+    return NextResponse.json(
+      { error: "Informe o ID do dataset do Meta antes de ligar o envio." },
       { status: 400 },
     );
   }
@@ -168,6 +180,13 @@ export async function PUT(req: NextRequest) {
     conversionActionName: body.conversionActionName?.slice(0, 200) || null,
     customerId: body.customerId?.replace(/-/g, "") || null,
     loginCustomerId: body.loginCustomerId?.replace(/-/g, "") || null,
+    datasetId: body.datasetId?.replace(/\D/g, "") || null,
+    eventName: body.eventName?.slice(0, 60) || null,
+    // Token vazio na requisição significa "não mexer": assim editar o evento
+    // não apaga o token que já estava salvo.
+    ...(body.apiToken !== undefined && body.apiToken !== ""
+      ? { apiToken: body.apiToken }
+      : {}),
     sendValue: Boolean(body.sendValue),
     defaultValue:
       typeof body.defaultValue === "number" && body.defaultValue >= 0 ? body.defaultValue : null,
@@ -178,11 +197,11 @@ export async function PUT(req: NextRequest) {
       workspaceId_stage_platform: {
         workspaceId: body.workspaceId,
         stage: stage as Stage,
-        platform: "google",
+        platform,
       },
     },
     update: dados,
-    create: { workspaceId: body.workspaceId, stage, platform: "google", ...dados },
+    create: { workspaceId: body.workspaceId, stage, platform, ...dados },
   });
 
   // Ao ligar um destino, as vendas que já aconteceram passam a ser elegíveis:
@@ -198,5 +217,10 @@ export async function PUT(req: NextRequest) {
       })
     : 0;
 
-  return NextResponse.json({ destino, pendentesParaBackfill: pendentes });
+  // O token nunca volta para o navegador: a tela só precisa saber se existe.
+  const { apiToken, ...semSegredo } = destino;
+  return NextResponse.json({
+    destino: { ...semSegredo, temToken: Boolean(apiToken) },
+    pendentesParaBackfill: pendentes,
+  });
 }

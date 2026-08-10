@@ -571,9 +571,22 @@ model TrackConversionTarget {
   conversionActionName String?
   sendValue            Boolean   @default(false)
   defaultValue         Float?
-  datasetId            String? // Meta CAPI
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+
+  // ── Meta (Conversions API) ──────────────────────────────────────
+  // Dataset que recebe o evento, o mesmo do Gerenciador de Eventos. Precisa
+  // estar associado à conta de WhatsApp que atende.
+  datasetId String?
+  // Nome do evento no Meta: Purchase, Lead, Contact ou um customizado. Cada
+  // estágio pode mandar um nome diferente.
+  eventName String?
+  // Token próprio para a API. Existe porque o token de usuário da conexão
+  // OAuth normalmente NÃO tem permissão no dataset de mensagens: o caminho
+  // usual é um token de system user, gerado por cliente. Vazio faz cair na
+  // conexão Meta do dono do workspace.
+  apiToken  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([workspaceId, stage, platform])
 }
