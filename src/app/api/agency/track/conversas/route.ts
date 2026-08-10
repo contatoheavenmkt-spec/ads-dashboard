@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   };
   if (estagio && [...STAGES, "perdido"].includes(estagio)) where.stage = estagio;
 
-  const [conversas, porEstagio, cliques, envios] = await Promise.all([
+  const [conversas, porEstagio, cliques, envios, falhasRecentes] = await Promise.all([
     db.trackConversation.findMany({
       where,
       orderBy: { lastMessageAt: "desc" },
@@ -65,6 +65,21 @@ export async function GET(req: NextRequest) {
       by: ["status"],
       where: { workspaceId: { in: escopo }, createdAt: { gte: desde } },
       _count: { _all: true },
+    }),
+    // Os motivos das falhas, para o selo vermelho explicar em vez de só
+    // contar. "3 não subiram" sem o porquê obriga a pessoa a pedir ajuda;
+    // com o motivo (ação de conversão errada, conta desconectada) ela mesma
+    // resolve.
+    db.trackDispatch.findMany({
+      where: {
+        workspaceId: { in: escopo },
+        createdAt: { gte: desde },
+        status: "failed",
+        lastError: { not: null },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 3,
+      select: { lastError: true, platform: true },
     }),
   ]);
 
@@ -97,6 +112,7 @@ export async function GET(req: NextRequest) {
       taxaCasamento: cliques > 0 ? ((acumulado.lead ?? 0) / cliques) * 100 : 0,
     },
     envios: Object.fromEntries(envios.map((e) => [e.status, e._count._all])),
+    motivosDeFalha: falhasRecentes.map((f) => `${f.platform}: ${f.lastError}`),
     dias,
   });
 }

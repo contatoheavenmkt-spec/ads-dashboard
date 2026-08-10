@@ -70,6 +70,7 @@ export default function TrackVisaoGeral() {
   const [workspaces, setWorkspaces] = useState<WorkspaceRef[]>([]);
   const [funil, setFunil] = useState<Funil | null>(null);
   const [envios, setEnvios] = useState<Record<string, number>>({});
+  const [motivosDeFalha, setMotivosDeFalha] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [ws, setWs] = useState("all");
   const [dias, setDias] = useState(30);
@@ -87,6 +88,7 @@ export default function TrackVisaoGeral() {
       setWorkspaces(data.workspaces ?? []);
       setFunil(data.funil ?? null);
       setEnvios(data.envios ?? {});
+      setMotivosDeFalha(data.motivosDeFalha ?? []);
     } finally {
       setLoading(false);
     }
@@ -131,9 +133,20 @@ export default function TrackVisaoGeral() {
           </select>
           <div className="flex-1" />
           {envios.failed ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[11px] font-semibold text-red-300">
+            // O motivo vem junto: "3 não subiram" sem o porquê obriga a pedir
+            // ajuda; com ele (ação errada, conta desconectada) a própria
+            // pessoa resolve.
+            <span
+              title={motivosDeFalha.join("\n") || undefined}
+              className="inline-flex cursor-help items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[11px] font-semibold text-red-300"
+            >
               <XCircle size={12} />
               {envios.failed} conversão(ões) não subiram
+              {motivosDeFalha[0] ? (
+                <span className="max-w-[260px] truncate font-normal text-red-200/80">
+                  · {motivosDeFalha[0].split(": ").slice(1).join(": ")}
+                </span>
+              ) : null}
             </span>
           ) : null}
           {envios.pending ? (

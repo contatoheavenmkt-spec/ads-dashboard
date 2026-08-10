@@ -153,9 +153,11 @@ export async function validarDataset(
   accessToken: string,
 ): Promise<{ ok: boolean; nome?: string; erro?: string }> {
   try {
-    const res = await fetch(
-      `${GRAPH}/${datasetId}?fields=id,name&access_token=${encodeURIComponent(accessToken)}`,
-    );
+    // Token no header, nunca na query string: URL vai parar em log de proxy
+    // e de servidor, e um token de BM vazado dá acesso às contas do cliente.
+    const res = await fetch(`${GRAPH}/${datasetId}?fields=id,name`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     const data = await res.json().catch(() => ({}));
     if (data?.error) {
       return { ok: false, erro: data.error.message ?? "sem acesso ao dataset" };
@@ -202,7 +204,11 @@ export async function descobrirDatasets(p: {
 
   async function buscar(url: string, origem: string) {
     try {
-      const res = await fetch(url);
+      // Token no header, nunca na query string: URL vai parar em log de
+      // proxy, e um token de BM vazado dá acesso às contas do cliente.
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${p.accessToken}` },
+      });
       const data = await res.json().catch(() => ({}));
       if (data?.error) {
         avisos.push(`${origem}: ${data.error.message ?? "sem acesso"}`);
@@ -225,27 +231,16 @@ export async function descobrirDatasets(p: {
     }
   }
 
-  const t = encodeURIComponent(p.accessToken);
-
   // Datasets da BM: é onde ficam os de mensagem (CTWA).
   for (const bm of p.businessIds) {
-    await buscar(
-      `${GRAPH}/${bm}/owned_pixels?fields=id,name&limit=100&access_token=${t}`,
-      "BM (próprios)",
-    );
-    await buscar(
-      `${GRAPH}/${bm}/client_pixels?fields=id,name&limit=100&access_token=${t}`,
-      "BM (compartilhados)",
-    );
+    await buscar(`${GRAPH}/${bm}/owned_pixels?fields=id,name&limit=100`, "BM (próprios)");
+    await buscar(`${GRAPH}/${bm}/client_pixels?fields=id,name&limit=100`, "BM (compartilhados)");
   }
 
   // Alguns datasets aparecem só pela conta de anúncio.
   for (const conta of p.adAccountIds ?? []) {
     const id = conta.startsWith("act_") ? conta : `act_${conta}`;
-    await buscar(
-      `${GRAPH}/${id}/adspixels?fields=id,name&limit=100&access_token=${t}`,
-      "Conta de anúncio",
-    );
+    await buscar(`${GRAPH}/${id}/adspixels?fields=id,name&limit=100`, "Conta de anúncio");
   }
 
   return { datasets: [...achados.values()], avisos };

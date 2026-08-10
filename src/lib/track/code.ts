@@ -20,10 +20,21 @@
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 export const CODE_LENGTH = 8;
 
+/**
+ * Alfabeto de LEITURA, separado do de geração.
+ *
+ * O L saiu da geração, mas códigos criados antes da mudança o contêm, e uma
+ * mensagem pode chegar dias depois do clique (a pessoa guarda o texto pronto
+ * e manda quando quer). Ler com o alfabeto novo descartaria esses códigos e a
+ * conversa ficaria sem atribuição. Regra: o que já foi emitido um dia precisa
+ * ser lido para sempre.
+ */
+const READ_ALPHABET = `${ALPHABET}L`;
+
 /** Prefixo que torna o código localizável no meio de qualquer texto. */
 const MARKER = "#";
 
-const CODE_RE = new RegExp(`${MARKER}([${ALPHABET}]{${CODE_LENGTH}})`);
+const CODE_RE = new RegExp(`${MARKER}([${READ_ALPHABET}]{${CODE_LENGTH}})`);
 
 /**
  * Gera um código aleatório. Usa crypto quando disponível (server e worker),
@@ -89,7 +100,8 @@ export function extractCode(text: string | null | undefined): string | null {
 
 /** Valida o formato sem tocar no banco (usado para descartar lixo cedo). */
 export function isValidCode(code: string): boolean {
-  return new RegExp(`^[${ALPHABET}]{${CODE_LENGTH}}$`).test(code);
+  // Alfabeto de leitura: código antigo com L continua válido para sempre.
+  return new RegExp(`^[${READ_ALPHABET}]{${CODE_LENGTH}}$`).test(code);
 }
 
 /**

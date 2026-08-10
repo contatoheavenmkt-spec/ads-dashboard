@@ -37,6 +37,16 @@
     return;
   }
 
+  /*
+   * Restrição opcional por número: data-phone="5511999999999".
+   *
+   * Sem ela, TODO link de WhatsApp da página é reescrito para o destino do
+   * link rastreável. Num site com dois números (vendas e suporte), o botão de
+   * suporte passaria a abrir vendas. Com o atributo, só os links daquele
+   * número são trocados e o resto fica em paz.
+   */
+  var SO_NUMERO = (script.getAttribute("data-phone") || "").replace(/\D/g, "") || null;
+
   // A origem sai do próprio src do script: assim o mesmo trecho funciona em
   // qualquer ambiente, sem ninguém precisar editar a URL.
   var BASE = script.src.replace(/\/track\.js.*$/, "");
@@ -116,13 +126,20 @@
   /** É um link que leva ao WhatsApp (ou já ao nosso redirecionador)? */
   function ehLinkDeWhatsApp(href) {
     if (!href) return false;
-    return (
+    var eWa =
       href.indexOf("wa.me/") !== -1 ||
       href.indexOf("api.whatsapp.com/send") !== -1 ||
       href.indexOf("web.whatsapp.com/send") !== -1 ||
-      href.indexOf("whatsapp://send") !== -1 ||
-      href.indexOf("/r/" + SLUG) !== -1
-    );
+      href.indexOf("whatsapp://send") !== -1;
+    if (href.indexOf("/r/" + SLUG) !== -1) return true;
+    if (!eWa) return false;
+    // Com data-phone, só o link daquele número é reescrito: os outros botões
+    // de WhatsApp da página (outro setor, outro número) ficam intactos.
+    if (SO_NUMERO) {
+      var digitos = (href.match(/\d{10,15}/) || [""])[0];
+      return digitos.indexOf(SO_NUMERO) !== -1 || SO_NUMERO.indexOf(digitos) !== -1;
+    }
+    return true;
   }
 
   var MARCA = "data-dashfys-track";

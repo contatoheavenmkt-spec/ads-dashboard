@@ -132,6 +132,20 @@ console.log("phone.ts");
   verdade("detecta @lid de conta Business", isLidJid("123456789@lid"));
 }
 
+console.log("compatibilidade com código antigo (o alfabeto tinha L)");
+{
+  // Códigos gerados antes da mudança de alfabeto continham L (~22% deles), e
+  // uma mensagem pode chegar dias depois do clique: a pessoa guarda o texto
+  // pronto e manda quando quer. O que já foi emitido precisa ser lido para
+  // sempre, então o alfabeto de LEITURA contém o de geração antiga.
+  ok("extrai código antigo com L", extractCode("Vim pelo anúncio #ALB2C3D4"), "ALB2C3D4");
+  ok("extrai com L em minúsculo", extractCode("vim pelo anuncio #alb2c3d4"), "ALB2C3D4");
+  verdade("isValidCode aceita código antigo com L", isValidCode("ALB2C3D4"));
+  // Mas a GERAÇÃO nunca mais produz L.
+  const amostra = Array.from({ length: 300 }, () => generateCode()).join("");
+  verdade("geração nunca produz L", !amostra.includes("L"));
+}
+
 console.log(`\n${total - falhas}/${total} checagens passaram`);
 if (falhas > 0) {
   console.error(`${falhas} FALHA(S)`);
