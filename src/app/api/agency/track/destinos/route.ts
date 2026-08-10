@@ -162,6 +162,10 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   const session = await auth();
+  // O teste dispara uma escrita externa de verdade (evento no dataset do
+  // cliente): sessão impersonada não pode.
+  const bloqueio = bloqueioDeEscrita(session);
+  if (bloqueio) return bloqueio;
   if (!session?.user?.id || session.user.role !== "AGENCY") {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }

@@ -93,9 +93,24 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ code: strin
     if (!falhouOBanco) gravarCache(slug, link);
   }
 
-  if (!link || !link.active) {
+  if (!link) {
     return new NextResponse("Link não encontrado", {
       status: 404,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
+  /*
+   * Link DESATIVADO não pode virar 404: com o script no site do cliente,
+   * todos os botões de WhatsApp apontam para cá, e desativar o rastreio
+   * mataria o canal de contato inteiro. A pessoa segue para o destino
+   * (fallback configurado, ou o próprio WhatsApp sem código); só o rastreio
+   * para.
+   */
+  if (!link.active) {
+    const destinoSemRastreio = link.fallbackUrl || `https://wa.me/${link.destinationPhone}`;
+    return NextResponse.redirect(destinoSemRastreio, {
+      status: 302,
       headers: { "Cache-Control": "no-store" },
     });
   }

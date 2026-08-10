@@ -156,9 +156,16 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    // Idade do CLIQUE, não do evento: é o identificador que expira.
-    const nascimento = d.event.conversation.firstMessageAt;
-    const idadeDias = (Date.now() - nascimento.getTime()) / 86400_000;
+    /*
+     * Cada plataforma expira uma coisa diferente. No Google é o CLIQUE que
+     * vence (gclid vale 90 dias), então a idade certa é a da primeira
+     * mensagem. No Meta o limite duro da API é a idade do EVENTO
+     * (event_time até 7 dias atrás): uma venda de ontem numa conversa de 6
+     * dias é perfeitamente válida, e medir pelo clique a descartaria.
+     */
+    const referencia =
+      d.platform === "meta" ? d.event.occurredAt : d.event.conversation.firstMessageAt;
+    const idadeDias = (Date.now() - referencia.getTime()) / 86400_000;
     const janela = d.platform === "meta" ? JANELA_CTWA_DIAS : JANELA_GCLID_DIAS;
     if (idadeDias > janela) {
       await marcar(
@@ -383,16 +390,31 @@ async function enviarGrupoMeta(
     return { ok: 0, falhos: grupo.length };
   }
 
-  const eventos = grupo.map((d) => ({
-    eventName: alvo.eventName || EVENTO_PADRAO[d.event.stage] || "Lead",
-    // Em segundos, e do momento em que o fato aconteceu.
-    eventTime: Math.floor(d.event.occurredAt.getTime() / 1000),
-    // Deduplicação do lado do Meta, igual ao orderId do Google.
-    eventId: d.id,
-    ctwaClid: d.event.conversation.ctwaClid!,
-    valor: alvo.sendValue ? d.event.value : null,
-    moeda: d.event.currency || "BRL",
-  }));
+  const eventos = grupo.map((d) => {
+    const eventName = alvo.eventName || EVENTO_PADRAO[d.event.stage] || "Lead";
+    /*
+     * Purchase é o único evento em que value e currency são OBRIGATÓRIOS na
+     * Conversions API: sem eles o Meta recusa. E era exatamente o que a
+     * configuração padrão produzia (sendValue desligado), com o agravante de
+     * o teste de permissão usar Lead, então o teste passava e o envio real
+     * falhava. Para Purchase o valor vai sempre: o da venda, ou o padrão do
+     * destino, ou zero, que o Meta aceita.
+     */
+    const ehPurchase = eventName === "Purchase";
+    const valor = alvo.sendValue || ehPurchase
+      ? d.event.value ?? alvo.defaultValue ?? (ehPurchase ? 0 : null)
+      : null;
+    return {
+      eventName,
+      // Em segundos, e do momento em que o fato aconteceu.
+      eventTime: Math.floor(d.event.occurredAt.getTime() / 1000),
+      // Deduplicação do lado do Meta, igual ao orderId do Google.
+      eventId: d.id,
+      ctwaClid: d.event.conversation.ctwaClid!,
+      valor,
+      moeda: d.event.currency || "BRL",
+    };
+  });
 
   const resultado = await enviarEventosCapi({
     datasetId: alvo.datasetId,
@@ -408,6 +430,48 @@ async function enviarGrupoMeta(
 
   if (!resultado.ok && resultado.erro) {
     const tipo = classificarErroCapi(resultado.erro.codigo, resultado.erro.tipo);
+
+    /*
+     * A CAPI não tem falha parcial como o Google: o lote é tudo ou nada. Um
+     * único evento malformado derrubaria os outros de forma PERMANENTE, e
+     * vendas boas morreriam por culpa de uma vizinha de lote. Com erro
+     * permanente num lote de vários, reenvia um a um: o podre falha sozinho
+     * e os bons passam.
+     */
+    if (tipo === "permanente" && grupo.length > 1) {
+      let ok = 0;
+      let falhos = 0;
+      for (let i = 0; i < grupo.length; i++) {
+        const d = grupo[i];
+        const solo = await enviarEventosCapi({
+          datasetId: alvo.datasetId,
+          accessToken: token,
+          eventos: [eventos[i]],
+          testEventCode: simular ? "TEST_DASHFYS" : null,
+        });
+        const pedidoSolo = JSON.stringify({ dataset: alvo.datasetId, eventos: [eventos[i]] }).slice(0, 4000);
+        const respostaSolo = JSON.stringify(solo.respostaCrua).slice(0, 4000);
+        if (solo.ok) {
+          if (simular) {
+            await db.trackDispatch.update({
+              where: { id: d.id },
+              data: { status: "pending", lockedAt: null, lastError: null, responsePayload: respostaSolo },
+            });
+          } else {
+            await marcar(d.id, "sent", null, d.attempts, pedidoSolo, respostaSolo);
+          }
+          ok++;
+        } else {
+          const msgSolo = `${solo.erro?.codigo}: ${solo.erro?.mensagem}`;
+          const tipoSolo = classificarErroCapi(solo.erro?.codigo ?? "", solo.erro?.tipo);
+          if (tipoSolo === "permanente") await marcar(d.id, "failed", msgSolo, d.attempts, pedidoSolo, respostaSolo);
+          else await falhar(d.id, d.attempts, msgSolo, pedidoSolo, respostaSolo);
+          falhos++;
+        }
+      }
+      return { ok, falhos };
+    }
+
     for (const d of grupo) {
       const msg = `${resultado.erro.codigo}: ${resultado.erro.mensagem}`;
       if (tipo === "permanente") await marcar(d.id, "failed", msg, d.attempts, pedido, resposta);

@@ -134,6 +134,28 @@ async function processarUma(
     await db.trackSettings.findUnique({ where: { workspaceId } }),
   );
 
+  // A atribuição do Meta pode chegar DEPOIS da primeira mensagem (o
+  // externalAdReply vem na mensagem que o anúncio gerou, que nem sempre é a
+  // primeira a ser processada). Conversa sem atribuição absorve o ctwa_clid
+  // que aparecer: sem isso, um clique pago viraria conversa "orgânica".
+  if (!daAgencia && conteudo.ctwaClid) {
+    await db.trackConversation.updateMany({
+      where: {
+        instanceId,
+        contactKey: contato.contactKey,
+        matchType: "none",
+        ctwaClid: null,
+      },
+      data: {
+        ctwaClid: conteudo.ctwaClid,
+        adId: conteudo.adId,
+        matchType: "ctwa",
+        matchConfidence: "high",
+        source: "meta",
+      },
+    });
+  }
+
   const conversa = await acharOuCriarConversa({
     instanceId,
     workspaceId,
@@ -156,7 +178,23 @@ async function processarUma(
       where: { conversationId_waMessageId: { conversationId: conversa.id, waMessageId } },
       select: { id: true },
     });
-    if (jaTem) return;
+    if (jaTem) {
+      /*
+       * A mensagem já está gravada, mas isso NÃO garante que o funil rodou:
+       * se o processo morreu entre a gravação e a reavaliação, o retry cai
+       * aqui e a frase "venda realizada" daquela mensagem nunca dispararia.
+       * Reavaliar é idempotente (o funil só anda pra frente), então o custo
+       * de repetir é zero e o de pular é uma venda perdida.
+       */
+      await reavaliar({
+        workspaceId,
+        conversationId: conversa.id,
+        cfg,
+        mensagem: { texto: conteudo.texto, direcao: daAgencia ? "out" : "in" },
+        quando,
+      }).catch((e) => log.erro(`reavaliação no dedupe falhou: ${e.message}`));
+      return;
+    }
   }
 
   await db.trackMessage.create({
@@ -341,7 +379,10 @@ async function criar(p: {
   if (codigo) {
     const clique = await db.trackClick.findUnique({
       where: { workspaceId_code: { workspaceId: p.workspaceId, code: codigo } },
-      select: { id: true, gclid: true, wbraid: true, gbraid: true, campaignId: true, matchedAt: true },
+      select: {
+        id: true, gclid: true, wbraid: true, gbraid: true,
+        fbclid: true, ctwaClid: true, campaignId: true, matchedAt: true,
+      },
     });
     if (clique?.matchedAt) {
       /*
@@ -365,7 +406,13 @@ async function criar(p: {
       clickId = clique.id;
       matchType = "code";
       matchConfidence = "high";
-      source = "google";
+      // A origem sai dos IDs que o clique realmente carrega, não de um
+      // "google" fixo: clique casado por código mas vindo de anúncio do Meta
+      // (fbclid) ou sem id nenhum (só utm) apareceria como Google no painel
+      // e confundiria a leitura do gestor.
+      source = clique.gclid || clique.wbraid || clique.gbraid ? "google"
+        : clique.fbclid || clique.ctwaClid ? "meta"
+        : "outro";
       gclid = clique.gclid;
       // wbraid e gbraid vêm no lugar do gclid quando o consentimento limita o
       // identificador (iOS, PMax, YouTube). Sem copiar os três, a venda dessas

@@ -53,7 +53,7 @@ export async function registrarStage(p: RegistrarStageParams): Promise<Resultado
     select: {
       id: true, stage: true, clickId: true, matchConfidence: true,
       gclid: true, wbraid: true, gbraid: true, ctwaClid: true, source: true, leadId: true,
-      firstMessageAt: true,
+      firstMessageAt: true, respondedAt: true, qualifiedAt: true,
     },
   });
   if (!conversa) return { criados: [], despachos: 0, motivoSemDespacho: "conversa não existe" };
@@ -104,8 +104,11 @@ export async function registrarStage(p: RegistrarStageParams): Promise<Resultado
   // reavaliação e fazer a data de fechamento andar sozinha.
   if (!nadaNovo) {
     const camposDeData: Record<string, unknown> = { stage };
-    if (alvos.includes("respondeu")) camposDeData.respondedAt = camposDeData.respondedAt ?? quando;
-    if (stage === "qualificado" || alvos.includes("qualificado")) {
+    // Timestamps históricos não são reescritos: uma venda que chega depois
+    // não pode fazer o "qualificado em" andar para a data da venda, senão a
+    // linha do tempo da conversa mente.
+    if (alvos.includes("respondeu") && !conversa.respondedAt) camposDeData.respondedAt = quando;
+    if ((stage === "qualificado" || alvos.includes("qualificado")) && !conversa.qualifiedAt) {
       camposDeData.qualifiedAt = quando;
       camposDeData.qualifiedBy = p.origem;
     }
@@ -172,6 +175,23 @@ export async function repararEventosOrfaos(
   let enfileirados = 0;
 
   for (const destino of destinos) {
+    /*
+     * Despachos que foram pulados porque o destino estava desligado ou
+     * incompleto na hora. Sem isto, religar o destino não recuperava nada:
+     * o dispatch "skipped" existe, então a varredura de órfãos (que procura
+     * evento SEM dispatch) não o enxerga, e o unique impede criar outro.
+     * Só os motivos de configuração voltam: "sem gclid" não muda nunca.
+     */
+    const ressuscitados = await db.trackDispatch.updateMany({
+      where: {
+        targetId: destino.id,
+        status: "skipped",
+        lastError: { contains: "desligado" },
+      },
+      data: { status: "pending", lastError: null, nextAttemptAt: new Date() },
+    });
+    if (ressuscitados.count > 0) enfileirados += ressuscitados.count;
+
     const pendentes = await db.trackEvent.findMany({
       where: {
         workspaceId: destino.workspaceId,

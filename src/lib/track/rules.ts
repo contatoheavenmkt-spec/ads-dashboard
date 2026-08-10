@@ -16,10 +16,44 @@ export interface EstadoConversa {
   stage: ConversationStage;
   inboundCount: number;
   outboundCount: number;
+  /**
+   * Idas e voltas REAIS: quantas vezes o cliente voltou depois de uma
+   * resposta do atendente, na sequência de mensagens de verdade.
+   *
+   * Não é min(inbound, outbound): com essa conta, um lead que mandou 3
+   * mensagens no primeiro dia e sumiu viraria "qualificado" quando o
+   * atendente mandasse a 3ª cobrança sem resposta. Follow-up no vácuo não é
+   * conversa.
+   */
+  trocasCompletas: number;
   /** Etiquetas atualmente na conversa, por waLabelId. */
   labelIds: string[];
   /** Houve mensagem da agência antes da última do cliente? */
   houveOutboundAntesDoUltimoInbound: boolean;
+}
+
+/**
+ * Conta as idas e voltas de uma sequência de direções de mensagem.
+ *
+ * Colapsa rajadas (3 mensagens seguidas do cliente = 1 bloco) e conta quantos
+ * blocos do cliente vieram DEPOIS de um bloco do atendente: é o "voltou
+ * depois da resposta", que é o que separa conversa de monólogo dos dois
+ * lados.
+ */
+export function contarTrocasCompletas(direcoes: Array<"in" | "out">): number {
+  let trocas = 0;
+  let anterior: "in" | "out" | null = null;
+  let houveOut = false;
+  for (const d of direcoes) {
+    if (d === anterior) continue; // rajada do mesmo lado: mesmo bloco
+    if (d === "out") houveOut = true;
+    if (d === "in" && houveOut) {
+      trocas++;
+      houveOut = false; // a próxima troca exige nova resposta do atendente
+    }
+    anterior = d;
+  }
+  return trocas;
 }
 
 export interface MensagemAvaliada {
@@ -97,9 +131,12 @@ export function avaliarConversa(
   // mensagens soltas: cinco mensagens seguidas do cliente sem resposta são
   // lead ansioso, não conversa.
   if (cfg.qualifiedMinTrocas > 0) {
-    const trocas = Math.min(estado.inboundCount, estado.outboundCount);
-    if (trocas >= cfg.qualifiedMinTrocas && avancou(estado.stage, "qualificado")) {
-      return { stage: "qualificado", origem: "messages", detalhe: `${trocas} trocas de mensagem` };
+    if (estado.trocasCompletas >= cfg.qualifiedMinTrocas && avancou(estado.stage, "qualificado")) {
+      return {
+        stage: "qualificado",
+        origem: "messages",
+        detalhe: `${estado.trocasCompletas} idas e voltas na conversa`,
+      };
     }
   }
 

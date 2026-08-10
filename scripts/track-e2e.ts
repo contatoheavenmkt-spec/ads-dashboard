@@ -144,14 +144,14 @@ async function main() {
   });
 
   const detRespondeu = avaliarConversa(cfg, {
-    stage: "lead", inboundCount: 2, outboundCount: 1, labelIds: [],
+    stage: "lead", inboundCount: 2, outboundCount: 1, trocasCompletas: 1, labelIds: [],
     houveOutboundAntesDoUltimoInbound: true,
   });
   checa("duas entradas com resposta no meio = respondeu", detRespondeu?.stage === "respondeu");
 
   // Sem resposta do atendente no meio, não conta como engajamento.
   const semTroca = avaliarConversa(cfg, {
-    stage: "lead", inboundCount: 3, outboundCount: 0, labelIds: [],
+    stage: "lead", inboundCount: 3, outboundCount: 0, trocasCompletas: 0, labelIds: [],
     houveOutboundAntesDoUltimoInbound: false,
   });
   checa("lead falando sozinho NÃO é respondeu", semTroca === null);
@@ -204,7 +204,7 @@ async function main() {
   );
 
   const detVenda = avaliarConversa(cfg, {
-    stage: "respondeu", inboundCount: 2, outboundCount: 1,
+    stage: "respondeu", inboundCount: 2, outboundCount: 1, trocasCompletas: 1,
     labelIds: [ETIQUETA_PAGO], houveOutboundAntesDoUltimoInbound: true,
   });
   checa("etiqueta Pago vira venda", detVenda?.stage === "venda" && detVenda.origem === "label");

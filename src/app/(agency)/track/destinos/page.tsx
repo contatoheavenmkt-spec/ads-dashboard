@@ -200,7 +200,21 @@ export default function TrackDestinos() {
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={ws}
-            onChange={(e) => { setWs(e.target.value); setAcoes([]); setAviso(null); }}
+            onChange={(e) => {
+              setWs(e.target.value);
+              // TUDO que deriva do cliente anterior sai da tela junto com ele.
+              // Sem esta limpeza, o datasetLocal do cliente A sobrevivia à
+              // troca e um salvamento gravaria o dataset dele no cliente B:
+              // conversão de um cliente caindo na conta do outro.
+              setAcoes([]);
+              setAviso(null);
+              setDatasets([]);
+              setDatasetLocal("");
+              setAvisoMeta(null);
+              setResultadoTeste(null);
+              setTokenMeta("");
+              setContaDeConversao(null);
+            }}
             className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs font-medium text-slate-300 focus:border-cyan-500/60 focus:outline-none"
           >
             {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}

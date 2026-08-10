@@ -32,7 +32,17 @@ export async function GET(req: NextRequest) {
 
   const [linha, alvos, instancias] = await Promise.all([
     db.trackSettings.findUnique({ where: { workspaceId } }),
-    db.trackConversionTarget.findMany({ where: { workspaceId } }),
+    // Select explícito SEM o apiToken: esta rota devolvia a linha inteira e o
+    // token de system user do Meta ia parar no navegador. Token vazado dá
+    // acesso às contas do cliente; o front só precisa saber que existe.
+    db.trackConversionTarget.findMany({
+      where: { workspaceId },
+      select: {
+        id: true, stage: true, platform: true, enabled: true,
+        conversionActionId: true, conversionActionName: true,
+        datasetId: true, eventName: true, sendValue: true, defaultValue: true,
+      },
+    }),
     db.whatsappInstance.findMany({
       where: { workspaceId },
       select: {
@@ -149,7 +159,12 @@ export async function PUT(req: NextRequest) {
     lostLabelIds: limparIds(c.lostLabelIds),
     salePhrases: limparFrases(c.salePhrases),
     qualifiedPhrases: limparFrases(c.qualifiedPhrases),
-    qualifiedMinTrocas: Math.min(20, Math.max(0, Math.round(Number(c.qualifiedMinTrocas ?? 3)))),
+    // Só mexe se o campo veio no payload. Com fallback fixo em 3, um save de
+    // tela antiga (ou cacheada) sem o campo religava em silêncio a
+    // qualificação automática de quem tinha escolhido "Desligado".
+    ...(c.qualifiedMinTrocas !== undefined
+      ? { qualifiedMinTrocas: Math.min(20, Math.max(0, Math.round(Number(c.qualifiedMinTrocas) || 0))) }
+      : {}),
     respondedMinInbound: Math.min(Math.max(Number(c.respondedMinInbound) || 2, 1), 20),
     respondedRequiresOutbound: c.respondedRequiresOutbound !== false,
     defaultSaleValue:

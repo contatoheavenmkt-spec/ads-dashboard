@@ -5,7 +5,7 @@
  * enviada ao Google Ads. Um falso positivo aqui manda venda que não existiu e
  * ensina o algoritmo do cliente a gastar no lugar errado.
  */
-import { avaliarConversa, foiMarcadaComoPerdida, valorDaVenda } from "../src/lib/track/rules";
+import { avaliarConversa, contarTrocasCompletas, foiMarcadaComoPerdida, valorDaVenda } from "../src/lib/track/rules";
 import { CONFIG_PADRAO, type TrackConfig } from "../src/lib/track/settings";
 
 let falhas = 0;
@@ -41,6 +41,7 @@ const base = {
   stage: "lead" as const,
   inboundCount: 1,
   outboundCount: 0,
+  trocasCompletas: 0,
   labelIds: [] as string[],
   houveOutboundAntesDoUltimoInbound: false,
 };
@@ -163,40 +164,58 @@ console.log("workspace sem configuração");
   );
 }
 
-console.log("qualificado por engajamento (automático)");
+console.log("qualificado por engajamento (alternância real)");
 {
   const cfgEng: TrackConfig = { ...cfg, qualifiedMinTrocas: 3 };
-  const est = (inb: number, out: number) => ({
+  const est = (trocas: number, inb = trocas + 1, out = trocas) => ({
     stage: "respondeu" as const, inboundCount: inb, outboundCount: out,
+    trocasCompletas: trocas,
     labelIds: [] as string[], houveOutboundAntesDoUltimoInbound: true,
   });
 
   // 3 idas e voltas completas: é conversa de verdade.
-  ok("3 trocas qualificam sozinho", avaliarConversa(cfgEng, est(3, 3))?.stage, "qualificado");
-  ok("origem é a contagem de mensagens", avaliarConversa(cfgEng, est(3, 3))?.origem, "messages");
-  verdade("o detalhe explica o porquê", Boolean(avaliarConversa(cfgEng, est(3, 3))?.detalhe?.includes("trocas")));
-  ok("4 trocas também", avaliarConversa(cfgEng, est(4, 5))?.stage, "qualificado");
-  ok("2 trocas ainda não", avaliarConversa(cfgEng, est(2, 2)), null);
-
-  // O ponto central: mensagem solta não é conversa. Cliente ansioso mandando
-  // 8 mensagens sem ninguém responder não é lead qualificado.
-  ok("8 mensagens do cliente sem resposta NÃO qualificam", avaliarConversa(cfgEng, est(8, 0)), null);
-  ok("8 do cliente com 1 resposta NÃO qualificam", avaliarConversa(cfgEng, est(8, 1)), null);
-  ok("conta o menor dos dois lados", avaliarConversa(cfgEng, est(9, 3))?.stage, "qualificado");
+  ok("3 trocas qualificam sozinho", avaliarConversa(cfgEng, est(3))?.stage, "qualificado");
+  ok("origem é a contagem de mensagens", avaliarConversa(cfgEng, est(3))?.origem, "messages");
+  verdade("o detalhe explica o porquê", Boolean(avaliarConversa(cfgEng, est(3))?.detalhe?.includes("idas e voltas")));
+  ok("4 trocas também", avaliarConversa(cfgEng, est(4))?.stage, "qualificado");
+  ok("2 trocas ainda não", avaliarConversa(cfgEng, est(2)), null);
 
   // Desligado volta ao comportamento anterior: só marca à mão.
   const desligado: TrackConfig = { ...cfg, qualifiedMinTrocas: 0 };
-  ok("com 0 fica desligado", avaliarConversa(desligado, est(10, 10)), null);
-  ok("mas a etiqueta continua valendo", avaliarConversa(desligado, { ...est(1, 1), labelIds: ["10"] })?.stage, "qualificado");
+  ok("com 0 fica desligado", avaliarConversa(desligado, est(10)), null);
+  ok("mas a etiqueta continua valendo", avaliarConversa(desligado, { ...est(1), labelIds: ["10"] })?.stage, "qualificado");
 
   // Venda continua ganhando de qualificado.
   ok(
     "venda tem precedência sobre engajamento",
-    avaliarConversa(cfgEng, { ...est(5, 5), labelIds: ["20"] })?.stage,
+    avaliarConversa(cfgEng, { ...est(5), labelIds: ["20"] })?.stage,
     "venda",
   );
   // E não volta atrás depois de vendido.
-  ok("já vendido não vira qualificado por conversa", avaliarConversa(cfgEng, { ...est(9, 9), stage: "venda" }), null);
+  ok("já vendido não vira qualificado por conversa", avaliarConversa(cfgEng, { ...est(9), stage: "venda" }), null);
+}
+
+console.log("contagem de trocas (a alternância em si)");
+{
+  const t = (seq: string) => contarTrocasCompletas([...seq].map((c) => (c === "I" ? "in" : "out")));
+
+  // O caso que motivou a mudança: cliente mandou 3 e sumiu, atendente mandou
+  // 3 cobranças no vácuo. min(3,3) diria "qualificado"; a alternância diz 0.
+  ok("monólogo dos dois lados NÃO conta", t("IIIOOO"), 0);
+  ok("cliente falando sozinho é 0", t("IIIIIIII"), 0);
+  ok("atendente cobrando no vácuo é 0", t("IOOOOO"), 0);
+
+  // Conversa de verdade: o cliente VOLTA depois da resposta.
+  ok("I-O-I é 1 troca", t("IOI"), 1);
+  ok("I-O-I-O-I é 2 trocas", t("IOIOI"), 2);
+  ok("I-O-I-O-I-O-I é 3 trocas", t("IOIOIOI"), 3);
+  // Rajada colapsa: 3 mensagens seguidas do cliente = 1 bloco.
+  ok("rajadas colapsam", t("IIIOOIIOI"), 2);
+  // Atendente terminando a conversa não conta como troca.
+  ok("resposta final sem retorno não conta", t("IOIO"), 1);
+  ok("vazio é 0", t(""), 0);
+  // Conversa iniciada pelo atendente (raro, mas possível).
+  ok("O-I conta como 1 (cliente respondeu)", t("OI"), 1);
 }
 
 console.log(`

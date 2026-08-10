@@ -3,6 +3,7 @@ import { db } from "../prisma";
 import { registrarStage } from "../../src/lib/track/events";
 import {
   avaliarConversa,
+  contarTrocasCompletas,
   foiMarcadaComoPerdida,
   valorDaVenda,
   type MensagemAvaliada,
@@ -56,12 +57,24 @@ export async function reavaliar(p: {
     return;
   }
 
+  // A sequência real das mensagens, para as regras que dependem de ALTERNÂNCIA
+  // e não de contagem solta. 200 últimas bastam: quem passou disso qualificou
+  // há muito tempo.
+  const sequencia = await db.trackMessage.findMany({
+    where: { conversationId: conversa.id },
+    orderBy: { sentAt: "asc" },
+    take: 200,
+    select: { direction: true },
+  });
+  const direcoes = sequencia.map((m) => (m.direction === "out" ? "out" : "in") as "in" | "out");
+
   const detectado = avaliarConversa(
     cfg,
     {
       stage: conversa.stage as never,
       inboundCount: conversa.inboundCount,
       outboundCount: conversa.outboundCount,
+      trocasCompletas: contarTrocasCompletas(direcoes),
       labelIds,
       houveOutboundAntesDoUltimoInbound: await houveTrocaDeVerdade(conversa.id),
     },
