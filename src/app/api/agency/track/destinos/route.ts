@@ -5,6 +5,8 @@ import { bloqueioDeEscrita } from "@/lib/impersonation";
 import { rateLimit } from "@/lib/rate-limit";
 import { workspaceDaAgencia, workspacesDaAgencia } from "@/lib/track/acesso";
 import { STAGES, type Stage } from "@/lib/track/stages";
+import { descobrirDatasets, testarEscrita, type DatasetMeta } from "@/lib/meta-capi";
+import { getStoredMetaToken } from "@/lib/meta-token";
 import {
   getValidGoogleToken,
   listConversionActions,
@@ -47,12 +49,17 @@ export async function GET(req: NextRequest) {
     orderBy: [{ platform: "asc" }, { stage: "asc" }],
   });
 
-  // Contas Google ligadas a este cliente.
+  // Contas ligadas a este cliente, das duas plataformas.
   const integracoes = await db.workspaceIntegration.findMany({
-    where: { workspaceId, integration: { platform: "google", status: "active" } },
-    select: { integration: { select: { adAccountId: true, name: true, loginCustomerId: true } } },
+    where: { workspaceId, integration: { status: "active" } },
+    select: {
+      integration: {
+        select: { platform: true, adAccountId: true, name: true, loginCustomerId: true, bmId: true, bmName: true },
+      },
+    },
   });
-  const contas = integracoes.map((i) => i.integration);
+  const contas = integracoes.map((i) => i.integration).filter((i) => i.platform === "google");
+  const contasMeta = integracoes.map((i) => i.integration).filter((i) => i.platform === "meta");
 
   // A lista de ações custa uma chamada à API, então só vem quando pedida.
   let acoes: Array<{ id: string; name: string; type: string; status: string; usavel: boolean }> = [];
@@ -98,6 +105,39 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  /*
+   * Datasets do Meta, descobertos pela conexão que a agência já fez.
+   *
+   * A versão anterior pedia para colar ID e token na mão, o que é
+   * desnecessário: a BM já está ligada ao produto e o OAuth já pede
+   * `business_management`. Aqui a lista sai pronta e a pessoa só escolhe.
+   */
+  let datasets: DatasetMeta[] = [];
+  let avisoMeta: string | null = null;
+  let temTokenDaConexao = false;
+
+  if (buscarAcoes && contasMeta.length > 0) {
+    const tokenMeta = await getStoredMetaToken(session.user.id);
+    temTokenDaConexao = Boolean(tokenMeta);
+    if (!tokenMeta) {
+      avisoMeta = "Conta Meta desconectada. Reconecte em Integrações.";
+    } else {
+      const bms = [...new Set(contasMeta.map((c) => c.bmId).filter((b): b is string => Boolean(b)))];
+      const r = await descobrirDatasets({
+        accessToken: tokenMeta,
+        businessIds: bms,
+        adAccountIds: contasMeta.map((c) => c.adAccountId),
+      });
+      datasets = r.datasets;
+      if (datasets.length === 0) {
+        avisoMeta =
+          r.avisos.length > 0
+            ? `Não encontrei dataset nas BMs ligadas. ${r.avisos[0]}`
+            : "Nenhum dataset encontrado nas BMs deste cliente. Confira no Gerenciador de Eventos se existe um ligado à conta de WhatsApp.";
+      }
+    }
+  }
+
   return NextResponse.json({
     workspaces,
     destinos: destinos.map(({ apiToken, ...d }) => ({ ...d, temToken: Boolean(apiToken) })),
@@ -105,8 +145,58 @@ export async function GET(req: NextRequest) {
     avisoAcoes,
     contaDeConversao,
     contas,
+    contasMeta,
+    datasets,
+    avisoMeta,
+    temTokenDaConexao,
     stages: STAGES,
   });
+}
+
+/**
+ * Prova que dá para escrever no dataset ANTES de ligar.
+ *
+ * Listar não garante permissão de escrita, que é o que importa. Manda um
+ * evento de teste de verdade (com test_event_code, então não conta para a
+ * campanha) e devolve o erro exato do Meta se falhar.
+ */
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== "AGENCY") {
+    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  }
+
+  const rl = rateLimit(`track-teste-meta:${session.user.id}`, 20, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json({ error: "Espere um pouco antes de testar de novo." }, { status: 429 });
+  }
+
+  const { workspaceId, datasetId, apiToken } = (await req.json().catch(() => ({}))) as {
+    workspaceId?: string;
+    datasetId?: string;
+    apiToken?: string;
+  };
+  if (!workspaceId || !datasetId) {
+    return NextResponse.json({ error: "Informe o cliente e o dataset" }, { status: 400 });
+  }
+  const ws = await workspaceDaAgencia(workspaceId, session.user.id);
+  if (!ws) return NextResponse.json({ error: "Workspace inválido" }, { status: 403 });
+
+  // Ordem: token colado agora, token já salvo, e por fim o da conexão.
+  let token = apiToken || null;
+  if (!token) {
+    const salvo = await db.trackConversionTarget.findFirst({
+      where: { workspaceId, platform: "meta", apiToken: { not: null } },
+      select: { apiToken: true },
+    });
+    token = salvo?.apiToken ?? (await getStoredMetaToken(session.user.id));
+  }
+  if (!token) {
+    return NextResponse.json({ error: "Sem token do Meta disponível." }, { status: 400 });
+  }
+
+  const r = await testarEscrita(datasetId.replace(/\D/g, ""), token);
+  return NextResponse.json(r);
 }
 
 interface SalvarBody {

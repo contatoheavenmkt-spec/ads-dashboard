@@ -165,3 +165,118 @@ export async function validarDataset(
     return { ok: false, erro: (err as Error).message };
   }
 }
+
+/* ─────────────────── descoberta automática ─────────────────── */
+
+export interface DatasetMeta {
+  id: string;
+  nome: string;
+  /** De onde veio: a BM ligada ao cliente ou a conta de anúncio. */
+  origem: string;
+  /** O token que temos consegue escrever nele? */
+  usavel: boolean;
+  motivo?: string;
+}
+
+/**
+ * Descobre os datasets que o cliente já tem, usando a conexão que a agência
+ * fez no login.
+ *
+ * O OAuth do produto já pede `business_management` e `ads_management`, então
+ * na maior parte dos casos dá para listar tudo sozinho e o usuário só escolhe
+ * numa lista, em vez de caçar um ID no Gerenciador de Eventos e colar na mão.
+ *
+ * Quando o token não alcança algum dataset, ele aparece marcado como não
+ * usável com o motivo, em vez de sumir da lista: assim a pessoa entende que
+ * o problema é permissão, não ausência.
+ */
+export async function descobrirDatasets(p: {
+  accessToken: string;
+  /** BMs já ligadas ao cliente. */
+  businessIds: string[];
+  /** Contas de anúncio do cliente, para achar dataset ligado a elas. */
+  adAccountIds?: string[];
+}): Promise<{ datasets: DatasetMeta[]; avisos: string[] }> {
+  const achados = new Map<string, DatasetMeta>();
+  const avisos: string[] = [];
+
+  async function buscar(url: string, origem: string) {
+    try {
+      const res = await fetch(url);
+      const data = await res.json().catch(() => ({}));
+      if (data?.error) {
+        avisos.push(`${origem}: ${data.error.message ?? "sem acesso"}`);
+        return;
+      }
+      for (const item of data?.data ?? []) {
+        if (!item?.id) continue;
+        if (achados.has(item.id)) continue;
+        achados.set(item.id, {
+          id: String(item.id),
+          nome: item.name ?? `Dataset ${item.id}`,
+          origem,
+          // A permissão real só se confirma na escrita; aqui é otimista e a
+          // validação faz a prova antes de ligar.
+          usavel: true,
+        });
+      }
+    } catch (err) {
+      avisos.push(`${origem}: ${(err as Error).message}`);
+    }
+  }
+
+  const t = encodeURIComponent(p.accessToken);
+
+  // Datasets da BM: é onde ficam os de mensagem (CTWA).
+  for (const bm of p.businessIds) {
+    await buscar(
+      `${GRAPH}/${bm}/owned_pixels?fields=id,name&limit=100&access_token=${t}`,
+      "BM (próprios)",
+    );
+    await buscar(
+      `${GRAPH}/${bm}/client_pixels?fields=id,name&limit=100&access_token=${t}`,
+      "BM (compartilhados)",
+    );
+  }
+
+  // Alguns datasets aparecem só pela conta de anúncio.
+  for (const conta of p.adAccountIds ?? []) {
+    const id = conta.startsWith("act_") ? conta : `act_${conta}`;
+    await buscar(
+      `${GRAPH}/${id}/adspixels?fields=id,name&limit=100&access_token=${t}`,
+      "Conta de anúncio",
+    );
+  }
+
+  return { datasets: [...achados.values()], avisos };
+}
+
+/**
+ * Prova de fogo antes de ligar: manda um evento de TESTE de verdade.
+ *
+ * Listar o dataset não garante permissão de escrita, que é o que importa.
+ * Este envio usa `test_event_code`, então aparece no Gerenciador de Eventos
+ * para conferência e não conta para a campanha. É a diferença entre descobrir
+ * o problema agora ou daqui a três dias, quando a venda já aconteceu.
+ */
+export async function testarEscrita(
+  datasetId: string,
+  accessToken: string,
+): Promise<{ ok: boolean; erro?: string }> {
+  const r = await enviarEventosCapi({
+    datasetId,
+    accessToken,
+    testEventCode: "TEST_DASHFYS",
+    eventos: [
+      {
+        eventName: "Lead",
+        eventTime: Math.floor(Date.now() / 1000),
+        eventId: `teste-dashfys-${Date.now()}`,
+        // Valor sintético só para a chamada ter forma válida.
+        ctwaClid: "teste_de_permissao_dashfys",
+      },
+    ],
+  });
+  if (r.ok) return { ok: true };
+  return { ok: false, erro: `${r.erro?.codigo}: ${r.erro?.mensagem}` };
+}

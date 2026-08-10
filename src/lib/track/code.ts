@@ -9,8 +9,15 @@
  * caminho relativo, fora do resolver de paths do tsconfig.
  */
 
-/** Sem 0/O/1/I/L: o código é lido e digitado por gente. 32^8 ≈ 1,1 trilhão. */
-const ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+/**
+ * Sem 0, O, 1, I e L: o código é lido e digitado por gente, e num tipo sem
+ * serifa esses cinco viram dois. 31^8 ≈ 850 bilhões, folga de sobra.
+ *
+ * O L estava aqui por engano até uma checagem pegar: ele aparecia em cerca de
+ * 22% dos códigos gerados, exatamente o problema que a lista existe para
+ * evitar.
+ */
+const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 export const CODE_LENGTH = 8;
 
 /** Prefixo que torna o código localizável no meio de qualquer texto. */
@@ -24,11 +31,31 @@ const CODE_RE = new RegExp(`${MARKER}([${ALPHABET}]{${CODE_LENGTH}})`);
  * a colisão é tratada no banco pelo unique [workspaceId, code].
  */
 export function generateCode(): string {
-  const bytes = randomBytes(CODE_LENGTH);
+  return sortearDoAlfabeto(CODE_LENGTH);
+}
+
+/**
+ * Sorteia caracteres com distribuição uniforme.
+ *
+ * Com alfabeto de 31, `byte % 31` enviesaria: 256 não é múltiplo de 31, então
+ * os primeiros caracteres sairiam com mais frequência que os últimos. O
+ * descarte dos bytes acima do maior múltiplo (248) resolve, ao custo de pedir
+ * mais alguns bytes de vez em quando.
+ */
+function sortearDoAlfabeto(tamanho: number): string {
+  const n = ALPHABET.length;
+  const limite = Math.floor(256 / n) * n;
   let out = "";
-  for (let i = 0; i < CODE_LENGTH; i++) {
-    // 256 % 32 === 0, então o módulo não enviesa a distribuição.
-    out += ALPHABET[bytes[i] % ALPHABET.length];
+  let bytes = randomBytes(tamanho * 2);
+  let i = 0;
+
+  while (out.length < tamanho) {
+    if (i >= bytes.length) {
+      bytes = randomBytes(tamanho);
+      i = 0;
+    }
+    const b = bytes[i++];
+    if (b < limite) out += ALPHABET[b % n];
   }
   return out;
 }
@@ -81,8 +108,5 @@ export function renderMessage(template: string, code: string): string {
  * ele entra na URL final do anúncio, que o Google exibe.
  */
 export function generateSlug(length = 6): string {
-  const bytes = randomBytes(length);
-  let out = "";
-  for (let i = 0; i < length; i++) out += ALPHABET[bytes[i] % ALPHABET.length].toLowerCase();
-  return out;
+  return sortearDoAlfabeto(length).toLowerCase();
 }

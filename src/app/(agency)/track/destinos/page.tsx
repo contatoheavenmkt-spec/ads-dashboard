@@ -12,6 +12,7 @@ import { AbasTrack } from "../_components/abas";
 interface WorkspaceRef { id: string; name: string }
 interface Conta { adAccountId: string; name: string; loginCustomerId: string | null }
 interface Acao { id: string; name: string; type: string; status: string; usavel: boolean }
+interface DatasetMeta { id: string; nome: string; origem: string; usavel: boolean }
 
 interface Destino {
   id: string;
@@ -69,6 +70,13 @@ export default function TrackDestinos() {
   const [plataforma, setPlataforma] = useState<"google" | "meta">("google");
   const [tokenMeta, setTokenMeta] = useState("");
   const [datasetLocal, setDatasetLocal] = useState("");
+  const [datasets, setDatasets] = useState<DatasetMeta[]>([]);
+  const [avisoMeta, setAvisoMeta] = useState<string | null>(null);
+  const [temTokenConexao, setTemTokenConexao] = useState(false);
+  const [contasMeta, setContasMeta] = useState<Conta[]>([]);
+  const [testando, setTestando] = useState(false);
+  const [resultadoTeste, setResultadoTeste] = useState<{ ok: boolean; erro?: string } | null>(null);
+  const [mostrarManual, setMostrarManual] = useState(false);
 
   const carregar = useCallback(async (workspaceId: string, comAcoes = false) => {
     setLoading(true);
@@ -84,10 +92,14 @@ export default function TrackDestinos() {
       const comDataset = (data.destinos ?? []).find((d: Destino) => d.platform === "meta" && d.datasetId);
       if (comDataset) setDatasetLocal(comDataset.datasetId ?? "");
       setContas(data.contas ?? []);
+      setContasMeta(data.contasMeta ?? []);
       if (comAcoes) {
         setAcoes(data.acoes ?? []);
         setAviso(data.avisoAcoes ?? null);
         setContaDeConversao(data.contaDeConversao ?? null);
+        setDatasets(data.datasets ?? []);
+        setAvisoMeta(data.avisoMeta ?? null);
+        setTemTokenConexao(Boolean(data.temTokenDaConexao));
       }
       if (!workspaceId && data.workspaces?.[0]) setWs(data.workspaces[0].id);
     } catch {
@@ -144,6 +156,24 @@ export default function TrackDestinos() {
     }
   }
 
+  async function testarDataset() {
+    if (!datasetLocal) return;
+    setTestando(true);
+    setResultadoTeste(null);
+    try {
+      const res = await fetch("/api/agency/track/destinos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workspaceId: ws, datasetId: datasetLocal, apiToken: tokenMeta || undefined }),
+      });
+      setResultadoTeste(await res.json());
+    } catch (e) {
+      setResultadoTeste({ ok: false, erro: (e as Error).message });
+    } finally {
+      setTestando(false);
+    }
+  }
+
   const usaveis = acoes.filter((a) => a.usavel);
 
   return (
@@ -194,16 +224,14 @@ export default function TrackDestinos() {
               </button>
             ))}
           </div>
-          {plataforma === "google" ? (
-            <button
-              onClick={() => carregar(ws, true)}
-              disabled={buscandoAcoes || contas.length === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 disabled:opacity-40"
-            >
-              {buscandoAcoes ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-              Buscar ações de conversão
-            </button>
-          ) : null}
+          <button
+            onClick={() => carregar(ws, true)}
+            disabled={buscandoAcoes || (plataforma === "google" ? contas.length === 0 : contasMeta.length === 0)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+          >
+            {buscandoAcoes ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            {plataforma === "google" ? "Buscar ações de conversão" : "Buscar datasets da BM"}
+          </button>
         </div>
 
         {plataforma === "google" && contas.length === 0 && !loading ? (
@@ -263,10 +291,9 @@ export default function TrackDestinos() {
                 configurar é só o destino.
               </p>
               <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                Você precisa de duas coisas do Gerenciador de Eventos: o
-                <span className="text-slate-200"> ID do dataset</span> ligado à conta de WhatsApp
-                que atende, e um <span className="text-slate-200">token de system user</span> com
-                permissão nele. O token da conexão normal de login costuma não ter essa permissão.
+                Como a BM deste cliente já está conectada, o sistema busca os datasets sozinho:
+                escolha na lista e teste a permissão. Só se o acesso da BM não alcançar o dataset
+                é que entra um token de system user, nas opções avançadas.
               </p>
               <a
                 href="https://business.facebook.com/events_manager2"
@@ -277,50 +304,131 @@ export default function TrackDestinos() {
                 Abrir o Gerenciador de Eventos <ExternalLink size={11} />
               </a>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    ID do dataset
-                  </label>
-                  <input
+              <div className="mt-4">
+                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Dataset
+                </label>
+
+                {datasets.length > 0 ? (
+                  <select
                     value={datasetLocal}
-                    onChange={(e) => setDatasetLocal(e.target.value.replace(/[^0-9]/g, ""))}
-                    onBlur={() => {
-                      if (datasetLocal) {
-                        ESTAGIOS.forEach((et) => void salvar(et.id, { datasetId: datasetLocal }));
-                      }
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setDatasetLocal(v);
+                      setResultadoTeste(null);
+                      if (v) ESTAGIOS.forEach((et) => void salvar(et.id, { datasetId: v }));
                     }}
-                    inputMode="numeric"
-                    placeholder="1234567890123456"
-                    className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 font-mono text-xs text-slate-300 placeholder-slate-600 focus:border-cyan-500/60 focus:outline-none"
-                  />
-                  <p className="mt-1 text-[11px] text-slate-500">Vale para todos os estágios.</p>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Token de system user
-                  </label>
-                  <input
-                    value={tokenMeta}
-                    onChange={(e) => setTokenMeta(e.target.value)}
-                    onBlur={() => {
-                      if (tokenMeta) {
-                        ESTAGIOS.forEach((et) => void salvar(et.id, {}));
-                        setTokenMeta("");
-                      }
-                    }}
-                    type="password"
-                    placeholder={
-                      destinos.some((d) => d.platform === "meta" && d.temToken)
-                        ? "token salvo (digite para trocar)"
-                        : "EAAG..."
-                    }
-                    className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 font-mono text-xs text-slate-300 placeholder-slate-600 focus:border-cyan-500/60 focus:outline-none"
-                  />
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Guardado no servidor e nunca devolvido para o navegador.
+                    className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-300 focus:border-cyan-500/60 focus:outline-none"
+                  >
+                    <option value="">Escolha o dataset do cliente</option>
+                    {datasets.map((ds) => (
+                      <option key={ds.id} value={ds.id}>
+                        {ds.nome} · {ds.origem}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-[11px] text-slate-500">
+                    {datasetLocal
+                      ? `Configurado: ${datasetLocal}`
+                      : 'Clique em "Buscar datasets da BM" para listar os do cliente.'}
                   </p>
-                </div>
+                )}
+
+                {avisoMeta ? (
+                  <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+                    <TriangleAlert size={11} className="mt-0.5 shrink-0" />
+                    {avisoMeta}
+                  </p>
+                ) : null}
+
+                {temTokenConexao && !mostrarManual ? (
+                  <p className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <CheckCircle2 size={11} className="text-emerald-500" />
+                    Usando o acesso da BM que você já conectou. Nenhum token a colar.
+                  </p>
+                ) : null}
+
+                {/* Teste real de escrita: listar o dataset não prova permissão,
+                    e descobrir isso só quando a venda acontecer é caro. */}
+                {datasetLocal ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={testarDataset}
+                      disabled={testando}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+                    >
+                      {testando ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                      Testar permissão
+                    </button>
+                    {resultadoTeste ? (
+                      resultadoTeste.ok ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                          <CheckCircle2 size={12} />
+                          Funcionou. O evento de teste aparece no Gerenciador de Eventos e não conta para a campanha.
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-start gap-1 text-[11px] text-red-300">
+                          <TriangleAlert size={12} className="mt-0.5 shrink-0" />
+                          {resultadoTeste.erro}
+                        </span>
+                      )
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {/* Saída de emergência: só aparece se for preciso. */}
+                <button
+                  onClick={() => setMostrarManual((v) => !v)}
+                  className="mt-3 text-[11px] text-slate-500 underline-offset-2 hover:text-slate-300 hover:underline"
+                >
+                  {mostrarManual ? "Esconder opções avançadas" : "O acesso da BM não alcança este dataset?"}
+                </button>
+
+                {mostrarManual ? (
+                  <div className="mt-3 grid gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        ID do dataset na mão
+                      </label>
+                      <input
+                        value={datasetLocal}
+                        onChange={(e) => setDatasetLocal(e.target.value.replace(/[^0-9]/g, ""))}
+                        onBlur={() => {
+                          if (datasetLocal) ESTAGIOS.forEach((et) => void salvar(et.id, { datasetId: datasetLocal }));
+                        }}
+                        inputMode="numeric"
+                        placeholder="1234567890123456"
+                        className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 font-mono text-xs text-slate-300 placeholder-slate-600 focus:border-cyan-500/60 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Token de system user
+                      </label>
+                      <input
+                        value={tokenMeta}
+                        onChange={(e) => setTokenMeta(e.target.value)}
+                        onBlur={() => {
+                          if (tokenMeta) {
+                            ESTAGIOS.forEach((et) => void salvar(et.id, {}));
+                            setTokenMeta("");
+                          }
+                        }}
+                        type="password"
+                        placeholder={
+                          destinos.some((d) => d.platform === "meta" && d.temToken)
+                            ? "token salvo (digite para trocar)"
+                            : "EAAG..."
+                        }
+                        className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 font-mono text-xs text-slate-300 placeholder-slate-600 focus:border-cyan-500/60 focus:outline-none"
+                      />
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Guardado no servidor, nunca devolvido ao navegador.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </>
           )}
