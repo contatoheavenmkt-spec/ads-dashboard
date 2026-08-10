@@ -23,6 +23,11 @@ export interface FraseGatilho {
 export interface TrackConfig {
   respondedMinInbound: number;
   respondedRequiresOutbound: boolean;
+  /**
+   * Idas e voltas completas para qualificar sozinho, sem ninguém marcar nada.
+   * Uma troca = o cliente escreveu e o atendente respondeu. 0 desliga.
+   */
+  qualifiedMinTrocas: number;
   qualifiedLabelIds: string[];
   qualifiedPhrases: FraseGatilho[];
   saleLabelIds: string[];
@@ -42,6 +47,7 @@ export interface TrackConfig {
 export const CONFIG_PADRAO: TrackConfig = {
   respondedMinInbound: 2,
   respondedRequiresOutbound: true,
+  qualifiedMinTrocas: 3,
   qualifiedLabelIds: [],
   qualifiedPhrases: [],
   saleLabelIds: [],
@@ -62,6 +68,7 @@ export const CONFIG_PADRAO: TrackConfig = {
 export interface TrackSettingsRow {
   respondedMinInbound: number;
   respondedRequiresOutbound: boolean;
+  qualifiedMinTrocas?: number;
   qualifiedLabelIds: string | null;
   qualifiedPhrases: string | null;
   saleLabelIds: string | null;
@@ -119,6 +126,7 @@ export function parseTrackSettings(row: TrackSettingsRow | null | undefined): Tr
   return {
     respondedMinInbound: Math.max(1, row.respondedMinInbound ?? CONFIG_PADRAO.respondedMinInbound),
     respondedRequiresOutbound: row.respondedRequiresOutbound ?? CONFIG_PADRAO.respondedRequiresOutbound,
+    qualifiedMinTrocas: Math.max(0, row.qualifiedMinTrocas ?? CONFIG_PADRAO.qualifiedMinTrocas),
     qualifiedLabelIds: listaDeIds(row.qualifiedLabelIds),
     qualifiedPhrases: listaDeFrases(row.qualifiedPhrases),
     saleLabelIds: listaDeIds(row.saleLabelIds),
@@ -141,6 +149,7 @@ export function serializeTrackSettings(c: Partial<TrackConfig>): Record<string, 
   const out: Record<string, unknown> = {};
   if (c.respondedMinInbound !== undefined) out.respondedMinInbound = c.respondedMinInbound;
   if (c.respondedRequiresOutbound !== undefined) out.respondedRequiresOutbound = c.respondedRequiresOutbound;
+  if (c.qualifiedMinTrocas !== undefined) out.qualifiedMinTrocas = c.qualifiedMinTrocas;
   if (c.qualifiedLabelIds !== undefined) out.qualifiedLabelIds = JSON.stringify(c.qualifiedLabelIds);
   if (c.qualifiedPhrases !== undefined) out.qualifiedPhrases = JSON.stringify(c.qualifiedPhrases);
   if (c.saleLabelIds !== undefined) out.saleLabelIds = JSON.stringify(c.saleLabelIds);

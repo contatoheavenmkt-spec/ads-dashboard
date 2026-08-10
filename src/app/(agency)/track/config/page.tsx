@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Loader2, MessageSquare, Save, Tag, TriangleAlert, X } from "lucide-react";
+import { Check, Loader2, MessageSquare, MessagesSquare, Save, Tag, TriangleAlert, X } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { cn } from "@/lib/utils";
 import { AbasTrack } from "../_components/abas";
@@ -17,6 +17,7 @@ interface Config {
   qualifiedPhrases: Frase[];
   salePhrases: Frase[];
   respondedMinInbound: number;
+  qualifiedMinTrocas: number;
   respondedRequiresOutbound: boolean;
   defaultSaleValue: number | null;
   storeMessageText: boolean;
@@ -179,8 +180,52 @@ export default function TrackConfig() {
 
             <Secao
               titulo="O que conta como QUALIFICADO"
-              subtitulo="Lead que demonstrou interesse real. Útil para mandar ao Google um sinal melhor que volume bruto."
+              subtitulo="Lead que engajou de verdade. É o sinal que o Google mais aproveita, porque acontece em volume."
             >
+              {/* O caminho automático vem primeiro de propósito: é o que
+                  funciona sem depender de ninguém lembrar de marcar nada. */}
+              <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4">
+                <div className="flex items-start gap-2">
+                  <MessagesSquare size={14} className="mt-0.5 shrink-0 text-amber-400" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-slate-200">
+                      Automático: quem conversou de verdade
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">
+                      Sem ninguém marcar nada. Uma troca é o cliente escrever e você responder.
+                      Cinco mensagens seguidas dele sem resposta não contam: isso é lead ansioso,
+                      não conversa.
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {[0, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => setCfg({ ...cfg, qualifiedMinTrocas: n })}
+                          className={cn(
+                            "rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors",
+                            cfg.qualifiedMinTrocas === n
+                              ? "border-amber-500/50 bg-amber-500/20 text-amber-300"
+                              : "border-slate-700 text-slate-400 hover:bg-slate-800",
+                          )}
+                        >
+                          {n === 0 ? "Desligado" : `${n} trocas`}
+                        </button>
+                      ))}
+                    </div>
+
+                    <p className="mt-2 text-[11px] text-slate-500">
+                      {cfg.qualifiedMinTrocas === 0
+                        ? "Desligado: só qualifica pelo que for marcado à mão abaixo."
+                        : `Conversa com ${cfg.qualifiedMinTrocas} idas e voltas vira qualificado sozinha.`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Ou quando você marcar
+              </p>
               <ListaEtiquetas
                 etiquetas={etiquetas}
                 marcadas={cfg.qualifiedLabelIds}

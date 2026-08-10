@@ -82,6 +82,7 @@ interface SalvarBody {
     qualifiedPhrases?: FraseGatilho[];
     salePhrases?: FraseGatilho[];
     respondedMinInbound?: number;
+    qualifiedMinTrocas?: number;
     respondedRequiresOutbound?: boolean;
     defaultSaleValue?: number | null;
     storeMessageText?: boolean;
@@ -148,6 +149,7 @@ export async function PUT(req: NextRequest) {
     lostLabelIds: limparIds(c.lostLabelIds),
     salePhrases: limparFrases(c.salePhrases),
     qualifiedPhrases: limparFrases(c.qualifiedPhrases),
+    qualifiedMinTrocas: Math.min(20, Math.max(0, Math.round(Number(c.qualifiedMinTrocas ?? 3)))),
     respondedMinInbound: Math.min(Math.max(Number(c.respondedMinInbound) || 2, 1), 20),
     respondedRequiresOutbound: c.respondedRequiresOutbound !== false,
     defaultSaleValue:

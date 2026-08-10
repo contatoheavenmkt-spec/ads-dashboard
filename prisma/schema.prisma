@@ -617,6 +617,16 @@ model TrackSettings {
   respondedMinInbound       Int     @default(2)
   respondedRequiresOutbound Boolean @default(true)
 
+  // "qualificado" por ENGAJAMENTO, sem ninguém marcar nada: quantas idas e
+  // voltas completas a conversa precisa ter. Uma troca = o cliente escreveu e
+  // o atendente respondeu.
+  //
+  // É o sinal mais valioso para mandar ao Google, porque acontece em volume e
+  // não depende da disciplina de quem atende. Etiqueta e frase continuam
+  // valendo por cima, para o caso de o atendente saber antes que o lead presta.
+  // 0 desliga e deixa a qualificação só no que for marcado à mão.
+  qualifiedMinTrocas Int @default(3)
+
   // JSON string[] de waLabelId e JSON [{ text, direction }] de frases.
   // A direção importa: "parabéns pela sua compra" é do atendente (out),
   // "quanto custa" é do cliente (in).

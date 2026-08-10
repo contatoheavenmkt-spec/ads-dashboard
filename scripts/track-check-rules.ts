@@ -163,7 +163,44 @@ console.log("workspace sem configuração");
   );
 }
 
-console.log(`\n${total - falhas}/${total} checagens passaram`);
+console.log("qualificado por engajamento (automático)");
+{
+  const cfgEng: TrackConfig = { ...cfg, qualifiedMinTrocas: 3 };
+  const est = (inb: number, out: number) => ({
+    stage: "respondeu" as const, inboundCount: inb, outboundCount: out,
+    labelIds: [] as string[], houveOutboundAntesDoUltimoInbound: true,
+  });
+
+  // 3 idas e voltas completas: é conversa de verdade.
+  ok("3 trocas qualificam sozinho", avaliarConversa(cfgEng, est(3, 3))?.stage, "qualificado");
+  ok("origem é a contagem de mensagens", avaliarConversa(cfgEng, est(3, 3))?.origem, "messages");
+  verdade("o detalhe explica o porquê", Boolean(avaliarConversa(cfgEng, est(3, 3))?.detalhe?.includes("trocas")));
+  ok("4 trocas também", avaliarConversa(cfgEng, est(4, 5))?.stage, "qualificado");
+  ok("2 trocas ainda não", avaliarConversa(cfgEng, est(2, 2)), null);
+
+  // O ponto central: mensagem solta não é conversa. Cliente ansioso mandando
+  // 8 mensagens sem ninguém responder não é lead qualificado.
+  ok("8 mensagens do cliente sem resposta NÃO qualificam", avaliarConversa(cfgEng, est(8, 0)), null);
+  ok("8 do cliente com 1 resposta NÃO qualificam", avaliarConversa(cfgEng, est(8, 1)), null);
+  ok("conta o menor dos dois lados", avaliarConversa(cfgEng, est(9, 3))?.stage, "qualificado");
+
+  // Desligado volta ao comportamento anterior: só marca à mão.
+  const desligado: TrackConfig = { ...cfg, qualifiedMinTrocas: 0 };
+  ok("com 0 fica desligado", avaliarConversa(desligado, est(10, 10)), null);
+  ok("mas a etiqueta continua valendo", avaliarConversa(desligado, { ...est(1, 1), labelIds: ["10"] })?.stage, "qualificado");
+
+  // Venda continua ganhando de qualificado.
+  ok(
+    "venda tem precedência sobre engajamento",
+    avaliarConversa(cfgEng, { ...est(5, 5), labelIds: ["20"] })?.stage,
+    "venda",
+  );
+  // E não volta atrás depois de vendido.
+  ok("já vendido não vira qualificado por conversa", avaliarConversa(cfgEng, { ...est(9, 9), stage: "venda" }), null);
+}
+
+console.log(`
+${total - falhas}/${total} checagens passaram`);
 if (falhas > 0) {
   console.error(`${falhas} FALHA(S)`);
   process.exit(1);

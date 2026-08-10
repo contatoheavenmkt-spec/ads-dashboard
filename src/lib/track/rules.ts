@@ -87,7 +87,22 @@ export function avaliarConversa(
     }
   }
 
-  // 2. Qualificado.
+  // 2. Qualificado por ENGAJAMENTO, sem ninguém marcar nada.
+  //
+  // Uma conversa com várias idas e voltas é lead de verdade, e isso acontece
+  // em volume, sem depender de o atendente lembrar de etiquetar. É o sinal
+  // mais útil para o Google aprender a trazer gente parecida.
+  //
+  // Conta trocas COMPLETAS (min entre o que entrou e o que saiu), não
+  // mensagens soltas: cinco mensagens seguidas do cliente sem resposta são
+  // lead ansioso, não conversa.
+  if (cfg.qualifiedMinTrocas > 0) {
+    const trocas = Math.min(estado.inboundCount, estado.outboundCount);
+    if (trocas >= cfg.qualifiedMinTrocas && avancou(estado.stage, "qualificado")) {
+      return { stage: "qualificado", origem: "messages", detalhe: `${trocas} trocas de mensagem` };
+    }
+  }
+
   const etiquetaQualificado = temAlgumaEtiqueta(estado.labelIds, cfg.qualifiedLabelIds);
   if (etiquetaQualificado && avancou(estado.stage, "qualificado")) {
     return { stage: "qualificado", origem: "label", detalhe: etiquetaQualificado };
