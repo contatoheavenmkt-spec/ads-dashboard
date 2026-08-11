@@ -46,7 +46,7 @@ export interface AdAnalisado {
 }
 
 type Veredito = {
-  tipo: "vencedor" | "fadiga" | "clique_caro" | "fraco" | "caro" | "media" | "sem_amostra";
+  tipo: "vencedor" | "sem_resultado" | "caro" | "fadiga" | "media" | "sem_amostra";
   rotulo: string;
   porque: string;
   cor: string;
@@ -54,13 +54,83 @@ type Veredito = {
 };
 
 /**
- * O "porquê deu certo ou errado", em regras explícitas.
- *
- * A referência é a média ponderada da conta no MESMO período: um CTR de 1,2%
- * pode ser ótimo num nicho e péssimo em outro, então comparar com número
- * absoluto mentiria. Amostra pequena não recebe veredito.
+ * O resultado que importa para ESTE anúncio, em ordem de valor:
+ * venda > conversa iniciada > lead. CTR não entra aqui: clique é meio, não
+ * fim, e um anúncio de CTR baixo com custo por conversa excelente é um bom
+ * anúncio.
  */
-function analisar(ad: AdAnalisado, ref: { ctr: number; custoPorResultado: number }): Veredito {
+type TipoResultado = "venda" | "conversa" | "lead" | "nenhum";
+
+function tipoDoAnuncio(ad: AdAnalisado): { tipo: TipoResultado; qtd: number } {
+  if (ad.purchases > 0) return { tipo: "venda", qtd: ad.purchases };
+  if (ad.messages > 0) return { tipo: "conversa", qtd: ad.messages };
+  if (ad.leads > 0) return { tipo: "lead", qtd: ad.leads };
+  return { tipo: "nenhum", qtd: 0 };
+}
+
+const NOME_RESULTADO: Record<TipoResultado, { singular: string; plural: string }> = {
+  venda: { singular: "venda", plural: "vendas" },
+  conversa: { singular: "conversa", plural: "conversas" },
+  lead: { singular: "lead", plural: "leads" },
+  nenhum: { singular: "resultado", plural: "resultados" },
+};
+
+/**
+ * Referências POR TIPO de resultado, ponderadas pelo conjunto exibido.
+ *
+ * Comparar tudo numa média única mentiria: custo por venda e custo por
+ * conversa são moedas diferentes, e um anúncio de venda sempre "perderia" de
+ * um de mensagem. Cada anúncio é medido contra a média dos que perseguem o
+ * MESMO resultado.
+ */
+interface Referencias {
+  custoPorTipo: Partial<Record<TipoResultado, number>>;
+  /** O resultado dominante do conjunto: é o que cobramos de quem tem zero. */
+  tipoDominante: TipoResultado;
+  ctr: number;
+}
+
+function calcularReferencias(creatives: AdAnalisado[]): Referencias {
+  const relevantes = creatives.filter((a) => a.impressions >= 1000 || a.spend >= 50);
+  const base = relevantes.length >= 2 ? relevantes : creatives;
+
+  const custoPorTipo: Partial<Record<TipoResultado, number>> = {};
+  const contagem: Partial<Record<TipoResultado, number>> = {};
+  for (const t of ["venda", "conversa", "lead"] as const) {
+    const doTipo = base.filter((a) => tipoDoAnuncio(a).tipo === t);
+    const gasto = doTipo.reduce((soma, a) => soma + a.spend, 0);
+    const qtd = doTipo.reduce((soma, a) => soma + tipoDoAnuncio(a).qtd, 0);
+    if (qtd > 0) {
+      custoPorTipo[t] = gasto / qtd;
+      contagem[t] = qtd;
+    }
+  }
+
+  // Dominante: vendas mandam se existem; senão o tipo com mais volume.
+  const tipoDominante: TipoResultado = custoPorTipo.venda
+    ? "venda"
+    : (contagem.conversa ?? 0) >= (contagem.lead ?? 0) && custoPorTipo.conversa
+      ? "conversa"
+      : custoPorTipo.lead
+        ? "lead"
+        : "nenhum";
+
+  const totalImpr = base.reduce((soma, a) => soma + a.impressions, 0);
+  const totalCliques = base.reduce((soma, a) => soma + a.clicks, 0);
+  return {
+    custoPorTipo,
+    tipoDominante,
+    ctr: totalImpr > 0 ? (totalCliques / totalImpr) * 100 : 0,
+  };
+}
+
+/**
+ * O veredito, na hierarquia que importa para quem vende por WhatsApp: custo
+ * por conversa decide, e custo por venda decide acima de tudo quando há
+ * venda. CTR virou diagnóstico dentro do porquê, nunca sentença: clique é
+ * meio, não fim.
+ */
+function analisar(ad: AdAnalisado, ref: Referencias): Veredito {
   const amostraOk = ad.impressions >= 1000 || ad.spend >= 50;
   if (!amostraOk) {
     return {
@@ -72,72 +142,104 @@ function analisar(ad: AdAnalisado, ref: { ctr: number; custoPorResultado: number
     };
   }
 
-  const custoPorResultado = ad.conversions > 0 ? ad.spend / ad.conversions : Infinity;
+  const { tipo, qtd } = tipoDoAnuncio(ad);
+  const nome = NOME_RESULTADO[tipo];
   const ctrRel = ref.ctr > 0 ? ad.ctr / ref.ctr : 1;
-  const custoRel =
-    ref.custoPorResultado > 0 && custoPorResultado !== Infinity
-      ? custoPorResultado / ref.custoPorResultado
-      : Infinity;
 
-  // Vencedor: converte mais barato que a média da conta, com volume real.
-  if (ad.conversions >= 3 && custoRel <= 0.8) {
+  // Zero resultado com gasto relevante: o problema mais acionável que existe,
+  // e o motor antigo nem tinha este veredito (julgava por CTR).
+  if (tipo === "nenhum") {
+    const nomeDominante = NOME_RESULTADO[ref.tipoDominante];
+    const refDominante = ref.custoPorTipo[ref.tipoDominante];
+    const gastoRelevante = refDominante ? ad.spend >= refDominante * 2 : ad.spend >= 50;
+    if (gastoRelevante) {
+      const diagnostico =
+        ctrRel >= 1.2
+          ? "O anúncio atrai clique, então o problema está depois dele: oferta, página ou o convite para chamar."
+          : ctrRel <= 0.6
+            ? "E o CTR baixo diz que o criativo nem chama atenção: é o primeiro a refazer."
+            : "O criativo clica na média, mas ninguém vira conversa: o convite para chamar é o suspeito.";
+      return {
+        tipo: "sem_resultado",
+        rotulo: `Gasta sem ${nomeDominante.singular}`,
+        porque:
+          `${formatCurrency(ad.spend)} gastos no período e nenhuma ${nomeDominante.singular} gerada` +
+          (refDominante
+            ? `, o suficiente para ${Math.floor(ad.spend / refDominante)} pelo custo médio da conta. `
+            : ". ") +
+          diagnostico,
+        cor: "text-red-400",
+        borda: "border-red-500/40",
+      };
+    }
+    return {
+      tipo: "media",
+      rotulo: "Sem resultado ainda",
+      porque: "Gasto ainda pequeno para condenar. Vale observar mais alguns dias.",
+      cor: "text-slate-300",
+      borda: "border-slate-700",
+    };
+  }
+
+  const custo = ad.spend / qtd;
+  const refCusto = ref.custoPorTipo[tipo];
+  const custoRel = refCusto ? custo / refCusto : 1;
+  // Venda é mais rara que conversa: exigir 3 esconderia vencedor real.
+  const minimo = tipo === "venda" ? 2 : 3;
+
+  // Vencedor: gera o resultado que importa mais barato que os irmãos.
+  if (qtd >= minimo && custoRel <= 0.8) {
     return {
       tipo: "vencedor",
       rotulo: "Vencedor",
-      porque: `Converte ${Math.round((1 - custoRel) * 100)}% mais barato que a média da conta. É o ângulo a escalar e a base para as próximas variações.`,
+      porque:
+        `${qtd} ${qtd === 1 ? nome.singular : nome.plural} a ${formatCurrency(custo)} cada, ` +
+        `${Math.round((1 - custoRel) * 100)}% mais barato que a média dos anúncios de ${nome.singular} da conta. ` +
+        `É o ângulo a escalar e a base para as próximas variações.`,
       cor: "text-emerald-400",
       borda: "border-emerald-500/40",
     };
   }
 
-  // Fadiga: as mesmas pessoas viram demais e pararam de reagir.
-  if (ad.frequency >= 3.5 && ctrRel < 1) {
-    return {
-      tipo: "fadiga",
-      rotulo: "Fadigado",
-      porque: `Cada pessoa viu ${ad.frequency.toFixed(1)} vezes e o CTR está abaixo da média: a audiência saturou. Troca de criativo ou de público costuma resolver.`,
-      cor: "text-orange-400",
-      borda: "border-orange-500/40",
-    };
-  }
-
-  // Atrai o clique errado: o anúncio chama, a conversão não vem.
-  if (ctrRel >= 1.3 && (custoRel >= 1.5 || ad.conversions === 0)) {
-    return {
-      tipo: "clique_caro",
-      rotulo: "Clique sem conversão",
-      porque: `CTR ${Math.round((ctrRel - 1) * 100)}% acima da média, mas a conversão não acompanha: a promessa do anúncio atrai curioso, não comprador. Ângulo e página precisam contar a mesma história.`,
-      cor: "text-amber-400",
-      borda: "border-amber-500/40",
-    };
-  }
-
-  // Fraco: não para o dedo.
-  if (ctrRel <= 0.6) {
-    return {
-      tipo: "fraco",
-      rotulo: "Criativo fraco",
-      porque: `CTR ${Math.round((1 - ctrRel) * 100)}% abaixo da média da conta: o anúncio não está parando o dedo. O gancho dos 3 primeiros segundos é o suspeito de sempre.`,
-      cor: "text-red-400",
-      borda: "border-red-500/40",
-    };
-  }
-
-  // Caro: converte, mas acima do que a conta consegue.
-  if (ad.conversions > 0 && custoRel >= 1.5) {
+  // Caro: gera, mas acima do que a conta consegue. O CTR entra como
+  // diagnóstico do PORQUÊ, não como sentença.
+  if (custoRel >= 1.5) {
+    const diagnostico =
+      ctrRel >= 1.2
+        ? "O CTR alto mostra que o anúncio chama, mas atrai gente que não vira: promessa e oferta não estão contando a mesma história."
+        : ctrRel <= 0.6
+          ? "O CTR baixo encarece tudo: pouca gente clica, e o leilão cobra por isso. Criativo novo tende a resolver."
+          : "Criativo e clique estão na média: o custo alto vem de público ou lance.";
     return {
       tipo: "caro",
-      rotulo: "Convertendo caro",
-      porque: `Cada resultado custa ${Math.round((custoRel - 1) * 100)}% mais que a média da conta. Vale testar variação do criativo antes de matar: o ângulo pode servir com outra execução.`,
+      rotulo:
+        tipo === "venda" ? "Vendendo caro" : tipo === "conversa" ? "Conversa cara" : "Lead caro",
+      porque:
+        `Cada ${nome.singular} custa ${formatCurrency(custo)}, ${Math.round((custoRel - 1) * 100)}% acima ` +
+        `da média da conta. ${diagnostico}`,
       cor: "text-amber-400",
       borda: "border-amber-500/40",
+    };
+  }
+
+  // Fadiga só importa quando o custo já sente o desgaste.
+  if (ad.frequency >= 3.5 && custoRel >= 1.15) {
+    return {
+      tipo: "fadiga",
+      rotulo: "Fadigando",
+      porque:
+        `Cada pessoa viu ${ad.frequency.toFixed(1)} vezes e o custo por ${nome.singular} já está ` +
+        `${Math.round((custoRel - 1) * 100)}% acima da média: a audiência está saturando. ` +
+        `Criativo novo ou público novo antes que encareça mais.`,
+      cor: "text-orange-400",
+      borda: "border-orange-500/40",
     };
   }
 
   return {
     tipo: "media",
     rotulo: "Na média",
-    porque: "Desempenho em linha com a conta. Não é o problema nem a solução.",
+    porque: `${qtd} ${qtd === 1 ? nome.singular : nome.plural} a ${formatCurrency(custo)} cada, em linha com a conta. Não é o problema nem a solução.`,
     cor: "text-slate-300",
     borda: "border-slate-700",
   };
@@ -164,19 +266,8 @@ export function AnaliseCriativos({
   const [filtro, setFiltro] = useState<"rodaram" | "ativos" | "pausados">("rodaram");
   const [aberto, setAberto] = useState<AdAnalisado | null>(null);
 
-  // Referência da análise: média ponderada DO CONJUNTO exibido no período.
-  const ref = useMemo(() => {
-    const relevantes = creatives.filter((a) => a.impressions >= 1000 || a.spend >= 50);
-    const base = relevantes.length >= 2 ? relevantes : creatives;
-    const totalImpr = base.reduce((s, a) => s + a.impressions, 0);
-    const totalCliques = base.reduce((s, a) => s + a.clicks, 0);
-    const totalGasto = base.reduce((s, a) => s + a.spend, 0);
-    const totalConv = base.reduce((s, a) => s + a.conversions, 0);
-    return {
-      ctr: totalImpr > 0 ? (totalCliques / totalImpr) * 100 : 0,
-      custoPorResultado: totalConv > 0 ? totalGasto / totalConv : 0,
-    };
-  }, [creatives]);
+  // Referências POR TIPO de resultado (venda/conversa/lead), ponderadas.
+  const ref = useMemo(() => calcularReferencias(creatives), [creatives]);
 
   const analisados = useMemo(
     () => creatives.map((ad) => ({ ad, veredito: analisar(ad, ref) })),
@@ -193,7 +284,7 @@ export function AnaliseCriativos({
   const pausados = analisados.length - ativos;
   const vencedores = analisados.filter((x) => x.veredito.tipo === "vencedor");
   const problemas = analisados.filter((x) =>
-    ["fadiga", "clique_caro", "fraco", "caro"].includes(x.veredito.tipo),
+    ["sem_resultado", "caro", "fadiga"].includes(x.veredito.tipo),
   );
 
   return (
@@ -245,7 +336,9 @@ export function AnaliseCriativos({
                 >
                   • {ad.name}
                   <span className="text-emerald-400">
-                    {" "}({formatCurrency(ad.conversions > 0 ? ad.spend / ad.conversions : 0)}/resultado)
+                    {" "}(
+                    {formatCurrency(tipoDoAnuncio(ad).qtd > 0 ? ad.spend / tipoDoAnuncio(ad).qtd : 0)}
+                    /{NOME_RESULTADO[tipoDoAnuncio(ad).tipo].singular})
                   </span>
                 </button>
               ))}
@@ -278,7 +371,6 @@ export function AnaliseCriativos({
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
           {visiveis.map(({ ad, veredito }) => {
             const st = STATUS_ROTULO[ad.status] ?? STATUS_ROTULO.PAUSED;
-            const custoResultado = ad.conversions > 0 ? ad.spend / ad.conversions : null;
             return (
               <button
                 key={ad.id}
@@ -324,16 +416,29 @@ export function AnaliseCriativos({
                     {veredito.rotulo}
                   </p>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 border-t border-slate-800 pt-1.5 text-[10px]">
+                    {(() => {
+                      const { tipo, qtd } = tipoDoAnuncio(ad);
+                      const nome = NOME_RESULTADO[tipo];
+                      const rotulo = qtd === 1 ? nome.singular : nome.plural;
+                      return (
+                        <>
+                          <span className={tipo === "venda" ? "font-bold text-emerald-500" : "text-slate-500"}>
+                            {rotulo.charAt(0).toUpperCase() + rotulo.slice(1)}
+                          </span>
+                          <span className={cn("text-right font-semibold", tipo === "venda" ? "text-emerald-400" : "text-slate-200")}>
+                            {formatNumber(qtd)}
+                          </span>
+                          <span className="text-slate-500">Custo/{nome.singular}</span>
+                          <span className="text-right font-semibold text-slate-200">
+                            {qtd > 0 ? formatCurrency(ad.spend / qtd) : "—"}
+                          </span>
+                        </>
+                      );
+                    })()}
                     <span className="text-slate-500">Gasto</span>
                     <span className="text-right font-semibold text-slate-300">{formatCurrency(ad.spend)}</span>
-                    <span className="text-slate-500">{ad.isMessaging ? "Conversas" : ad.purchases > 0 ? "Vendas" : "Resultados"}</span>
-                    <span className="text-right font-semibold text-slate-300">{formatNumber(ad.conversions)}</span>
-                    <span className="text-slate-500">Custo/result.</span>
-                    <span className="text-right font-semibold text-slate-300">
-                      {custoResultado !== null ? formatCurrency(custoResultado) : "—"}
-                    </span>
                     <span className="text-slate-500">CTR</span>
-                    <span className="text-right font-semibold text-slate-300">{ad.ctr.toFixed(2)}%</span>
+                    <span className="text-right text-slate-400">{ad.ctr.toFixed(2)}%</span>
                   </div>
                 </div>
               </button>
