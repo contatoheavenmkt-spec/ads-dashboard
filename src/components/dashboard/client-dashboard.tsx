@@ -218,6 +218,9 @@ export function ClientDashboard({
   const [rangeModalOpen, setRangeModalOpen] = useState(false);
   const [daysOpen, setDaysOpen] = useState(false);
   const [campaignOpen, setCampaignOpen] = useState(false);
+  // Menu "Baixar" — PDF e CSV existiam como dois ícones sem rótulo e ninguém
+  // achava ("não tem opção de download"). Um botão escrito resolve.
+  const [exportOpen, setExportOpen] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<{ id: string; name: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -309,11 +312,11 @@ export function ClientDashboard({
 
   // Close dropdowns on outside click
   useEffect(() => {
-    if (!daysOpen && !campaignOpen) return;
-    const handleClick = () => { setDaysOpen(false); setCampaignOpen(false); };
+    if (!daysOpen && !campaignOpen && !exportOpen) return;
+    const handleClick = () => { setDaysOpen(false); setCampaignOpen(false); setExportOpen(false); };
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
-  }, [daysOpen, campaignOpen]);
+  }, [daysOpen, campaignOpen, exportOpen]);
 
   const currentPeriodLabel = (() => {
     if (days === -2 && customRange) {
@@ -330,34 +333,36 @@ export function ClientDashboard({
   // ─── Download CSV ─────────────────────────────────────────────────────────
 
   function handleDownload() {
-    if (view === "ga4") {
-      const source = ga4Data?.timeSeries;
-      if (!source) return;
-      const headers = ["Data", "Sessões", "Usuários", "Conversões"];
-      const rows = source.map(d => [d.date, d.sessions, d.users, d.conversions]);
+    const salvar = (nome: string, headers: string[], rows: (string | number)[][]) => {
       const csv = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
       const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = `relatorio_ga4.csv`; a.click();
-    } else if (view === "google") {
-      const source = googleData?.timeSeries;
-      if (!source) return;
-      const headers = ["Data", "Investimento", "Impressões", "Cliques", "Conversões"];
-      const rows = source.map(d => [d.date, d.spend.toFixed(2), d.impressions, d.clicks, d.conversions]);
-      const csv = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
-      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = `relatorio_google_ads.csv`; a.click();
-    } else {
-      const source = metaData?.timeSeries;
-      if (!source) return;
-      const headers = ["Data", "Investimento", "Impressões", "Cliques", "Conversões", "Vendas", "Conversas"];
-      const rows = source.map(d => [d.date, d.spend.toFixed(2), d.impressions, d.clicks, d.conversions, d.purchases, d.messages + d.leads]);
-      const csv = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
-      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = `relatorio_meta.csv`; a.click();
-    }
+      const a = document.createElement("a"); a.href = url; a.download = nome; a.click();
+      return true;
+    };
+    const csvMeta = () => !!metaData?.timeSeries && salvar(
+      "relatorio_meta.csv",
+      ["Data", "Investimento", "Impressões", "Cliques", "Conversões", "Vendas", "Conversas"],
+      metaData!.timeSeries.map(d => [d.date, d.spend.toFixed(2), d.impressions, d.clicks, d.conversions, d.purchases, d.messages + d.leads]),
+    );
+    const csvGoogle = () => !!googleData?.timeSeries && salvar(
+      "relatorio_google_ads.csv",
+      ["Data", "Investimento", "Impressões", "Cliques", "Conversões"],
+      googleData!.timeSeries.map(d => [d.date, d.spend.toFixed(2), d.impressions, d.clicks, d.conversions]),
+    );
+    const csvGa4 = () => !!ga4Data?.timeSeries && salvar(
+      "relatorio_ga4.csv",
+      ["Data", "Sessões", "Usuários", "Conversões"],
+      ga4Data!.timeSeries.map(d => [d.date, d.sessions, d.users, d.conversions]),
+    );
+    // A aba atual manda; overview/detalhes caem pra qualquer fonte carregada.
+    // Antes, workspace só-Google na aba detalhes caía no ramo Meta sem dado e
+    // o clique não fazia NADA — silêncio que parecia "não tem download".
+    if (view === "ga4") { csvGa4(); return; }
+    if (view === "google") { csvGoogle(); return; }
+    if (csvMeta()) return;
+    if (csvGoogle()) return;
+    csvGa4();
   }
 
   // ─── View renderers ───────────────────────────────────────────────────────
@@ -1620,22 +1625,50 @@ export function ClientDashboard({
             )}
 
             {view !== "crm" && (
-              <>
+              /* Botão ESCRITO "Baixar" — antes eram dois ícones soltos
+                 (impressora e seta) que ninguém reconhecia como download do
+                 relatório, ainda mais ao lado do "Baixar app" que baixa outra
+                 coisa. O rótulo aparece até no mobile. */
+              <div className="relative">
                 <button
-                  onClick={() => window.print()}
-                  className="p-1.5 sm:p-2 rounded-lg border bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 transition-all active:scale-95"
-                  title="Imprimir / Salvar como PDF"
+                  onClick={(e) => { e.stopPropagation(); setExportOpen(!exportOpen); setDaysOpen(false); setCampaignOpen(false); }}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border text-[10px] sm:text-xs font-medium transition-colors active:scale-95",
+                    exportOpen
+                      ? "bg-slate-700 border-slate-600 text-white"
+                      : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300"
+                  )}
+                  title="Baixar relatório"
                 >
-                  <Printer size={14} />
+                  <Download size={13} className="shrink-0" />
+                  <span>Baixar</span>
+                  <ChevronDown size={12} className={cn("hidden sm:block opacity-30 shrink-0 transition-transform", exportOpen ? "rotate-180" : "")} />
                 </button>
-                <button
-                  onClick={handleDownload}
-                  className="p-1.5 sm:p-2 rounded-lg border bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 transition-all active:scale-95"
-                  title="Exportar CSV"
-                >
-                  <Download size={14} />
-                </button>
-              </>
+                {exportOpen && (
+                  <div className="absolute right-0 mt-2 w-60 bg-slate-950 border border-slate-700/60 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] py-2 z-[100]">
+                    <button
+                      onClick={() => { setExportOpen(false); window.print(); }}
+                      className="w-full text-left px-3 py-2.5 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors flex items-start gap-2.5"
+                    >
+                      <Printer size={15} className="shrink-0 mt-0.5 text-blue-400" />
+                      <span>
+                        Relatório em PDF
+                        <span className="block text-[10px] font-normal text-slate-500 mt-0.5">Abre a impressão — escolha &quot;Salvar como PDF&quot;</span>
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => { setExportOpen(false); handleDownload(); }}
+                      className="w-full text-left px-3 py-2.5 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors flex items-start gap-2.5"
+                    >
+                      <Download size={15} className="shrink-0 mt-0.5 text-emerald-400" />
+                      <span>
+                        Planilha (CSV)
+                        <span className="block text-[10px] font-normal text-slate-500 mt-0.5">Dados do período — abre no Excel</span>
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Campaign selector — visible only on meta/detalhes views */}
