@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
 import { RoscaSimples } from "@/components/charts/rosca-simples";
 import { COR_PLATAFORMA } from "@/components/charts/paleta";
+import { AnaliseCriativos, type AdAnalisado } from "@/components/dashboard/analise-criativos";
 import Link from "next/link";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -125,12 +126,8 @@ interface GA4Data {
 }
 
 interface DemographicBreakdown { label: string; impressions: number; clicks: number }
-interface AdCreative {
-  id: string; name: string; thumbnail: string | null;
-  impressions: number; clicks: number; purchases: number;
-  leads: number; messages: number; conversions: number;
-  spend: number; status: string; isMessaging: boolean;
-}
+// O mesmo shape da análise de criativos da agência — a rota devolve tudo.
+type AdCreative = AdAnalisado;
 
 interface ClientDashboardProps {
   workspaceId: string;
@@ -292,14 +289,10 @@ export function ClientDashboard({
       if (google) setGoogleData(google as GoogleData);
       if (ga4) setGa4Data(ga4 as GA4Data);
       // A API passou a devolver também os pausados que rodaram no período
-      // (para a análise de criativos da agência). A dash do CLIENTE FINAL
-      // mantém o comportamento de sempre: só o que está ativo agora.
+      // Lista COMPLETA (ativos e pausados que rodaram): a análise de
+      // criativos tem filtro próprio de status, igual à da agência.
       if (creativesRes) {
-        setCreatives(
-          ((creativesRes as { ads: AdCreative[] })?.ads ?? []).filter(
-            (a) => a.status === "ACTIVE",
-          ),
-        );
+        setCreatives((creativesRes as { ads: AdCreative[] })?.ads ?? []);
       }
       if (demoRes) setDemographics(demoRes as { gender: DemographicBreakdown[]; age: DemographicBreakdown[] });
       if (regionsRes) setRegions((regionsRes as { regions: { name: string; value: number }[] })?.regions ?? []);
@@ -1342,91 +1335,18 @@ export function ClientDashboard({
 
         </div>}
 
-        {/* ═══ Row 2: Anúncios Meta (FULL WIDTH) ═══ */}
-        {hasMeta && <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-          <div className="lg:col-span-12 glass-panel rounded-2xl p-4 sm:p-6 flex flex-col">
-            <div className="flex items-center justify-between mb-4 sm:mb-6">
-              <div className="flex items-center gap-3">
-                <h3 className="text-sm font-black text-white/80 uppercase tracking-[0.2em]">Anúncios Ativos</h3>
-                <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 uppercase">Meta Ads</span>
-              </div>
-              <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 uppercase tracking-widest">
-                {creatives.filter(a => a.status === "ACTIVE").length} ATIVOS
-              </span>
-            </div>
-
-            <div className="overflow-x-auto no-scrollbar pb-4">
-              {creatives.length > 0 ? (
-                <div className="flex gap-6" style={{ minWidth: `${creatives.length * 160}px` }}>
-                  {creatives.map(ad => (
-                    <div key={ad.id} className="flex-shrink-0 w-[160px] group/ad">
-                      <p className="text-[10px] font-bold text-white/40 mb-3 truncate uppercase tracking-tighter group-hover/ad:text-white transition-colors">{ad.name}</p>
-                      <div className="relative aspect-[4/5] w-full rounded-xl overflow-hidden bg-slate-800 border border-white/5 transition-transform group-hover/ad:scale-[1.02] duration-500">
-                        {ad.thumbnail ? (
-                          <img
-                            src={ad.thumbnail}
-                            alt={ad.name}
-                            className="w-full h-full object-cover grayscale-[0.3] group-hover/ad:grayscale-0 transition-all duration-700"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest italic">Sem imagem</span>
-                          </div>
-                        )}
-                        <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${ad.status === "ACTIVE" ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" : "bg-slate-500"}`}></div>
-                        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-                      </div>
-                      <div className="mt-3 space-y-2 px-1">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Impressões</span>
-                          <span className="text-[12px] font-black text-white">{formatNumber(ad.impressions)}</span>
-                        </div>
-
-                        {ad.messages + ad.leads > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">Conversas</span>
-                            <span className="text-[12px] font-black text-blue-400">{ad.messages + ad.leads}</span>
-                          </div>
-                        )}
-
-                        {ad.purchases > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-widest">Vendas</span>
-                            <span className="text-[12px] font-black text-emerald-400">{ad.purchases}</span>
-                          </div>
-                        )}
-
-                        {!ad.messages && !ad.leads && !ad.purchases && ad.conversions > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Conv.</span>
-                            <span className="text-[12px] font-black text-white">{ad.conversions}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-12 sm:py-16 text-center">
-                  <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">
-                    Nenhum anúncio com impressões no período
-                  </p>
-                  <p className="text-slate-600 text-[10px] mt-2 max-w-md mx-auto leading-relaxed">
-                    Mostramos apenas anúncios ativos que rodaram no intervalo escolhido. Tente expandir o período no filtro acima.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {creatives.length > 0 && (
-              <div className="mt-4 flex justify-between items-center text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] border-t border-white/5 pt-4">
-                <span>{creatives.length} {creatives.length === 1 ? "anúncio ativo" : "anúncios ativos"}</span>
-                <span className="hidden sm:inline text-white/20">↔ Arraste para ver mais</span>
-              </div>
-            )}
-          </div>
-        </div>}
+        {/* ═══ Row 2: Análise de criativos (a MESMA da agência) ═══
+            O cliente final vê os anúncios que rodaram com veredito e preview
+            real, respeitando o visibleMetrics: se o dono escondeu
+            investimento, nenhum R$ aparece nos cards nem no modal. */}
+        {hasMeta && (
+          <AnaliseCriativos
+            creatives={creatives}
+            workspaceIdParam={workspaceId}
+            agregadoSemConta={false}
+            mostrarCusto={shouldShowMetric("spend", visibleMetrics, true)}
+          />
+        )}
 
         {/* ═══ Row 2.5: Placements (onde os anúncios apareceram, Meta only) ═══ */}
         {hasMeta && placements.length > 0 && (

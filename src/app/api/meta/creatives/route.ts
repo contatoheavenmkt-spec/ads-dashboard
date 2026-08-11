@@ -109,6 +109,16 @@ export async function GET(req: NextRequest) {
 
   if (contas.length === 0) return NextResponse.json({ ads: [] });
 
+  // Nome da CONTA de anúncios (do Meta) — rótulo único e sem ambiguidade.
+  // O nome de workspace mesclado ("dosanjo · BBG · ...") confundia: parecia
+  // vários clientes num anúncio, quando era uma conta ligada a vários
+  // cadastros. A conta é o agrupador natural da tela.
+  const integracoes = await db.integration.findMany({
+    where: { adAccountId: { in: contas.map((c) => c.adAccountId) }, platform: "meta" },
+    select: { adAccountId: true, name: true },
+  });
+  const nomeDaConta = new Map(integracoes.map((i) => [i.adAccountId, i.name]));
+
   const results = await Promise.allSettled(
     contas.map((c) => getAdCreatives(c.adAccountId, token, days, customRange ?? undefined)),
   );
@@ -122,6 +132,7 @@ export async function GET(req: NextRequest) {
             // conta que o preview precisa para autorizar.
             clientName: contas[i].clientName,
             adAccountId: contas[i].adAccountId,
+            accountName: nomeDaConta.get(contas[i].adAccountId) ?? contas[i].clientName,
           }))
         : [],
     )

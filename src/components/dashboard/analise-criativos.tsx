@@ -43,6 +43,8 @@ export interface AdAnalisado {
   cpm: number;
   clientName?: string;
   adAccountId?: string;
+  /** Nome da conta de anúncios no Meta — o agrupador natural na visão geral. */
+  accountName?: string;
 }
 
 type Veredito = {
@@ -260,11 +262,14 @@ export function AnaliseCriativos({
   creatives,
   workspaceIdParam,
   agregadoSemConta,
+  mostrarCusto = true,
 }: {
   creatives: AdAnalisado[];
   workspaceIdParam?: string | null;
-  /** true quando a visão é "Todas as Fontes": mostra o dono de cada anúncio. */
+  /** true quando a visão é "Todas as Fontes": agrupa por conta de anúncios. */
   agregadoSemConta: boolean;
+  /** false quando o dono escondeu investimento do cliente final: some todo R$. */
+  mostrarCusto?: boolean;
 }) {
   const [filtro, setFiltro] = useState<"rodaram" | "ativos" | "pausados">("rodaram");
   const [aberto, setAberto] = useState<AdAnalisado | null>(null);
@@ -306,6 +311,43 @@ export function AnaliseCriativos({
 
   const ativos = analisados.filter((x) => x.ad.status === "ACTIVE").length;
   const pausados = analisados.length - ativos;
+
+  // Agrupado por CONTA de anúncios, dinheiro primeiro: grupos ordenados por
+  // gasto total e, dentro deles, anúncios por gasto. A visão "Todas as Fontes"
+  // intercalava contas por impressão — parecia bagunça sem dono.
+  const grupos = useMemo(() => {
+    const porConta = new Map<string, { chave: string; nome: string; itens: { ad: AdAnalisado; veredito: Veredito }[] }>();
+    for (const item of visiveis) {
+      const chave = item.ad.adAccountId ?? "sem-conta";
+      const g = porConta.get(chave) ?? {
+        chave,
+        nome: item.ad.accountName || item.ad.clientName || "Conta de anúncios",
+        itens: [],
+      };
+      g.itens.push(item);
+      porConta.set(chave, g);
+    }
+    const gastoDe = (itens: { ad: AdAnalisado }[]) => itens.reduce((s, x) => s + x.ad.spend, 0);
+    const lista = [...porConta.values()].map((g) => ({
+      ...g,
+      itens: [...g.itens].sort((a, b) => b.ad.spend - a.ad.spend),
+      gasto: gastoDe(g.itens),
+    }));
+    lista.sort((a, b) => b.gasto - a.gasto);
+    return lista;
+  }, [visiveis]);
+
+  // Pagina ATRAVÉS dos grupos em sequência: seções inteiras até o limite,
+  // a última possivelmente parcial. "Mostrar mais" continua global.
+  const comCabecalho = agregadoSemConta && grupos.length > 1;
+  let restante = limite;
+  const secoes = grupos
+    .map((g) => {
+      const mostrar = restante > 0 ? g.itens.slice(0, restante) : [];
+      restante -= mostrar.length;
+      return { ...g, mostrar };
+    })
+    .filter((s) => s.mostrar.length > 0);
 
   return (
     <div className="glass-panel flex flex-col rounded-2xl p-6">
@@ -351,85 +393,103 @@ export function AnaliseCriativos({
           Nenhum anúncio {filtro === "ativos" ? "ativo" : filtro === "pausados" ? "pausado" : "com entrega"} no período.
         </div>
       ) : (
-        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
-          {visiveis.slice(0, limite).map(({ ad, veredito }) => {
-            const st = STATUS_ROTULO[ad.status] ?? STATUS_ROTULO.PAUSED;
-            return (
-              <button
-                key={ad.id}
-                onClick={() => setAberto(ad)}
-                className={cn(
-                  "group flex flex-col overflow-hidden rounded-xl border bg-slate-900/40 text-left transition-transform hover:scale-[1.01]",
-                  veredito.borda,
-                )}
-                title="Clique para ver o anúncio real"
-              >
-                <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-800">
-                  {ad.thumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={ad.thumbnail}
-                      alt={ad.name}
-                      className="h-full w-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-widest text-slate-600">
-                      sem imagem
-                    </div>
-                  )}
-                  <div className="absolute left-2 top-2 flex flex-col gap-1">
-                    <span className={cn("rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase", st.cor)}>
-                      {st.texto}
-                    </span>
-                    {agregadoSemConta && ad.clientName ? (
-                      <span
-                        className="max-w-[160px] truncate rounded-md border border-cyan-500/30 bg-cyan-950/80 px-1.5 py-0.5 text-[9px] font-bold text-cyan-300"
-                        title={ad.clientName}
-                      >
-                        {ad.clientName}
-                      </span>
-                    ) : null}
-                  </div>
-                  <span className="absolute bottom-2 right-2 rounded-md bg-black/70 p-1 text-white/70 opacity-0 transition-opacity group-hover:opacity-100">
-                    <Eye size={12} />
+        <div className="space-y-6">
+          {secoes.map((secao) => (
+            <div key={secao.chave}>
+              {comCabecalho && (
+                <div
+                  className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-slate-800 pb-2"
+                  title={secao.itens[0]?.ad.clientName || undefined}
+                >
+                  <span className="text-[11px] font-black uppercase tracking-wider text-cyan-300">
+                    {secao.nome}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {secao.itens.length} {secao.itens.length === 1 ? "anúncio" : "anúncios"}
+                    {mostrarCusto ? ` · ${formatCurrency(secao.gasto)} no período` : ""}
                   </span>
                 </div>
+              )}
+              <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+                {secao.mostrar.map(({ ad, veredito }) => {
+                  const st = STATUS_ROTULO[ad.status] ?? STATUS_ROTULO.PAUSED;
+                  return (
+                    <button
+                      key={ad.id}
+                      onClick={() => setAberto(ad)}
+                      className={cn(
+                        "group flex flex-col overflow-hidden rounded-xl border bg-slate-900/40 text-left transition-transform hover:scale-[1.01]",
+                        veredito.borda,
+                      )}
+                      title="Clique para ver o anúncio real"
+                    >
+                      <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-800">
+                        {ad.thumbnail ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={ad.thumbnail}
+                            alt={ad.name}
+                            className="h-full w-full object-cover"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-widest text-slate-600">
+                            sem imagem
+                          </div>
+                        )}
+                        <span className={cn("absolute left-2 top-2 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase", st.cor)}>
+                          {st.texto}
+                        </span>
+                        <span className="absolute bottom-2 right-2 rounded-md bg-black/70 p-1 text-white/70 opacity-0 transition-opacity group-hover:opacity-100">
+                          <Eye size={12} />
+                        </span>
+                      </div>
 
-                <div className="space-y-1.5 p-3">
-                  <p className="truncate text-[11px] font-semibold text-slate-200">{ad.name}</p>
-                  <p className={cn("text-[10px] font-bold uppercase tracking-wider", veredito.cor)}>
-                    {veredito.rotulo}
-                  </p>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 border-t border-slate-800 pt-1.5 text-[10px]">
-                    {(() => {
-                      const { tipo, qtd } = tipoDoAnuncio(ad);
-                      const nome = NOME_RESULTADO[tipo];
-                      const rotulo = qtd === 1 ? nome.singular : nome.plural;
-                      return (
-                        <>
-                          <span className={tipo === "venda" ? "font-bold text-emerald-500" : "text-slate-500"}>
-                            {rotulo.charAt(0).toUpperCase() + rotulo.slice(1)}
-                          </span>
-                          <span className={cn("text-right font-semibold", tipo === "venda" ? "text-emerald-400" : "text-slate-200")}>
-                            {formatNumber(qtd)}
-                          </span>
-                          <span className="text-slate-500">Custo/{nome.singular}</span>
-                          <span className="text-right font-semibold text-slate-200">
-                            {qtd > 0 ? formatCurrency(ad.spend / qtd) : "—"}
-                          </span>
-                        </>
-                      );
-                    })()}
-                    <span className="text-slate-500">Gasto</span>
-                    <span className="text-right font-semibold text-slate-300">{formatCurrency(ad.spend)}</span>
-                    <span className="text-slate-500">CTR</span>
-                    <span className="text-right text-slate-400">{ad.ctr.toFixed(2)}%</span>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+                      <div className="space-y-1.5 p-3">
+                        <p className="truncate text-[11px] font-semibold text-slate-200">{ad.name}</p>
+                        <p className={cn("text-[10px] font-bold uppercase tracking-wider", veredito.cor)}>
+                          {veredito.rotulo}
+                        </p>
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 border-t border-slate-800 pt-1.5 text-[10px]">
+                          {(() => {
+                            const { tipo, qtd } = tipoDoAnuncio(ad);
+                            const nome = NOME_RESULTADO[tipo];
+                            const rotulo = qtd === 1 ? nome.singular : nome.plural;
+                            return (
+                              <>
+                                <span className={tipo === "venda" ? "font-bold text-emerald-500" : "text-slate-500"}>
+                                  {rotulo.charAt(0).toUpperCase() + rotulo.slice(1)}
+                                </span>
+                                <span className={cn("text-right font-semibold", tipo === "venda" ? "text-emerald-400" : "text-slate-200")}>
+                                  {formatNumber(qtd)}
+                                </span>
+                                {mostrarCusto && (
+                                  <>
+                                    <span className="text-slate-500">Custo/{nome.singular}</span>
+                                    <span className="text-right font-semibold text-slate-200">
+                                      {qtd > 0 ? formatCurrency(ad.spend / qtd) : "—"}
+                                    </span>
+                                  </>
+                                )}
+                              </>
+                            );
+                          })()}
+                          {mostrarCusto && (
+                            <>
+                              <span className="text-slate-500">Gasto</span>
+                              <span className="text-right font-semibold text-slate-300">{formatCurrency(ad.spend)}</span>
+                            </>
+                          )}
+                          <span className="text-slate-500">CTR</span>
+                          <span className="text-right text-slate-400">{ad.ctr.toFixed(2)}%</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -447,6 +507,7 @@ export function AnaliseCriativos({
           ad={aberto}
           veredito={analisar(aberto, ref)}
           workspaceIdParam={workspaceIdParam}
+          mostrarCusto={mostrarCusto}
           onFechar={() => setAberto(null)}
         />
       ) : null}
@@ -459,11 +520,13 @@ function ModalAnuncio({
   ad,
   veredito,
   workspaceIdParam,
+  mostrarCusto,
   onFechar,
 }: {
   ad: AdAnalisado;
   veredito: Veredito;
   workspaceIdParam?: string | null;
+  mostrarCusto: boolean;
   onFechar: () => void;
 }) {
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
@@ -511,9 +574,12 @@ function ModalAnuncio({
               <span className={cn("rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase", st.cor)}>
                 {st.texto}
               </span>
-              {ad.clientName ? (
-                <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] font-bold text-cyan-300">
-                  {ad.clientName}
+              {ad.accountName || ad.clientName ? (
+                <span
+                  className="max-w-[200px] truncate rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] font-bold text-cyan-300"
+                  title={ad.clientName || undefined}
+                >
+                  {ad.accountName || ad.clientName}
                 </span>
               ) : null}
             </div>
@@ -550,12 +616,16 @@ function ModalAnuncio({
           </div>
 
           <div className="space-y-4 p-4">
-            <div className={cn("rounded-xl border p-3", veredito.borda)}>
-              <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Por que este veredito
-              </p>
-              <p className="text-xs leading-relaxed text-slate-200">{veredito.porque}</p>
-            </div>
+            {/* O porquê cita valores em R$ — se o dono escondeu investimento
+                do cliente final, a explicação inteira fica de fora. */}
+            {mostrarCusto && (
+              <div className={cn("rounded-xl border p-3", veredito.borda)}>
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Por que este veredito
+                </p>
+                <p className="text-xs leading-relaxed text-slate-200">{veredito.porque}</p>
+              </div>
+            )}
 
             {(ad.title || ad.body) && (
               <div>
@@ -578,14 +648,18 @@ function ModalAnuncio({
               <div className="grid grid-cols-2 gap-2">
                 <Metrica icone={<PlayCircle size={12} />} rotulo="Impressões" valor={formatNumber(ad.impressions)} />
                 <Metrica icone={<MousePointerClick size={12} />} rotulo="Cliques" valor={`${formatNumber(ad.clicks)} (${ad.ctr.toFixed(2)}%)`} />
-                <Metrica icone={<TrendingDown size={12} />} rotulo="Gasto" valor={formatCurrency(ad.spend)} />
+                {mostrarCusto && (
+                  <Metrica icone={<TrendingDown size={12} />} rotulo="Gasto" valor={formatCurrency(ad.spend)} />
+                )}
                 <Metrica
                   icone={<Award size={12} />}
                   rotulo={ad.isMessaging ? "Conversas" : ad.purchases > 0 ? "Vendas" : "Resultados"}
-                  valor={`${formatNumber(ad.conversions)}${custoResultado !== null ? ` (${formatCurrency(custoResultado)} cada)` : ""}`}
+                  valor={`${formatNumber(ad.conversions)}${mostrarCusto && custoResultado !== null ? ` (${formatCurrency(custoResultado)} cada)` : ""}`}
                 />
                 <Metrica icone={<Flame size={12} />} rotulo="Frequência" valor={`${ad.frequency.toFixed(1)}x por pessoa`} />
-                <Metrica icone={<PauseCircle size={12} />} rotulo="CPM" valor={formatCurrency(ad.cpm)} />
+                {mostrarCusto && (
+                  <Metrica icone={<PauseCircle size={12} />} rotulo="CPM" valor={formatCurrency(ad.cpm)} />
+                )}
               </div>
             </div>
 
