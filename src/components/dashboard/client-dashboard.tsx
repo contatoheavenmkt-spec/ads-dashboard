@@ -288,7 +288,16 @@ export function ClientDashboard({
       if (meta) setMetaData(meta as MetaData);
       if (google) setGoogleData(google as GoogleData);
       if (ga4) setGa4Data(ga4 as GA4Data);
-      if (creativesRes) setCreatives((creativesRes as { ads: AdCreative[] })?.ads ?? []);
+      // A API passou a devolver também os pausados que rodaram no período
+      // (para a análise de criativos da agência). A dash do CLIENTE FINAL
+      // mantém o comportamento de sempre: só o que está ativo agora.
+      if (creativesRes) {
+        setCreatives(
+          ((creativesRes as { ads: AdCreative[] })?.ads ?? []).filter(
+            (a) => a.status === "ACTIVE",
+          ),
+        );
+      }
       if (demoRes) setDemographics(demoRes as { gender: DemographicBreakdown[]; age: DemographicBreakdown[] });
       if (regionsRes) setRegions((regionsRes as { regions: { name: string; value: number }[] })?.regions ?? []);
       setMetaPrev((metaPrevRes as { totals?: MetaTotals })?.totals ?? null);

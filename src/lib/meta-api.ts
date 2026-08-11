@@ -442,6 +442,17 @@ export interface MetaAdCreative {
   spend: number;
   status: string;
   isMessaging: boolean;
+  // ── Campos para a análise de criativos ──
+  /** O texto principal do anúncio: é onde mora o "ângulo". */
+  body: string | null;
+  /** O título do criativo. */
+  title: string | null;
+  /** Link do post real no Instagram, quando existe. */
+  permalink: string | null;
+  /** Quantas vezes, em média, a mesma pessoa viu o anúncio no período. */
+  frequency: number;
+  ctr: number;
+  cpm: number;
 }
 
 export async function getAdCreatives(
@@ -451,28 +462,46 @@ export async function getAdCreatives(
   customRange?: { since: string; until: string }
 ): Promise<MetaAdCreative[]> {
   const { since, until } = customRange ?? getInsightsDateRange(days);
-  const insightFields = "impressions,clicks,spend,actions";
+  const insightFields = "impressions,clicks,spend,actions,frequency,ctr,cpm";
   // date_preset só aceita valores enumerados (last_7d/last_30d/...), então
   // values arbitrários como 15 quebravam silenciosamente. time_range aceita
   // qualquer janela e ainda casa com o que o usuário escolhe na dash.
   const insightParams =
     `time_range({"since":"${since}","until":"${until}"})` +
     `.use_account_attribution_setting(true)`;
-  // `effective_status` reflete o estado real do anúncio (paused, archived,
-  // disapproved, etc.), diferente do `status` que é só o que o user setou.
-  // Filtramos pra ACTIVE — é o que faz sentido mostrar como "Anúncios Ativos".
-  const fields = `id,name,status,effective_status,creative{thumbnail_url,image_url},insights.${insightParams}{${insightFields}}`;
+  /*
+   * Duas decisões que vieram de dor real do usuário:
+   *
+   * 1. SEM filtro de ACTIVE. A pergunta que a tela responde é "o que rodou no
+   *    período", e um anúncio pausado ontem rodou o mês inteiro: escondê-lo
+   *    inutiliza a análise de criativos. O recorte por entrega acontece
+   *    adiante (impressões > 0 no período); quem nunca entregou não aparece.
+   *    Trazemos os pausados/arquivados junto e o front decide o recorte.
+   *
+   * 2. thumbnail_width/height 512. Sem isso o Meta manda 64x64, que é a
+   *    imagem "embaçada" que aparecia na tela. title/body vêm junto porque o
+   *    ângulo do anúncio mora no texto, e o permalink permite abrir o post
+   *    de verdade.
+   */
+  const fields =
+    `id,name,status,effective_status,` +
+    `creative.thumbnail_width(512).thumbnail_height(512)` +
+    `{thumbnail_url,image_url,title,body,instagram_permalink_url},` +
+    `insights.${insightParams}{${insightFields}}`;
   const filtering = encodeURIComponent(
-    JSON.stringify([{ field: "ad.effective_status", operator: "IN", value: ["ACTIVE"] }]),
+    JSON.stringify([
+      {
+        field: "ad.effective_status",
+        operator: "IN",
+        value: ["ACTIVE", "PAUSED", "ADSET_PAUSED", "CAMPAIGN_PAUSED", "ARCHIVED"],
+      },
+    ]),
   );
-  // Limit 100 com filtering server-side: pega só ads ativos e depois ainda
-  // filtramos client-side por impressions > 0 (defesa em profundidade: ads
-  // recém-publicados podem estar ACTIVE sem impressões no período escolhido).
   const url =
     `${GRAPH_API}/${adAccountId}/ads` +
     `?fields=${encodeURIComponent(fields)}` +
     `&filtering=${filtering}` +
-    `&limit=100` +
+    `&limit=200` +
     `&access_token=${accessToken}`;
 
   const res = await fetch(url, { cache: "no-store" });
@@ -484,8 +513,24 @@ export async function getAdCreatives(
     name: string;
     status: string;
     effective_status?: string;
-    creative?: { thumbnail_url?: string; image_url?: string };
-    insights?: { data: Array<{ impressions: string; clicks: string; spend: string; actions?: Array<{ action_type: string; value: string }> }> };
+    creative?: {
+      thumbnail_url?: string;
+      image_url?: string;
+      title?: string;
+      body?: string;
+      instagram_permalink_url?: string;
+    };
+    insights?: {
+      data: Array<{
+        impressions: string;
+        clicks: string;
+        spend: string;
+        frequency?: string;
+        ctr?: string;
+        cpm?: string;
+        actions?: Array<{ action_type: string; value: string }>;
+      }>;
+    };
   }>).map((ad) => {
     const ins = ad.insights?.data?.[0];
     const purchases = readAction(ins?.actions, ACTION_PURCHASE, ACTION_PURCHASE_FALLBACKS);
@@ -508,12 +553,18 @@ export async function getAdCreatives(
       conversions,
       status: ad.effective_status ?? ad.status,
       isMessaging,
+      body: ad.creative?.body ?? null,
+      title: ad.creative?.title ?? null,
+      permalink: ad.creative?.instagram_permalink_url ?? null,
+      frequency: Number(ins?.frequency ?? 0),
+      ctr: Number(ins?.ctr ?? 0),
+      cpm: Number(ins?.cpm ?? 0),
     };
   });
 
-  // Filtra ads sem impressões no período escolhido (recém-criados ou ativos
-  // mas que ainda não rodaram) e ordena por impressões desc — anúncio que
-  // está performando mais aparece primeiro.
+  // Só quem teve ENTREGA no período: é o recorte que responde "o que rodou".
+  // Anúncio pausado ontem que rodou o mês aparece; rascunho que nunca rodou,
+  // não. Ordenado por impressões: quem mais entregou vem primeiro.
   return mapped
     .filter((a) => a.impressions > 0)
     .sort((a, b) => b.impressions - a.impressions);

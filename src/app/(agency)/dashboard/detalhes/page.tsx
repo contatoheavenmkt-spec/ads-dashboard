@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Header } from "@/components/layout/header";
+import { AnaliseCriativos } from "@/components/dashboard/analise-criativos";
 import { GaugeChart } from "@/components/dashboard/gauge-chart";
 import { PerformanceChart } from "@/components/charts/performance-chart";
 import { RegionList, RegionMap } from "@/components/dashboard/region-heatmap";
@@ -14,7 +15,7 @@ import { KeywordsTable } from "@/components/dashboard/keywords-table";
 
 
 interface DemographicBreakdown { label: string; impressions: number; clicks: number }
-interface AdCreative { id: string; name: string; thumbnail: string | null; impressions: number; clicks: number; purchases: number; leads: number; messages: number; conversions: number; spend: number; status: string; isMessaging: boolean }
+type AdCreative = import("@/components/dashboard/analise-criativos").AdAnalisado;
 interface TimeSeries { date: string; spend: number; revenue: number; impressions: number; clicks: number; purchases: number; leads: number; messages: number; conversions: number }
 
 const GENDER_COLORS = ["#3b82f6", "#93c5fd", "#1e40af"];
@@ -343,87 +344,14 @@ export default function DetalhesPage() {
 
         </div>}
 
-        {/* ═══ Row 2: Anúncios Meta (FULL WIDTH) ═══ */}
+        {/* ═══ Row 2: Análise de criativos (FULL WIDTH) ═══ */}
         {showMetaSection && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-12 glass-panel rounded-2xl p-6 flex flex-col">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <h3 className="text-sm font-black text-white/80 uppercase tracking-[0.2em]">Creative Matrix</h3>
-                <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 uppercase">Meta Ads</span>
-              </div>
-              <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 uppercase tracking-widest">
-                {creatives.filter(a => a.status === "ACTIVE").length} ATIVOS
-              </span>
-            </div>
-
-            <div className="overflow-x-auto no-scrollbar pb-4">
-              {creatives.length > 0 ? (
-                <div className="flex gap-6" style={{ minWidth: `${creatives.length * 160}px` }}>
-                  {creatives.map(ad => (
-                    <div key={ad.id} className="flex-shrink-0 w-[160px] group/ad">
-                      <p className="text-[10px] font-bold text-white/40 mb-3 truncate uppercase tracking-tighter group-hover/ad:text-white transition-colors">{ad.name}</p>
-                      <div className="relative aspect-[4/5] w-full rounded-xl overflow-hidden bg-slate-800 border border-white/5 transition-transform group-hover/ad:scale-[1.02] duration-500">
-                        {ad.thumbnail ? (
-                          <img
-                            src={ad.thumbnail}
-                            alt={ad.name}
-                            className="w-full h-full object-cover grayscale-[0.3] group-hover/ad:grayscale-0 transition-all duration-700"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <span className="text-[8px] text-slate-600 font-bold uppercase tracking-widest italic">Signal lost</span>
-                          </div>
-                        )}
-                        <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${ad.status === "ACTIVE" ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" : "bg-slate-500"}`}></div>
-                        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-                      </div>
-                      <div className="mt-3 space-y-2 px-1">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Reach</span>
-                          <span className="text-[12px] font-black text-white">{formatNumber(ad.impressions)}</span>
-                        </div>
-
-                        {ad.messages + ad.leads > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">Conversas</span>
-                            <span className="text-[12px] font-black text-blue-400">{ad.messages + ad.leads}</span>
-                          </div>
-                        )}
-
-                        {ad.purchases > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-widest">Vendas</span>
-                            <span className="text-[12px] font-black text-emerald-400">{ad.purchases}</span>
-                          </div>
-                        )}
-
-                        {!ad.messages && !ad.leads && !ad.purchases && ad.conversions > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Conv.</span>
-                            <span className="text-[12px] font-black text-white">{ad.conversions}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-20 text-center text-slate-700 text-[10px] font-black uppercase tracking-[0.3em] opacity-40">
-                  Data Stream Empty - No Creatives Found
-                </div>
-              )}
-            </div>
-
-            {creatives.length > 0 && (
-              <div className="mt-4 flex justify-between items-center text-[10px] font-bold text-white/10 uppercase tracking-[0.2em] border-t border-white/5 pt-4">
-                <span>Displaying Node Cluster {Math.min(creatives.length, 7)} / {creatives.length}</span>
-                <div className="flex gap-6 pointer-events-auto">
-                  <button className="hover:text-white transition-colors cursor-pointer">&lt;</button>
-                  <button className="hover:text-white transition-colors cursor-pointer">&gt;</button>
-                </div>
-              </div>
-            )}
+          <div className="lg:col-span-12">
+            <AnaliseCriativos
+              creatives={creatives}
+              workspaceIdParam={null}
+              agregadoSemConta={!selectedAccount || selectedAccount?.platform === "google"}
+            />
           </div>
         </div>}
 

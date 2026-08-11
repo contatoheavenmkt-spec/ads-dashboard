@@ -22,7 +22,16 @@ export async function GET(req: NextRequest) {
   const token = await getStoredMetaToken(userId);
   if (!token) return NextResponse.json({ ads: [] });
 
-  let accountIds: string[] = [];
+  /*
+   * Cada conta carrega o NOME do cliente dono dela.
+   *
+   * Na visão "Todas as Fontes" esta rota agrega criativos de todos os
+   * clientes da agência numa lista só, e sem o rótulo a tela virava uma
+   * mistura sem dono: impossível saber de qual cliente era cada anúncio. A
+   * autorização entre agências sempre esteve correta; o problema era a
+   * agregação sem identificação.
+   */
+  let contas: Array<{ adAccountId: string; clientName: string }> = [];
 
   if (adAccountIdParam) {
     // ⚠️ Antes essa rota aceitava qualquer adAccountId direto da query,
@@ -32,37 +41,56 @@ export async function GET(req: NextRequest) {
     if (!ok) {
       return NextResponse.json({ error: "Conta de anúncios não autorizada" }, { status: 403 });
     }
-    accountIds = [adAccountIdParam];
+    const wi = await db.workspaceIntegration.findFirst({
+      where: {
+        integration: { adAccountId: adAccountIdParam, platform: "meta" },
+        workspace: { ownerId: userId, deletedAt: null },
+      },
+      select: { workspace: { select: { name: true } } },
+    });
+    contas = [{ adAccountId: adAccountIdParam, clientName: wi?.workspace.name ?? "" }];
   } else if (workspaceIdParam) {
     const wsIntegrations = await db.workspaceIntegration.findMany({
       where: { workspaceId: workspaceIdParam },
-      include: { integration: { select: { adAccountId: true, platform: true } } },
+      include: {
+        integration: { select: { adAccountId: true, platform: true } },
+        workspace: { select: { name: true } },
+      },
     });
-    accountIds = wsIntegrations
+    contas = wsIntegrations
       .filter((wi) => wi.integration.platform === "meta")
-      .map((wi) => wi.integration.adAccountId);
+      .map((wi) => ({ adAccountId: wi.integration.adAccountId, clientName: wi.workspace.name }));
   } else {
     // Sem workspaceId: pega integrações de workspaces do próprio dono.
     const userWs = await db.workspace.findMany({
       where: { ownerId: userId, deletedAt: null },
       include: { integrations: { include: { integration: true } } },
     });
-    accountIds = userWs.flatMap((w) =>
+    contas = userWs.flatMap((w) =>
       w.integrations
         .filter((wi) => wi.integration.platform === "meta")
-        .map((wi) => wi.integration.adAccountId),
+        .map((wi) => ({ adAccountId: wi.integration.adAccountId, clientName: w.name })),
     );
   }
 
-  if (accountIds.length === 0) return NextResponse.json({ ads: [] });
+  if (contas.length === 0) return NextResponse.json({ ads: [] });
 
   const results = await Promise.allSettled(
-    accountIds.map((id) => getAdCreatives(id, token, days))
+    contas.map((c) => getAdCreatives(c.adAccountId, token, days)),
   );
 
   const ads = results
-    .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof getAdCreatives>>> => r.status === "fulfilled")
-    .flatMap((r) => r.value)
+    .flatMap((r, i) =>
+      r.status === "fulfilled"
+        ? r.value.map((ad) => ({
+            ...ad,
+            // O rótulo que desfaz a mistura na visão agregada, e o id da
+            // conta que o preview precisa para autorizar.
+            clientName: contas[i].clientName,
+            adAccountId: contas[i].adAccountId,
+          }))
+        : [],
+    )
     .sort((a, b) => b.impressions - a.impressions);
 
   return NextResponse.json({ ads });
