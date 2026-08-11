@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Award, ExternalLink, Eye, Flame, Loader2, MousePointerClick,
-  PauseCircle, PlayCircle, TrendingDown, TriangleAlert, X,
+  PauseCircle, PlayCircle, TrendingDown, X,
 } from "lucide-react";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 
@@ -253,6 +253,9 @@ const STATUS_ROTULO: Record<string, { texto: string; cor: string }> = {
   ARCHIVED: { texto: "Arquivado", cor: "text-slate-500 bg-slate-800/40 border-slate-700" },
 };
 
+/** Cards por leva — 3 linhas cheias na grade mais larga; o resto via "Mostrar mais". */
+const POR_PAGINA = 18;
+
 export function AnaliseCriativos({
   creatives,
   workspaceIdParam,
@@ -265,13 +268,34 @@ export function AnaliseCriativos({
 }) {
   const [filtro, setFiltro] = useState<"rodaram" | "ativos" | "pausados">("rodaram");
   const [aberto, setAberto] = useState<AdAnalisado | null>(null);
+  // Quantos cards mostrar de cada vez — 100+ anúncios empilhados viram poluição;
+  // o "Mostrar mais" traz o resto só de quem quiser.
+  const [limite, setLimite] = useState(POR_PAGINA);
+  // Dataset novo (troca de conta/período no Header, sem remontar o componente)
+  // volta a paginação pro início — senão um "Mostrar mais" antigo vaza pro
+  // cliente seguinte. Ajuste durante o render, padrão oficial do React pra
+  // derivar estado de prop sem useEffect.
+  const [creativesAnterior, setCreativesAnterior] = useState(creatives);
+  if (creativesAnterior !== creatives) {
+    setCreativesAnterior(creatives);
+    setLimite(POR_PAGINA);
+  }
+
+  // Dedupe por id: defesa contra o mesmo anúncio chegar N vezes quando a mesma
+  // conta está ligada a mais de um workspace (a rota já deduplica, isto é cinto
+  // de segurança pra qualquer outro caminho).
+  const unicos = useMemo(() => {
+    const vistos = new Map<string, AdAnalisado>();
+    for (const ad of creatives) if (!vistos.has(ad.id)) vistos.set(ad.id, ad);
+    return [...vistos.values()];
+  }, [creatives]);
 
   // Referências POR TIPO de resultado (venda/conversa/lead), ponderadas.
-  const ref = useMemo(() => calcularReferencias(creatives), [creatives]);
+  const ref = useMemo(() => calcularReferencias(unicos), [unicos]);
 
   const analisados = useMemo(
-    () => creatives.map((ad) => ({ ad, veredito: analisar(ad, ref) })),
-    [creatives, ref],
+    () => unicos.map((ad) => ({ ad, veredito: analisar(ad, ref) })),
+    [unicos, ref],
   );
 
   const visiveis = useMemo(() => {
@@ -282,10 +306,6 @@ export function AnaliseCriativos({
 
   const ativos = analisados.filter((x) => x.ad.status === "ACTIVE").length;
   const pausados = analisados.length - ativos;
-  const vencedores = analisados.filter((x) => x.veredito.tipo === "vencedor");
-  const problemas = analisados.filter((x) =>
-    ["sem_resultado", "caro", "fadiga"].includes(x.veredito.tipo),
-  );
 
   return (
     <div className="glass-panel flex flex-col rounded-2xl p-6">
@@ -306,7 +326,13 @@ export function AnaliseCriativos({
           ].map((f) => (
             <button
               key={f.id}
-              onClick={() => setFiltro(f.id)}
+              onClick={() => {
+                // Guard: reclique no filtro já ativo não pode colapsar a
+                // lista expandida de volta pra 18 (o scroll saltaria).
+                if (f.id === filtro) return;
+                setFiltro(f.id);
+                setLimite(POR_PAGINA);
+              }}
               className={cn(
                 "rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors",
                 filtro === f.id
@@ -320,56 +346,13 @@ export function AnaliseCriativos({
         </div>
       </div>
 
-      {/* O resumo que responde "e aí, o que faço?" antes dos cards. */}
-      {(vencedores.length > 0 || problemas.length > 0) && (
-        <div className="mb-5 grid gap-2 sm:grid-cols-2">
-          {vencedores.length > 0 && (
-            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-3">
-              <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                <Award size={12} /> O que está funcionando
-              </p>
-              {vencedores.slice(0, 3).map(({ ad }) => (
-                <button
-                  key={ad.id}
-                  onClick={() => setAberto(ad)}
-                  className="block w-full truncate text-left text-[11px] text-slate-300 hover:text-white"
-                >
-                  • {ad.name}
-                  <span className="text-emerald-400">
-                    {" "}(
-                    {formatCurrency(tipoDoAnuncio(ad).qtd > 0 ? ad.spend / tipoDoAnuncio(ad).qtd : 0)}
-                    /{NOME_RESULTADO[tipoDoAnuncio(ad).tipo].singular})
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-          {problemas.length > 0 && (
-            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3">
-              <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                <TriangleAlert size={12} /> O que precisa de atenção
-              </p>
-              {problemas.slice(0, 3).map(({ ad, veredito }) => (
-                <button
-                  key={ad.id}
-                  onClick={() => setAberto(ad)}
-                  className="block w-full truncate text-left text-[11px] text-slate-300 hover:text-white"
-                >
-                  • {ad.name} <span className={veredito.cor}>({veredito.rotulo})</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {visiveis.length === 0 ? (
         <div className="py-16 text-center text-xs text-slate-500">
           Nenhum anúncio {filtro === "ativos" ? "ativo" : filtro === "pausados" ? "pausado" : "com entrega"} no período.
         </div>
       ) : (
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
-          {visiveis.map(({ ad, veredito }) => {
+          {visiveis.slice(0, limite).map(({ ad, veredito }) => {
             const st = STATUS_ROTULO[ad.status] ?? STATUS_ROTULO.PAUSED;
             return (
               <button
@@ -400,7 +383,10 @@ export function AnaliseCriativos({
                       {st.texto}
                     </span>
                     {agregadoSemConta && ad.clientName ? (
-                      <span className="rounded-md border border-cyan-500/30 bg-cyan-950/80 px-1.5 py-0.5 text-[9px] font-bold text-cyan-300">
+                      <span
+                        className="max-w-[160px] truncate rounded-md border border-cyan-500/30 bg-cyan-950/80 px-1.5 py-0.5 text-[9px] font-bold text-cyan-300"
+                        title={ad.clientName}
+                      >
                         {ad.clientName}
                       </span>
                     ) : null}
@@ -445,6 +431,15 @@ export function AnaliseCriativos({
             );
           })}
         </div>
+      )}
+
+      {visiveis.length > limite && (
+        <button
+          onClick={() => setLimite((l) => l + POR_PAGINA)}
+          className="mx-auto mt-5 rounded-lg border border-slate-700 bg-slate-800/80 px-5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+        >
+          Mostrar mais ({visiveis.length - limite} restantes)
+        </button>
       )}
 
       {aberto ? (

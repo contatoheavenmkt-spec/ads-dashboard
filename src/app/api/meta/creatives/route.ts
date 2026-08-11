@@ -4,10 +4,19 @@ import { getStoredMetaToken } from "@/lib/meta-token";
 import { getAdCreatives } from "@/lib/meta-api";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
 import { safeInt } from "@/lib/utils";
+import { parseCustomRange } from "@/lib/date-range";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const days = safeInt(searchParams.get("days"), 30, 1, 366);
+  // Período "Personalizado" manda since/until (sem days). A rota ignorava e
+  // caía nos 30 dias padrão — o carrossel de anúncios do cliente final ficava
+  // numa janela diferente dos KPIs da MESMA tela.
+  const rangeResult = parseCustomRange(searchParams.get("since"), searchParams.get("until"));
+  if (rangeResult.error) {
+    return NextResponse.json({ error: rangeResult.error }, { status: 400 });
+  }
+  const customRange = rangeResult.range;
   const adAccountIdParam = searchParams.get("adAccountId");
   const workspaceIdParam = searchParams.get("workspaceId");
 
@@ -41,14 +50,19 @@ export async function GET(req: NextRequest) {
     if (!ok) {
       return NextResponse.json({ error: "Conta de anúncios não autorizada" }, { status: 403 });
     }
-    const wi = await db.workspaceIntegration.findFirst({
+    // findMany, não findFirst: com a conta ligada a N workspaces, o findFirst
+    // sem orderBy devolvia um nome ARBITRÁRIO. Agora todos entram e o dedupe
+    // abaixo mescla, igual à visão "Todas as Fontes".
+    const wis = await db.workspaceIntegration.findMany({
       where: {
         integration: { adAccountId: adAccountIdParam, platform: "meta" },
         workspace: { ownerId: userId, deletedAt: null },
       },
       select: { workspace: { select: { name: true } } },
     });
-    contas = [{ adAccountId: adAccountIdParam, clientName: wi?.workspace.name ?? "" }];
+    contas = wis.length > 0
+      ? wis.map((wi) => ({ adAccountId: adAccountIdParam, clientName: wi.workspace.name }))
+      : [{ adAccountId: adAccountIdParam, clientName: "" }];
   } else if (workspaceIdParam) {
     const wsIntegrations = await db.workspaceIntegration.findMany({
       where: { workspaceId: workspaceIdParam },
@@ -73,10 +87,30 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  /*
+   * A MESMA conta de anúncios pode estar conectada a vários workspaces
+   * (cliente cadastrado em duplicidade). Sem dedupe, cada anúncio aparecia
+   * uma vez POR workspace — o mesmo criativo 3x na tela, com o mesmo gasto,
+   * inflando a lista e as médias. Uma conta = uma busca; o rótulo carrega
+   * todos os nomes de cliente que apontam pra ela.
+   */
+  // Nomes acumulados em array (não em string concatenada): nome de workspace
+  // pode conter " · ", e um split no acumulado confundiria fragmento com nome.
+  const porConta = new Map<string, string[]>();
+  for (const c of contas) {
+    const nomes = porConta.get(c.adAccountId) ?? [];
+    if (c.clientName && !nomes.includes(c.clientName)) nomes.push(c.clientName);
+    porConta.set(c.adAccountId, nomes);
+  }
+  contas = [...porConta.entries()].map(([adAccountId, nomes]) => ({
+    adAccountId,
+    clientName: nomes.join(" · "),
+  }));
+
   if (contas.length === 0) return NextResponse.json({ ads: [] });
 
   const results = await Promise.allSettled(
-    contas.map((c) => getAdCreatives(c.adAccountId, token, days)),
+    contas.map((c) => getAdCreatives(c.adAccountId, token, days, customRange ?? undefined)),
   );
 
   const ads = results
