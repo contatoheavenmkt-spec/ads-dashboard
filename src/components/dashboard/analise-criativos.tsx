@@ -617,13 +617,17 @@ function ModalAnuncio({
 
         <div className="grid flex-1 gap-0 overflow-y-auto md:grid-cols-2">
           {/* O anúncio de verdade, como quem rolou o feed viu. */}
-          <div className="flex min-h-[420px] items-center justify-center bg-slate-950/60 p-3">
+          {/* overflow-hidden + max-h-full: a linha do grid pode ficar menor
+              que os 560px do iframe (aconteceu no mobile) e sem isso ele
+              vazava por cima do bloco seguinte. Preso à célula, o preview
+              rola dentro do próprio iframe se faltar altura. */}
+          <div className="flex min-h-[420px] items-center justify-center overflow-hidden bg-slate-950/60 p-3">
             {carregandoPreview ? (
               <Loader2 className="animate-spin text-slate-600" size={22} />
             ) : iframeUrl ? (
               <iframe
                 src={iframeUrl}
-                className="h-[560px] w-full max-w-[340px] rounded-lg border-0 bg-white"
+                className="h-[560px] max-h-full w-full max-w-[340px] rounded-lg border-0 bg-white"
                 title={`Anúncio: ${ad.name}`}
                 sandbox="allow-scripts allow-same-origin allow-popups"
               />
