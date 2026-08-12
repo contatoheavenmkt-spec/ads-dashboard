@@ -24,7 +24,7 @@ export function GaugeChart({
   const rotation = (percentage * 180) - 90; // -90 to 90 degrees
 
   return (
-    <div className="flex flex-col items-center justify-center relative py-2 w-full">
+    <div className="flex w-full flex-col items-center justify-center py-2">
       <svg width="100%" height="100" viewBox="0 0 180 100" className="overflow-visible" style={{ maxWidth: 180 }}>
         {/* Background Track */}
         <path
@@ -66,13 +66,21 @@ export function GaugeChart({
         </motion.g>
       </svg>
 
-      <div className="absolute top-[65px] flex flex-col items-center">
-        <span className="text-2xl font-black text-white tracking-tighter">{format(value)}</span>
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 text-center max-w-[120px]">
+      {/*
+        Em FLUXO com margem negativa, não `absolute`.
+        Posicionado de forma absoluta, este bloco vazava para fora do card:
+        no celular o sublabel ("114 conv.") era cortado pela borda e ainda
+        aparecia como um borrão atrás do backdrop-blur do card seguinte.
+        Puxado por margem, o texto continua dentro do arco mas o card cresce
+        junto e nada é cortado.
+      */}
+      <div className="-mt-[42px] flex flex-col items-center">
+        <span className="text-2xl font-black tracking-tighter text-white">{format(value)}</span>
+        <span className="mt-1 max-w-[140px] text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">
           {label}
         </span>
         {sublabel && (
-          <span className="text-[10px] text-emerald-500 font-bold mt-0.5">{sublabel}</span>
+          <span className="mt-0.5 text-[10px] font-bold text-emerald-500">{sublabel}</span>
         )}
       </div>
     </div>

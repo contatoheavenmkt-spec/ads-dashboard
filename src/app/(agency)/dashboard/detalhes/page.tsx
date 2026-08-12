@@ -12,6 +12,7 @@ import { DashboardSkeleton } from "@/components/ui/skeleton";
 import { Loader2, Search, Target, MousePointer2, Zap } from "lucide-react";
 import Link from "next/link";
 import { KeywordsTable } from "@/components/dashboard/keywords-table";
+import { COR_METRICA } from "@/components/charts/paleta";
 
 
 interface DemographicBreakdown { label: string; impressions: number; clicks: number }
@@ -288,15 +289,18 @@ export default function DetalhesPage() {
           {/* Line Chart */}
           <div className="lg:col-span-4 glass-panel rounded-2xl p-6 flex flex-col">
             <div className="flex items-center gap-3 mb-4">
+              {/* Cores da paleta real do gráfico. A legenda estava trocada
+                  (azul=Conversas, verde=Custo) e o rótulo mentia: a linha é
+                  o INVESTIMENTO do dia, não o custo por conversão. */}
               <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-1 bg-blue-500 rounded"></div>
+                <div className="h-1 w-2.5 rounded" style={{ background: COR_METRICA.conversions }} />
                 <span className="text-[9px] font-bold text-slate-400 uppercase">
                   {mt?.purchases > 0 ? "Vendas" : mt?.messages > 0 ? "Conversas" : mt?.leads > 0 ? "Leads" : "Conversões"}
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-1 bg-emerald-400 rounded"></div>
-                <span className="text-[9px] font-bold text-slate-400 uppercase">Custo por Conv.</span>
+                <div className="h-1 w-2.5 rounded" style={{ background: COR_METRICA.spend }} />
+                <span className="text-[9px] font-bold text-slate-400 uppercase">Investimento</span>
               </div>
             </div>
             <div className="flex-1 min-h-[220px]">
