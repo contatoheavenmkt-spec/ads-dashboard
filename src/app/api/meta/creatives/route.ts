@@ -19,6 +19,11 @@ export async function GET(req: NextRequest) {
   const customRange = rangeResult.range;
   const adAccountIdParam = searchParams.get("adAccountId");
   const workspaceIdParam = searchParams.get("workspaceId");
+  // A tela da agência já mandava campaignId e a rota ignorava: selecionar uma
+  // campanha filtrava os KPIs mas a análise continuava mostrando a conta
+  // inteira. Agora o filtro chega ao insights.
+  const campaignIdParam = searchParams.get("campaignId");
+  const campaignId = campaignIdParam && /^\d+$/.test(campaignIdParam) ? campaignIdParam : null;
 
   const access = await requireMetricsAccess(req, workspaceIdParam);
   if (!access.ok) {
@@ -120,7 +125,9 @@ export async function GET(req: NextRequest) {
   const nomeDaConta = new Map(integracoes.map((i) => [i.adAccountId, i.name]));
 
   const results = await Promise.allSettled(
-    contas.map((c) => getAdCreatives(c.adAccountId, token, days, customRange ?? undefined)),
+    contas.map((c) =>
+      getAdCreatives(c.adAccountId, token, days, customRange ?? undefined, campaignId),
+    ),
   );
 
   const ads = results
@@ -138,5 +145,20 @@ export async function GET(req: NextRequest) {
     )
     .sort((a, b) => b.impressions - a.impressions);
 
-  return NextResponse.json({ ads });
+  /*
+   * Conta que falhou vira AVISO, não silêncio. Antes, o allSettled trocava a
+   * conta quebrada por lista vazia e a tela mostrava menos anúncios sem dizer
+   * nada — indistinguível de "não rodou nada". O gestor precisa saber que
+   * está olhando dado incompleto.
+   */
+  const avisos = results.flatMap((r, i) =>
+    r.status === "rejected"
+      ? [{
+          conta: nomeDaConta.get(contas[i].adAccountId) ?? contas[i].adAccountId,
+          erro: r.reason instanceof Error ? r.reason.message : String(r.reason),
+        }]
+      : [],
+  );
+
+  return NextResponse.json({ ads, avisos });
 }

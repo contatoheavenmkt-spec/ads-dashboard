@@ -226,6 +226,7 @@ export function ClientDashboard({
   const [googleData, setGoogleData] = useState<GoogleData | null>(null);
   const [ga4Data, setGa4Data] = useState<GA4Data | null>(null);
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
+  const [avisosCriativos, setAvisosCriativos] = useState<{ conta: string; erro: string }[]>([]);
   const [demographics, setDemographics] = useState<{ gender: DemographicBreakdown[]; age: DemographicBreakdown[] }>({ gender: [], age: [] });
   const [regions, setRegions] = useState<{ name: string; value: number }[]>([]);
   const [placements, setPlacements] = useState<{ label: string; impressions: number; clicks: number; spend: number }[]>([]);
@@ -292,7 +293,9 @@ export function ClientDashboard({
       // Lista COMPLETA (ativos e pausados que rodaram): a análise de
       // criativos tem filtro próprio de status, igual à da agência.
       if (creativesRes) {
-        setCreatives((creativesRes as { ads: AdCreative[] })?.ads ?? []);
+        const r = creativesRes as { ads?: AdCreative[]; avisos?: { conta: string; erro: string }[] };
+        setCreatives(r?.ads ?? []);
+        setAvisosCriativos(r?.avisos ?? []);
       }
       if (demoRes) setDemographics(demoRes as { gender: DemographicBreakdown[]; age: DemographicBreakdown[] });
       if (regionsRes) setRegions((regionsRes as { regions: { name: string; value: number }[] })?.regions ?? []);
@@ -1345,6 +1348,8 @@ export function ClientDashboard({
             workspaceIdParam={workspaceId}
             agregadoSemConta={false}
             mostrarCusto={shouldShowMetric("spend", visibleMetrics, true)}
+            periodo={currentPeriodLabel.toLowerCase()}
+            avisos={avisosCriativos}
           />
         )}
 

@@ -254,7 +254,22 @@ const STATUS_ROTULO: Record<string, { texto: string; cor: string }> = {
   ADSET_PAUSED: { texto: "Conjunto pausado", cor: "text-slate-400 bg-slate-700/40 border-slate-600" },
   CAMPAIGN_PAUSED: { texto: "Campanha pausada", cor: "text-slate-400 bg-slate-700/40 border-slate-600" },
   ARCHIVED: { texto: "Arquivado", cor: "text-slate-500 bg-slate-800/40 border-slate-700" },
+  // Estes voltaram a existir na tela depois que a busca passou a partir de
+  // quem ENTREGOU (o filtro antigo de status escondia anúncio reprovado que
+  // já tinha gasto verba). Sem rótulo próprio eles cairiam no fallback e
+  // apareceriam como "Pausado", que é mentira.
+  WITH_ISSUES: { texto: "Com problema", cor: "text-amber-400 bg-amber-500/10 border-amber-500/30" },
+  DISAPPROVED: { texto: "Reprovado", cor: "text-red-400 bg-red-500/10 border-red-500/30" },
+  PENDING_REVIEW: { texto: "Em revisão", cor: "text-sky-400 bg-sky-500/10 border-sky-500/30" },
+  IN_PROCESS: { texto: "Processando", cor: "text-sky-400 bg-sky-500/10 border-sky-500/30" },
+  PREAPPROVED: { texto: "Pré-aprovado", cor: "text-sky-400 bg-sky-500/10 border-sky-500/30" },
+  PENDING_BILLING_INFO: { texto: "Pagamento pendente", cor: "text-amber-400 bg-amber-500/10 border-amber-500/30" },
+  DELETED: { texto: "Excluído", cor: "text-slate-500 bg-slate-800/40 border-slate-700" },
+  DESCONHECIDO: { texto: "Sem status", cor: "text-slate-500 bg-slate-800/40 border-slate-700" },
 };
+
+/** Status desconhecido não pode virar "Pausado" — inventa informação. */
+const STATUS_PADRAO = STATUS_ROTULO.DESCONHECIDO;
 
 /** Linhas por leva. O resto entra pelo "Ver mais". */
 const POR_PAGINA = 8;
@@ -264,6 +279,8 @@ export function AnaliseCriativos({
   workspaceIdParam,
   agregadoSemConta,
   mostrarCusto = true,
+  periodo,
+  avisos,
 }: {
   creatives: AdAnalisado[];
   workspaceIdParam?: string | null;
@@ -271,6 +288,10 @@ export function AnaliseCriativos({
   agregadoSemConta: boolean;
   /** false quando o dono escondeu investimento do cliente final: some todo R$. */
   mostrarCusto?: boolean;
+  /** Janela sendo exibida. Sem isso "Rodaram (25)" é número sem régua. */
+  periodo?: string | null;
+  /** Contas cuja busca falhou — dado incompleto tem que ser dito, não escondido. */
+  avisos?: { conta: string; erro: string }[];
 }) {
   const [filtro, setFiltro] = useState<"rodaram" | "ativos" | "pausados">("rodaram");
   const [aberto, setAberto] = useState<AdAnalisado | null>(null);
@@ -376,9 +397,14 @@ export function AnaliseCriativos({
           <h3 className="text-xs font-black uppercase tracking-[0.15em] text-white/80 sm:text-sm sm:tracking-[0.2em]">
             Análise de criativos
           </h3>
-          <span className="whitespace-nowrap rounded-md border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-400">
-            Meta Ads
-          </span>
+          {/* A janela SEMPRE visível: sem ela "Rodaram (25)" é número sem
+              régua, e no celular o seletor de período vira só um ícone —
+              não dava pra saber se faltava anúncio ou se ele não entregou. */}
+          {periodo ? (
+            <span className="whitespace-nowrap text-[10px] font-semibold text-slate-500">
+              {periodo}
+            </span>
+          ) : null}
         </div>
         {/* Rótulos curtos e sem quebra: "Rodaram no período" virava duas
             linhas por pill no mobile e empurrava tudo. */}
@@ -415,9 +441,23 @@ export function AnaliseCriativos({
           começo), a lista expandida volta a mostrar só a primeira leva. */}
       <div ref={topoRef} aria-hidden />
 
+      {avisos && avisos.length > 0 ? (
+        <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-3 py-2 text-[11px] text-amber-300">
+          Não foi possível carregar {avisos.length === 1 ? "a conta" : "as contas"}{" "}
+          {avisos.map((a) => a.conta).join(", ")}. A lista abaixo está incompleta.
+        </div>
+      ) : null}
+
       {visiveis.length === 0 ? (
-        <div className="py-16 text-center text-xs text-slate-500">
-          Nenhum anúncio {filtro === "ativos" ? "ativo" : filtro === "pausados" ? "pausado" : "com entrega"} no período.
+        <div className="px-6 py-14 text-center">
+          <p className="text-xs text-slate-400">
+            Nenhum anúncio {filtro === "ativos" ? "ativo" : filtro === "pausados" ? "pausado" : ""} entregou
+            {periodo ? ` em ${periodo.toLowerCase()}` : " no período"}.
+          </p>
+          <p className="mx-auto mt-1.5 max-w-sm text-[11px] leading-relaxed text-slate-600">
+            A lista mostra o que teve entrega na janela escolhida. Amplie o período no topo
+            da tela para ver criativos anteriores.
+          </p>
         </div>
       ) : (
         <div className="space-y-5">
@@ -442,7 +482,7 @@ export function AnaliseCriativos({
                   custo por resultado de cima a baixo, que é a leitura real. */}
               <div className="space-y-1.5">
                 {secao.mostrar.map(({ ad, veredito }) => {
-                  const st = STATUS_ROTULO[ad.status] ?? STATUS_ROTULO.PAUSED;
+                  const st = STATUS_ROTULO[ad.status] ?? STATUS_PADRAO;
                   const { tipo, qtd } = tipoDoAnuncio(ad);
                   const nome = NOME_RESULTADO[tipo];
                   const ehVenda = tipo === "venda";
@@ -592,7 +632,7 @@ function ModalAnuncio({
     };
   }, [onFechar]);
 
-  const st = STATUS_ROTULO[ad.status] ?? STATUS_ROTULO.PAUSED;
+  const st = STATUS_ROTULO[ad.status] ?? STATUS_PADRAO;
   const custoResultado = ad.conversions > 0 ? ad.spend / ad.conversions : null;
 
   // Portal no body: o painel pai usa backdrop-filter, que cria containing

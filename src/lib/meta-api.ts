@@ -455,119 +455,184 @@ export interface MetaAdCreative {
   cpm: number;
 }
 
+/** Lotes de ids para o endpoint batch do Graph (teto de 50 por chamada). */
+function emLotes<T>(itens: T[], tamanho: number): T[][] {
+  const lotes: T[][] = [];
+  for (let i = 0; i < itens.length; i += tamanho) lotes.push(itens.slice(i, i + tamanho));
+  return lotes;
+}
+
+/** Segue paging.next acumulando as linhas, com teto de páginas. */
+async function lerPaginado(
+  urlInicial: string,
+  maxPaginas: number,
+): Promise<{ linhas: Record<string, unknown>[]; truncado: boolean }> {
+  const linhas: Record<string, unknown>[] = [];
+  let url: string | undefined = urlInicial;
+  let paginas = 0;
+  while (url && paginas < maxPaginas) {
+    const res: Response = await fetch(url, { cache: "no-store" });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    linhas.push(...((data.data ?? []) as Record<string, unknown>[]));
+    // O Graph devolve o next absoluto e já com o token embutido.
+    url = data.paging?.next as string | undefined;
+    paginas++;
+  }
+  return { linhas, truncado: Boolean(url) };
+}
+
 export async function getAdCreatives(
   adAccountId: string,
   accessToken: string,
   days: number = 30,
-  customRange?: { since: string; until: string }
+  customRange?: { since: string; until: string },
+  campaignId?: string | null,
 ): Promise<MetaAdCreative[]> {
   const { since, until } = customRange ?? getInsightsDateRange(days);
-  const insightFields = "impressions,clicks,spend,actions,frequency,ctr,cpm";
-  // date_preset só aceita valores enumerados (last_7d/last_30d/...), então
-  // values arbitrários como 15 quebravam silenciosamente. time_range aceita
-  // qualquer janela e ainda casa com o que o usuário escolhe na dash.
-  const insightParams =
-    `time_range({"since":"${since}","until":"${until}"})` +
-    `.use_account_attribution_setting(true)`;
+
   /*
-   * Duas decisões que vieram de dor real do usuário:
+   * A pergunta é "o que RODOU no período". Perguntar isso à lista de anúncios
+   * da conta era a rota errada e custou dado de verdade: a BBG tem 1.937
+   * anúncios, o /ads devolve 200 por página em ordem que NÃO é por entrega, e
+   * o código lia só a primeira. Numa janela de 1 ano isso escondia 531
+   * anúncios e R$ 23 mil de verba — metade do investimento invisível na tela.
    *
-   * 1. SEM filtro de ACTIVE. A pergunta que a tela responde é "o que rodou no
-   *    período", e um anúncio pausado ontem rodou o mês inteiro: escondê-lo
-   *    inutiliza a análise de criativos. O recorte por entrega acontece
-   *    adiante (impressões > 0 no período); quem nunca entregou não aparece.
-   *    Trazemos os pausados/arquivados junto e o front decide o recorte.
+   * Agora a pergunta vai direto ao lugar que sabe responder: /insights com
+   * level=ad só devolve quem teve entrega no período (25 linhas em 30 dias,
+   * onde antes varríamos 1.937 registros). Como insights não filtra por
+   * status, isso conserta de brinde o outro furo: anúncio que entregou e
+   * depois foi reprovado (WITH_ISSUES/DISAPPROVED) ficava de fora do
+   * whitelist de effective_status e sumia com a verba junto.
    *
-   * 2. thumbnail_width/height 512. Sem isso o Meta manda 64x64, que é a
-   *    imagem "embaçada" que aparecia na tela. title/body vêm junto porque o
-   *    ângulo do anúncio mora no texto, e o permalink permite abrir o post
-   *    de verdade.
+   * Só depois buscamos criativo e status dos que realmente entregaram.
    */
-  const fields =
-    `id,name,status,effective_status,` +
-    `creative.thumbnail_width(512).thumbnail_height(512)` +
-    `{thumbnail_url,image_url,title,body,instagram_permalink_url},` +
-    `insights.${insightParams}{${insightFields}}`;
-  const filtering = encodeURIComponent(
-    JSON.stringify([
-      {
-        field: "ad.effective_status",
-        operator: "IN",
-        value: ["ACTIVE", "PAUSED", "ADSET_PAUSED", "CAMPAIGN_PAUSED", "ARCHIVED"],
-      },
-    ]),
-  );
-  const url =
-    `${GRAPH_API}/${adAccountId}/ads` +
-    `?fields=${encodeURIComponent(fields)}` +
-    `&filtering=${filtering}` +
-    `&limit=200` +
+  const camposInsights =
+    "ad_id,ad_name,impressions,clicks,spend,actions,frequency,ctr,cpm";
+  const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
+  const filtroCampanha = campaignId
+    ? `&filtering=${encodeURIComponent(
+        JSON.stringify([{ field: "campaign.id", operator: "IN", value: [campaignId] }]),
+      )}`
+    : "";
+  const urlInsights =
+    `${GRAPH_API}/${adAccountId}/insights` +
+    `?level=ad&fields=${camposInsights}` +
+    `&time_range=${timeRange}` +
+    `&use_account_attribution_setting=true` +
+    filtroCampanha +
+    `&limit=500` +
     `&access_token=${accessToken}`;
 
-  const res = await fetch(url, { cache: "no-store" });
-  const data = await res.json();
-  if (data.error) throw new Error(`Meta Ads [${adAccountId}]: ${data.error.message}`);
+  let entregaram: Record<string, unknown>[];
+  try {
+    // Teto de 20 páginas = 10 mil anúncios com entrega; acima disso a tela
+    // não seria legível de qualquer jeito.
+    ({ linhas: entregaram } = await lerPaginado(urlInsights, 20));
+  } catch (e) {
+    throw new Error(`Meta Ads [${adAccountId}]: ${(e as Error).message}`);
+  }
 
-  const mapped: MetaAdCreative[] = ((data.data ?? []) as Array<{
-    id: string;
-    name: string;
-    status: string;
-    effective_status?: string;
-    creative?: {
-      thumbnail_url?: string;
-      image_url?: string;
-      title?: string;
-      body?: string;
-      instagram_permalink_url?: string;
+  const porId = new Map<string, MetaAdCreative>();
+  for (const linha of entregaram) {
+    const row = linha as {
+      ad_id?: string;
+      ad_name?: string;
+      impressions?: string;
+      clicks?: string;
+      spend?: string;
+      frequency?: string;
+      ctr?: string;
+      cpm?: string;
+      actions?: Array<{ action_type: string; value: string }>;
     };
-    insights?: {
-      data: Array<{
-        impressions: string;
-        clicks: string;
-        spend: string;
-        frequency?: string;
-        ctr?: string;
-        cpm?: string;
-        actions?: Array<{ action_type: string; value: string }>;
-      }>;
-    };
-  }>).map((ad) => {
-    const ins = ad.insights?.data?.[0];
-    const purchases = readAction(ins?.actions, ACTION_PURCHASE, ACTION_PURCHASE_FALLBACKS);
-    const leads = readAction(ins?.actions, ACTION_LEAD, ACTION_LEAD_FALLBACKS);
-    const messages = readAction(ins?.actions, ACTION_MESSAGE, ACTION_MESSAGE_FALLBACKS);
+    const id = row.ad_id;
+    if (!id) continue;
+    const impressions = Number(row.impressions ?? 0);
+    if (impressions <= 0) continue;
 
-    const isMessaging = messages > 0;
-    const conversions = purchases + leads + messages;
+    const purchases = readAction(row.actions, ACTION_PURCHASE, ACTION_PURCHASE_FALLBACKS);
+    const leads = readAction(row.actions, ACTION_LEAD, ACTION_LEAD_FALLBACKS);
+    const messages = readAction(row.actions, ACTION_MESSAGE, ACTION_MESSAGE_FALLBACKS);
 
-    return {
-      id: ad.id,
-      name: ad.name,
-      thumbnail: ad.creative?.thumbnail_url ?? ad.creative?.image_url ?? null,
-      impressions: Number(ins?.impressions ?? 0),
-      clicks: Number(ins?.clicks ?? 0),
-      spend: Number(ins?.spend ?? 0),
+    porId.set(id, {
+      id,
+      name: row.ad_name ?? "Anúncio",
+      thumbnail: null,
+      impressions,
+      clicks: Number(row.clicks ?? 0),
+      spend: Number(row.spend ?? 0),
       purchases,
       leads,
       messages,
-      conversions,
-      status: ad.effective_status ?? ad.status,
-      isMessaging,
-      body: ad.creative?.body ?? null,
-      title: ad.creative?.title ?? null,
-      permalink: ad.creative?.instagram_permalink_url ?? null,
-      frequency: Number(ins?.frequency ?? 0),
-      ctr: Number(ins?.ctr ?? 0),
-      cpm: Number(ins?.cpm ?? 0),
-    };
-  });
+      conversions: purchases + leads + messages,
+      // Preenchido no passo 2; "DESCONHECIDO" é honesto quando o Graph não
+      // devolve o anúncio (excluído, por exemplo) — melhor que fingir Pausado.
+      status: "DESCONHECIDO",
+      isMessaging: messages > 0,
+      body: null,
+      title: null,
+      permalink: null,
+      frequency: Number(row.frequency ?? 0),
+      ctr: Number(row.ctr ?? 0),
+      cpm: Number(row.cpm ?? 0),
+    });
+  }
 
-  // Só quem teve ENTREGA no período: é o recorte que responde "o que rodou".
-  // Anúncio pausado ontem que rodou o mês aparece; rascunho que nunca rodou,
-  // não. Ordenado por impressões: quem mais entregou vem primeiro.
-  return mapped
-    .filter((a) => a.impressions > 0)
-    .sort((a, b) => b.impressions - a.impressions);
+  if (porId.size === 0) return [];
+
+  /*
+   * Passo 2: criativo e status SÓ de quem entregou, em lotes de 50 (teto do
+   * batch do Graph). thumbnail 512 porque o padrão é 64x64 — a imagem
+   * "embaçada" que o usuário via. allSettled por lote: um lote que falhe
+   * degrada aquele pedaço (fica sem imagem) em vez de derrubar a conta toda.
+   */
+  const camposAd =
+    `id,name,status,effective_status,` +
+    `creative.thumbnail_width(512).thumbnail_height(512)` +
+    `{thumbnail_url,image_url,title,body,instagram_permalink_url}`;
+
+  const lotes = emLotes([...porId.keys()], 50);
+  const respostas = await Promise.allSettled(
+    lotes.map(async (lote) => {
+      const url =
+        `${GRAPH_API}/?ids=${lote.join(",")}` +
+        `&fields=${encodeURIComponent(camposAd)}` +
+        `&access_token=${accessToken}`;
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      return data as Record<string, {
+        name?: string;
+        status?: string;
+        effective_status?: string;
+        creative?: {
+          thumbnail_url?: string;
+          image_url?: string;
+          title?: string;
+          body?: string;
+          instagram_permalink_url?: string;
+        };
+      }>;
+    }),
+  );
+
+  for (const r of respostas) {
+    if (r.status !== "fulfilled") continue;
+    for (const [id, det] of Object.entries(r.value)) {
+      const alvo = porId.get(id);
+      if (!alvo || !det) continue;
+      alvo.name = det.name ?? alvo.name;
+      alvo.status = det.effective_status ?? det.status ?? alvo.status;
+      alvo.thumbnail = det.creative?.thumbnail_url ?? det.creative?.image_url ?? null;
+      alvo.title = det.creative?.title ?? null;
+      alvo.body = det.creative?.body ?? null;
+      alvo.permalink = det.creative?.instagram_permalink_url ?? null;
+    }
+  }
+
+  // Quem mais entregou primeiro.
+  return [...porId.values()].sort((a, b) => b.impressions - a.impressions);
 }
 
 // ─── Demographics ─────────────────────────────────────────────────────────────

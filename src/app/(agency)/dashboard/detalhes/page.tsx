@@ -24,6 +24,13 @@ const AGE_COLORS = ["#1e3a8a", "#1e40af", "#2563eb", "#3b82f6", "#60a5fa", "#93c
 const FALLBACK_GENDER = { labels: ["Feminino", "Masculino", "Desconhecido"], data: [62, 37.8, 0.2] };
 const FALLBACK_AGE = { labels: ["45-54", "25-34", "35-44", "18-24", "63+", "55-64"], data: [31.4, 25, 17.2, 14.2, 8, 4.2] };
 
+/** A janela em palavras, para a análise dizer de que período está falando. */
+function rotuloPeriodo(days: number): string {
+  if (days === -1) return "este mês";
+  if (days === 1) return "hoje";
+  return `últimos ${days} dias`;
+}
+
 export default function DetalhesPage() {
   const [days, setDays] = useState(30);
   const [integrations, setIntegrations] = useState<any[]>([]);
@@ -34,6 +41,7 @@ export default function DetalhesPage() {
   const [googleData, setGoogleData] = useState<{ totals: any; timeSeries: TimeSeries[]; keywords: any[]; campaigns: any[] } | null>(null);
   const [ga4Data, setGa4Data] = useState<{ totals: any; regions: { name: string; value: number }[]; demographics?: any } | null>(null);
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
+  const [avisosCriativos, setAvisosCriativos] = useState<{ conta: string; erro: string }[]>([]);
   const [demographics, setDemographics] = useState<{ gender: DemographicBreakdown[]; age: DemographicBreakdown[] }>({ gender: [], age: [] });
   const [regions, setRegions] = useState<{ name: string; value: number }[]>([]);
   const [hasConnectedAccounts, setHasConnectedAccounts] = useState(false);
@@ -92,6 +100,7 @@ export default function DetalhesPage() {
     ]).then(([meta, creativesRes, demo, regionsRes, google, ga4]) => {
       setMetaData(meta);
       setCreatives(creativesRes?.ads ?? []);
+      setAvisosCriativos(creativesRes?.avisos ?? []);
       setDemographics(demo);
       setRegions((regionsRes as { regions: { name: string; value: number }[] })?.regions ?? []);
       setGoogleData(google);
@@ -351,6 +360,8 @@ export default function DetalhesPage() {
               creatives={creatives}
               workspaceIdParam={null}
               agregadoSemConta={!selectedAccount || selectedAccount?.platform === "google"}
+              periodo={rotuloPeriodo(days)}
+              avisos={avisosCriativos}
             />
           </div>
         </div>}
