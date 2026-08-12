@@ -18,8 +18,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Award, ExternalLink, Eye, Flame, Loader2, MousePointerClick,
-  PauseCircle, PlayCircle, TrendingDown, X,
+  Award, ChevronLeft, ChevronRight, ExternalLink, Eye, Flame, Loader2,
+  MousePointerClick, PauseCircle, PlayCircle, TrendingDown, X,
 } from "lucide-react";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 
@@ -275,8 +275,37 @@ const STATUS_ROTULO: Record<string, { texto: string; cor: string }> = {
 /** Status desconhecido não pode virar "Pausado" — inventa informação. */
 const STATUS_PADRAO = STATUS_ROTULO.DESCONHECIDO;
 
-/** Cards por leva (a grade comporta mais que a lista). */
-const POR_PAGINA = 10;
+/**
+ * As faixas da tela, na ordem em que um gestor olha: o que está no ar
+ * primeiro, o que parou depois, o que deu problema por último. Os estados
+ * do Meta são mais granulados que isso (conjunto pausado, campanha pausada,
+ * reprovado, em revisão...) — o card mostra o detalhe, a faixa agrupa pelo
+ * que muda a decisão.
+ */
+const PAUSADOS = ["PAUSED", "ADSET_PAUSED", "CAMPAIGN_PAUSED"];
+const PROBLEMA = ["WITH_ISSUES", "DISAPPROVED", "PENDING_REVIEW", "IN_PROCESS", "PREAPPROVED", "PENDING_BILLING_INFO"];
+const ARQUIVADOS = ["ARCHIVED", "DELETED"];
+
+const FAIXAS: Array<{
+  chave: string;
+  titulo: string;
+  cor: string;
+  combina: (status: string) => boolean;
+}> = [
+  { chave: "ativos", titulo: "No ar agora", cor: "text-emerald-400", combina: (s) => s === "ACTIVE" },
+  { chave: "pausados", titulo: "Pausados", cor: "text-slate-400", combina: (s) => PAUSADOS.includes(s) },
+  { chave: "problema", titulo: "Com problema", cor: "text-amber-400", combina: (s) => PROBLEMA.includes(s) },
+  { chave: "arquivados", titulo: "Arquivados", cor: "text-slate-500", combina: (s) => ARQUIVADOS.includes(s) },
+  {
+    chave: "outros",
+    titulo: "Sem status",
+    cor: "text-slate-500",
+    combina: (s) => s !== "ACTIVE" && ![...PAUSADOS, ...PROBLEMA, ...ARQUIVADOS].includes(s),
+  },
+];
+
+/** Cards por faixa antes do "ver todos": mantém o DOM leve em janelas longas. */
+const POR_FAIXA = 24;
 
 export function AnaliseCriativos({
   creatives,
@@ -297,39 +326,7 @@ export function AnaliseCriativos({
   /** Contas cuja busca falhou — dado incompleto tem que ser dito, não escondido. */
   avisos?: { conta: string; erro: string }[];
 }) {
-  const [filtro, setFiltro] = useState<"rodaram" | "ativos" | "pausados">("rodaram");
   const [aberto, setAberto] = useState<AdAnalisado | null>(null);
-  // Quantos cards mostrar de cada vez — 100+ anúncios empilhados viram poluição;
-  // o "Mostrar mais" traz o resto só de quem quiser.
-  const [limite, setLimite] = useState(POR_PAGINA);
-  // Dataset novo (troca de conta/período no Header, sem remontar o componente)
-  // volta a paginação pro início — senão um "Mostrar mais" antigo vaza pro
-  // cliente seguinte. Ajuste durante o render, padrão oficial do React pra
-  // derivar estado de prop sem useEffect.
-  const [creativesAnterior, setCreativesAnterior] = useState(creatives);
-  if (creativesAnterior !== creatives) {
-    setCreativesAnterior(creatives);
-    setLimite(POR_PAGINA);
-  }
-
-  // Rolou de volta ao topo da lista => recolhe pro tamanho padrão. O
-  // IntersectionObserver serve aqui porque quem rola pode ser um container
-  // interno (dash do cliente), não a janela — a posição na viewport muda
-  // igual. Só arma depois que a sentinela saiu de vista uma vez, senão
-  // recolheria no mesmo instante em que o usuário clica em "Ver mais".
-  const topoRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (limite <= POR_PAGINA) return;
-    const alvo = topoRef.current;
-    if (!alvo) return;
-    let saiuDeVista = false;
-    const io = new IntersectionObserver(([entrada]) => {
-      if (!entrada.isIntersecting) { saiuDeVista = true; return; }
-      if (saiuDeVista) setLimite(POR_PAGINA);
-    });
-    io.observe(alvo);
-    return () => io.disconnect();
-  }, [limite]);
 
   // Dedupe por id: defesa contra o mesmo anúncio chegar N vezes quando a mesma
   // conta está ligada a mais de um workspace (a rota já deduplica, isto é cinto
@@ -348,51 +345,21 @@ export function AnaliseCriativos({
     [unicos, ref],
   );
 
-  const visiveis = useMemo(() => {
-    if (filtro === "ativos") return analisados.filter((x) => x.ad.status === "ACTIVE");
-    if (filtro === "pausados") return analisados.filter((x) => x.ad.status !== "ACTIVE");
-    return analisados;
-  }, [analisados, filtro]);
-
-  const ativos = analisados.filter((x) => x.ad.status === "ACTIVE").length;
-  const pausados = analisados.length - ativos;
-
-  // Agrupado por CONTA de anúncios, dinheiro primeiro: grupos ordenados por
-  // gasto total e, dentro deles, anúncios por gasto. A visão "Todas as Fontes"
-  // intercalava contas por impressão — parecia bagunça sem dono.
-  const grupos = useMemo(() => {
-    const porConta = new Map<string, { chave: string; nome: string; itens: { ad: AdAnalisado; veredito: Veredito }[] }>();
-    for (const item of visiveis) {
-      const chave = item.ad.adAccountId ?? "sem-conta";
-      const g = porConta.get(chave) ?? {
-        chave,
-        nome: item.ad.accountName || item.ad.clientName || "Conta de anúncios",
-        itens: [],
-      };
-      g.itens.push(item);
-      porConta.set(chave, g);
-    }
-    const gastoDe = (itens: { ad: AdAnalisado }[]) => itens.reduce((s, x) => s + x.ad.spend, 0);
-    const lista = [...porConta.values()].map((g) => ({
-      ...g,
-      itens: [...g.itens].sort((a, b) => b.ad.spend - a.ad.spend),
-      gasto: gastoDe(g.itens),
+  /*
+   * Uma FAIXA por situação, cada uma arrastando pro lado. Filtro em pill
+   * obrigava a escolher uma coisa de cada vez e escondia o resto; com faixas
+   * separadas o gestor vê "o que está no ar" e "o que já parou" na mesma
+   * rolada, sem a parede de imagem que a grade única virava.
+   */
+  const faixas = useMemo(() => {
+    const definicao = FAIXAS.map((f) => ({
+      ...f,
+      itens: analisados
+        .filter((x) => f.combina(x.ad.status))
+        .sort((a, b) => b.ad.spend - a.ad.spend),
     }));
-    lista.sort((a, b) => b.gasto - a.gasto);
-    return lista;
-  }, [visiveis]);
-
-  // Pagina ATRAVÉS dos grupos em sequência: seções inteiras até o limite,
-  // a última possivelmente parcial. "Mostrar mais" continua global.
-  const comCabecalho = agregadoSemConta && grupos.length > 1;
-  let restante = limite;
-  const secoes = grupos
-    .map((g) => {
-      const mostrar = restante > 0 ? g.itens.slice(0, restante) : [];
-      restante -= mostrar.length;
-      return { ...g, mostrar };
-    })
-    .filter((s) => s.mostrar.length > 0);
+    return definicao.filter((f) => f.itens.length > 0);
+  }, [analisados]);
 
   return (
     <div className="glass-panel flex flex-col rounded-2xl p-4 sm:p-6">
@@ -410,40 +377,10 @@ export function AnaliseCriativos({
             </span>
           ) : null}
         </div>
-        {/* Rótulos curtos e sem quebra: "Rodaram no período" virava duas
-            linhas por pill no mobile e empurrava tudo. */}
-        <div className="no-scrollbar flex max-w-full gap-1 overflow-x-auto">
-          {[
-            { id: "rodaram" as const, label: `Rodaram (${analisados.length})`, dica: "Tudo que teve entrega no período, incluindo o que já foi pausado" },
-            { id: "ativos" as const, label: `Ativos (${ativos})`, dica: "Somente anúncios ativos agora" },
-            { id: "pausados" as const, label: `Pausados (${pausados})`, dica: "Rodaram no período mas estão pausados" },
-          ].map((f) => (
-            <button
-              key={f.id}
-              title={f.dica}
-              onClick={() => {
-                // Guard: reclique no filtro já ativo não pode colapsar a
-                // lista expandida de volta pra 18 (o scroll saltaria).
-                if (f.id === filtro) return;
-                setFiltro(f.id);
-                setLimite(POR_PAGINA);
-              }}
-              className={cn(
-                "whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors",
-                filtro === f.id
-                  ? "border-slate-600 bg-slate-800 text-white"
-                  : "border-slate-800 bg-slate-900/60 text-slate-400 hover:bg-slate-800",
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          {analisados.length} {analisados.length === 1 ? "anúncio rodou" : "anúncios rodaram"}
+        </span>
       </div>
-
-      {/* Sentinela do topo: quando ela reaparece (usuário rolou de volta pro
-          começo), a lista expandida volta a mostrar só a primeira leva. */}
-      <div ref={topoRef} aria-hidden />
 
       {avisos && avisos.length > 0 ? (
         <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-3 py-2 text-[11px] text-amber-300">
@@ -452,149 +389,31 @@ export function AnaliseCriativos({
         </div>
       ) : null}
 
-      {visiveis.length === 0 ? (
+      {analisados.length === 0 ? (
         <div className="px-6 py-14 text-center">
           <p className="text-xs text-slate-400">
-            Nenhum anúncio {filtro === "ativos" ? "ativo" : filtro === "pausados" ? "pausado" : ""} entregou
-            {periodo ? ` em ${periodo.toLowerCase()}` : " no período"}.
+            Nenhum anúncio entregou{periodo ? ` em ${periodo.toLowerCase()}` : " no período"}.
           </p>
           <p className="mx-auto mt-1.5 max-w-sm text-[11px] leading-relaxed text-slate-600">
-            A lista mostra o que teve entrega na janela escolhida. Amplie o período no topo
-            da tela para ver criativos anteriores.
+            A tela mostra o que teve entrega na janela escolhida. Amplie o período no topo
+            para ver criativos anteriores.
           </p>
         </div>
       ) : (
-        <div className="space-y-5">
-          {secoes.map((secao) => (
-            <div key={secao.chave}>
-              {comCabecalho && (
-                <div
-                  className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
-                  title={secao.itens[0]?.ad.clientName || undefined}
-                >
-                  <span className="text-[11px] font-black uppercase tracking-wider text-cyan-300">
-                    {secao.nome}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    {secao.itens.length} {secao.itens.length === 1 ? "anúncio" : "anúncios"}
-                    {mostrarCusto ? ` · ${formatCurrency(secao.gasto)} no período` : ""}
-                  </span>
-                </div>
-              )}
-              {/* Cards lado a lado com o criativo GRANDE: a peça é o que se
-                  analisa, e miniatura de 44px não deixa ver o anúncio. Duas
-                  colunas no celular (uma só virava rolagem infinita) e até
-                  cinco no desktop, onde a imagem fica realmente visível. */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {secao.mostrar.map(({ ad, veredito }) => {
-                  const st = STATUS_ROTULO[ad.status] ?? STATUS_PADRAO;
-                  const ehAtivo = ad.status === "ACTIVE";
-                  const { tipo, qtd } = tipoDoAnuncio(ad);
-                  const nome = NOME_RESULTADO[tipo];
-                  const ehVenda = tipo === "venda";
-                  return (
-                    <button
-                      key={ad.id}
-                      onClick={() => setAberto(ad)}
-                      className={cn(
-                        "group flex flex-col overflow-hidden rounded-xl border bg-slate-900/40 text-left transition-all hover:-translate-y-0.5 hover:bg-slate-900/70",
-                        veredito.borda,
-                      )}
-                      title="Clique para ver o anúncio real"
-                    >
-                      <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-800">
-                        {ad.thumbnail ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={ad.thumbnail}
-                            alt=""
-                            className="h-full w-full object-cover"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-widest text-slate-600">
-                            sem imagem
-                          </div>
-                        )}
-                        {/* Status escrito só quando foge do normal; ativo é o
-                            caso comum e o badge repetido virava ruído. */}
-                        {!ehAtivo && (
-                          <span className={cn("absolute left-2 top-2 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase backdrop-blur-sm", st.cor)}>
-                            {st.texto}
-                          </span>
-                        )}
-                        <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                          <span className="flex items-center gap-1.5 rounded-lg bg-black/70 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                            <Eye size={13} /> Ver anúncio
-                          </span>
-                        </span>
-                      </div>
-
-                      <div className="flex flex-1 flex-col gap-1.5 p-2.5 sm:p-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-[11px] font-semibold text-slate-100 sm:text-xs">{ad.name}</p>
-                          <p className="mt-0.5 flex items-center gap-1.5">
-                            <span
-                              className={cn("h-1.5 w-1.5 shrink-0 rounded-full", ehAtivo ? "bg-emerald-400" : "bg-slate-600")}
-                              title={st.texto}
-                            />
-                            <span className={cn("truncate text-[10px] font-bold uppercase tracking-wide", veredito.cor)}>
-                              <span className="sm:hidden">{veredito.curto ?? veredito.rotulo}</span>
-                              <span className="hidden sm:inline">{veredito.rotulo}</span>
-                            </span>
-                          </p>
-                        </div>
-
-                        {/* O número que decide primeiro e grande; gasto por
-                            último e apagado. */}
-                        <div className="mt-auto flex items-end justify-between gap-2 border-t border-slate-800/80 pt-2">
-                          <div className="min-w-0">
-                            <p className={cn("text-sm font-black leading-none", ehVenda ? "text-emerald-400" : "text-slate-100")}>
-                              {formatNumber(qtd)}
-                            </p>
-                            <p className="mt-0.5 truncate text-[9px] uppercase tracking-wide text-slate-500">
-                              {qtd === 1 ? nome.singular : nome.plural}
-                            </p>
-                          </div>
-                          {mostrarCusto && (
-                            <div className="min-w-0 text-right">
-                              <p className="truncate text-xs font-bold leading-none text-slate-100">
-                                {qtd > 0 ? formatCurrency(ad.spend / qtd) : "—"}
-                              </p>
-                              <p className="mt-0.5 truncate text-[9px] uppercase tracking-wide text-slate-500">custo</p>
-                            </div>
-                          )}
-                        </div>
-                        {mostrarCusto && (
-                          <p className="text-[9px] uppercase tracking-wide text-slate-600">
-                            {formatCurrency(ad.spend)} gastos
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+        <div className="space-y-6">
+          {faixas.map((faixa) => (
+            <Faixa
+              key={faixa.chave}
+              titulo={faixa.titulo}
+              cor={faixa.cor}
+              itens={faixa.itens}
+              mostrarCusto={mostrarCusto}
+              mostrarConta={agregadoSemConta}
+              onAbrir={setAberto}
+            />
           ))}
         </div>
       )}
-
-      {visiveis.length > limite ? (
-        <button
-          onClick={() => setLimite((l) => l + POR_PAGINA)}
-          className="mx-auto mt-4 rounded-lg border border-slate-700/80 bg-slate-800/60 px-5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
-        >
-          Ver mais ({visiveis.length - limite} restantes)
-        </button>
-      ) : limite > POR_PAGINA ? (
-        <button
-          onClick={() => { setLimite(POR_PAGINA); topoRef.current?.scrollIntoView({ block: "nearest" }); }}
-          className="mx-auto mt-4 rounded-lg border border-slate-800 bg-slate-900/60 px-5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-        >
-          Ver menos
-        </button>
-      ) : null}
 
       {aberto ? (
         <ModalAnuncio
@@ -606,6 +425,163 @@ export function AnaliseCriativos({
         />
       ) : null}
     </div>
+  );
+}
+
+/** Uma situação (no ar / pausado / com problema) numa fileira que arrasta. */
+function Faixa({
+  titulo,
+  cor,
+  itens,
+  mostrarCusto,
+  mostrarConta,
+  onAbrir,
+}: {
+  titulo: string;
+  cor: string;
+  itens: { ad: AdAnalisado; veredito: Veredito }[];
+  mostrarCusto: boolean;
+  mostrarConta: boolean;
+  onAbrir: (ad: AdAnalisado) => void;
+}) {
+  const trilhoRef = useRef<HTMLDivElement>(null);
+  const [todos, setTodos] = useState(false);
+  const visiveis = todos ? itens : itens.slice(0, POR_FAIXA);
+  const gasto = itens.reduce((soma, x) => soma + x.ad.spend, 0);
+
+  // No celular arrasta com o dedo; no desktop o mouse não arrasta, então as
+  // setas existem — sem elas metade da fileira ficaria inalcançável.
+  const rolar = (direcao: 1 | -1) =>
+    trilhoRef.current?.scrollBy({ left: direcao * 420, behavior: "smooth" });
+
+  return (
+    <section>
+      <div className="mb-2 flex items-center gap-2">
+        <h4 className={cn("text-[11px] font-black uppercase tracking-wider", cor)}>{titulo}</h4>
+        <span className="text-[10px] text-slate-500">
+          {itens.length}
+          {mostrarCusto ? ` · ${formatCurrency(gasto)}` : ""}
+        </span>
+        <div className="ml-auto flex items-center gap-1">
+          {itens.length > POR_FAIXA && (
+            <button
+              onClick={() => setTodos((v) => !v)}
+              className="rounded-md border border-slate-800 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+            >
+              {todos ? "Ver menos" : `Ver todos (${itens.length})`}
+            </button>
+          )}
+          <button
+            onClick={() => rolar(-1)}
+            aria-label="Voltar"
+            className="hidden rounded-md border border-slate-800 p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white sm:block"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            onClick={() => rolar(1)}
+            aria-label="Avançar"
+            className="hidden rounded-md border border-slate-800 p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white sm:block"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={trilhoRef}
+        className="no-scrollbar -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1"
+      >
+        {visiveis.map(({ ad, veredito }) => {
+          const st = STATUS_ROTULO[ad.status] ?? STATUS_PADRAO;
+          const ehAtivo = ad.status === "ACTIVE";
+          const { tipo, qtd } = tipoDoAnuncio(ad);
+          const nome = NOME_RESULTADO[tipo];
+          const ehVenda = tipo === "venda";
+          return (
+            <button
+              key={ad.id}
+              onClick={() => onAbrir(ad)}
+              className={cn(
+                "group flex w-[158px] shrink-0 snap-start flex-col overflow-hidden rounded-xl border bg-slate-900/40 text-left transition-all hover:-translate-y-0.5 hover:bg-slate-900/70 sm:w-[196px]",
+                veredito.borda,
+              )}
+              title="Clique para ver o anúncio real"
+            >
+              <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-800">
+                {ad.thumbnail ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={ad.thumbnail}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-widest text-slate-600">
+                    sem imagem
+                  </div>
+                )}
+                {/* O estado exato só sobre a imagem quando foge do normal: a
+                    faixa já diz a situação, o badge detalha (conjunto pausado,
+                    reprovado...). Em "No ar agora" seria repetição. */}
+                {!ehAtivo && (
+                  <span className={cn("absolute left-2 top-2 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase backdrop-blur-sm", st.cor)}>
+                    {st.texto}
+                  </span>
+                )}
+                <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                  <span className="flex items-center gap-1.5 rounded-lg bg-black/70 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                    <Eye size={13} /> Ver anúncio
+                  </span>
+                </span>
+              </div>
+
+              <div className="flex flex-1 flex-col gap-1.5 p-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] font-semibold text-slate-100 sm:text-xs">{ad.name}</p>
+                  {/* Na visão agregada, de quem é o anúncio. Nome da CONTA do
+                      Meta, não de workspace: mesclar cadastros confundia. */}
+                  {mostrarConta && ad.accountName ? (
+                    <p className="truncate text-[9px] text-cyan-300/80" title={ad.accountName}>
+                      {ad.accountName}
+                    </p>
+                  ) : null}
+                  <p className={cn("mt-0.5 truncate text-[10px] font-bold uppercase tracking-wide", veredito.cor)}>
+                    <span className="sm:hidden">{veredito.curto ?? veredito.rotulo}</span>
+                    <span className="hidden sm:inline">{veredito.rotulo}</span>
+                  </p>
+                </div>
+
+                <div className="mt-auto flex items-end justify-between gap-2 border-t border-slate-800/80 pt-2">
+                  <div className="min-w-0">
+                    <p className={cn("text-sm font-black leading-none", ehVenda ? "text-emerald-400" : "text-slate-100")}>
+                      {formatNumber(qtd)}
+                    </p>
+                    <p className="mt-0.5 truncate text-[9px] uppercase tracking-wide text-slate-500">
+                      {qtd === 1 ? nome.singular : nome.plural}
+                    </p>
+                  </div>
+                  {mostrarCusto && (
+                    <div className="min-w-0 text-right">
+                      <p className="truncate text-xs font-bold leading-none text-slate-100">
+                        {qtd > 0 ? formatCurrency(ad.spend / qtd) : "—"}
+                      </p>
+                      <p className="mt-0.5 truncate text-[9px] uppercase tracking-wide text-slate-500">custo</p>
+                    </div>
+                  )}
+                </div>
+                {mostrarCusto && (
+                  <p className="text-[9px] uppercase tracking-wide text-slate-600">
+                    {formatCurrency(ad.spend)} gastos
+                  </p>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
