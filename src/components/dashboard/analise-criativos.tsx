@@ -383,8 +383,12 @@ export function AnaliseCriativos({
             </span>
           ) : null}
         </div>
+        {/* O total é o que REALMENTE entregou, não o que coube na tela: com
+            a janela longa truncada, dizer "200 rodaram" contradiria o aviso
+            logo abaixo, que fala em 1.486. */}
         <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-          {analisados.length} {analisados.length === 1 ? "anúncio rodou" : "anúncios rodaram"}
+          {formatNumber(Math.max(totalComEntrega ?? 0, analisados.length))}{" "}
+          {Math.max(totalComEntrega ?? 0, analisados.length) === 1 ? "anúncio rodou" : "anúncios rodaram"}
         </span>
       </div>
 
