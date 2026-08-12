@@ -51,6 +51,8 @@ export interface AdAnalisado {
 type Veredito = {
   tipo: "vencedor" | "sem_resultado" | "caro" | "fadiga" | "media" | "sem_amostra";
   rotulo: string;
+  /** Versão curta para a linha da lista no celular, onde a coluna é estreita. */
+  curto?: string;
   porque: string;
   cor: string;
   borda: string;
@@ -165,6 +167,7 @@ function analisar(ad: AdAnalisado, ref: Referencias): Veredito {
       return {
         tipo: "sem_resultado",
         rotulo: `Gasta sem ${nomeDominante.singular}`,
+        curto: "Queima verba",
         porque:
           `${formatCurrency(ad.spend)} gastos no período e nenhuma ${nomeDominante.singular} gerada` +
           (refDominante
@@ -178,6 +181,7 @@ function analisar(ad: AdAnalisado, ref: Referencias): Veredito {
     return {
       tipo: "media",
       rotulo: "Sem resultado ainda",
+      curto: "Sem resultado",
       porque: "Gasto ainda pequeno para condenar. Vale observar mais alguns dias.",
       cor: "text-slate-300",
       borda: "border-slate-700",
@@ -525,7 +529,8 @@ export function AnaliseCriativos({
                             title={st.texto}
                           />
                           <span className={cn("truncate text-[10px] font-bold uppercase tracking-wide", veredito.cor)}>
-                            {veredito.rotulo}
+                            <span className="sm:hidden">{veredito.curto ?? veredito.rotulo}</span>
+                            <span className="hidden sm:inline">{veredito.rotulo}</span>
                           </span>
                           {!ehAtivo && (
                             <span className={cn("shrink-0 whitespace-nowrap rounded px-1 py-px text-[9px] font-bold uppercase", st.cor)}>
