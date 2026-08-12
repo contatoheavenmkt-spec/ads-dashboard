@@ -15,7 +15,7 @@
  * conclusão com três cliques de dado.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Award, ExternalLink, Eye, Flame, Loader2, MousePointerClick,
@@ -256,8 +256,8 @@ const STATUS_ROTULO: Record<string, { texto: string; cor: string }> = {
   ARCHIVED: { texto: "Arquivado", cor: "text-slate-500 bg-slate-800/40 border-slate-700" },
 };
 
-/** Cards por leva — 3 linhas cheias na grade mais larga; o resto via "Mostrar mais". */
-const POR_PAGINA = 18;
+/** Linhas por leva. O resto entra pelo "Ver mais". */
+const POR_PAGINA = 8;
 
 export function AnaliseCriativos({
   creatives,
@@ -286,6 +286,25 @@ export function AnaliseCriativos({
     setCreativesAnterior(creatives);
     setLimite(POR_PAGINA);
   }
+
+  // Rolou de volta ao topo da lista => recolhe pro tamanho padrão. O
+  // IntersectionObserver serve aqui porque quem rola pode ser um container
+  // interno (dash do cliente), não a janela — a posição na viewport muda
+  // igual. Só arma depois que a sentinela saiu de vista uma vez, senão
+  // recolheria no mesmo instante em que o usuário clica em "Ver mais".
+  const topoRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (limite <= POR_PAGINA) return;
+    const alvo = topoRef.current;
+    if (!alvo) return;
+    let saiuDeVista = false;
+    const io = new IntersectionObserver(([entrada]) => {
+      if (!entrada.isIntersecting) { saiuDeVista = true; return; }
+      if (saiuDeVista) setLimite(POR_PAGINA);
+    });
+    io.observe(alvo);
+    return () => io.disconnect();
+  }, [limite]);
 
   // Dedupe por id: defesa contra o mesmo anúncio chegar N vezes quando a mesma
   // conta está ligada a mais de um workspace (a rota já deduplica, isto é cinto
@@ -392,17 +411,21 @@ export function AnaliseCriativos({
         </div>
       </div>
 
+      {/* Sentinela do topo: quando ela reaparece (usuário rolou de volta pro
+          começo), a lista expandida volta a mostrar só a primeira leva. */}
+      <div ref={topoRef} aria-hidden />
+
       {visiveis.length === 0 ? (
         <div className="py-16 text-center text-xs text-slate-500">
           Nenhum anúncio {filtro === "ativos" ? "ativo" : filtro === "pausados" ? "pausado" : "com entrega"} no período.
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {secoes.map((secao) => (
             <div key={secao.chave}>
               {comCabecalho && (
                 <div
-                  className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-slate-800 pb-2"
+                  className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
                   title={secao.itens[0]?.ad.clientName || undefined}
                 >
                   <span className="text-[11px] font-black uppercase tracking-wider text-cyan-300">
@@ -414,81 +437,69 @@ export function AnaliseCriativos({
                   </span>
                 </div>
               )}
-              {/* minmax 150: 2 colunas num celular de 390px (antes era 1 card
-                  gigante por tela) e grade mais densa no desktop. */}
-              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
+              {/* Coluna única sempre: uma linha por anúncio. Grade de cards
+                  grandes virava parede de imagem; a lista deixa comparar
+                  custo por resultado de cima a baixo, que é a leitura real. */}
+              <div className="space-y-1.5">
                 {secao.mostrar.map(({ ad, veredito }) => {
                   const st = STATUS_ROTULO[ad.status] ?? STATUS_ROTULO.PAUSED;
+                  const { tipo, qtd } = tipoDoAnuncio(ad);
+                  const nome = NOME_RESULTADO[tipo];
+                  const ehVenda = tipo === "venda";
                   return (
                     <button
                       key={ad.id}
                       onClick={() => setAberto(ad)}
                       className={cn(
-                        "group flex flex-col overflow-hidden rounded-xl border bg-slate-900/40 text-left transition-transform hover:scale-[1.01]",
+                        "group flex w-full items-center gap-3 rounded-xl border bg-slate-900/30 p-2 text-left transition-colors hover:bg-slate-900/70",
                         veredito.borda,
                       )}
                       title="Clique para ver o anúncio real"
                     >
-                      <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-800">
+                      <div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-800">
                         {ad.thumbnail ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={ad.thumbnail}
-                            alt={ad.name}
+                            alt=""
                             className="h-full w-full object-cover"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                           />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-widest text-slate-600">
-                            sem imagem
-                          </div>
-                        )}
-                        <span className={cn("absolute left-2 top-2 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase", st.cor)}>
-                          {st.texto}
-                        </span>
-                        <span className="absolute bottom-2 right-2 rounded-md bg-black/70 p-1 text-white/70 opacity-0 transition-opacity group-hover:opacity-100">
-                          <Eye size={12} />
+                        ) : null}
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
+                          <Eye size={13} className="text-white" />
                         </span>
                       </div>
 
-                      <div className="space-y-1.5 p-2.5 sm:p-3">
-                        <p className="truncate text-[11px] font-semibold text-slate-200">{ad.name}</p>
-                        <p className={cn("text-[10px] font-bold uppercase tracking-wider", veredito.cor)}>
-                          {veredito.rotulo}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[11px] font-semibold text-slate-100 sm:text-xs">{ad.name}</p>
+                        <p className="mt-0.5 flex items-center gap-1.5 text-[10px]">
+                          <span className={cn("font-bold uppercase tracking-wide", veredito.cor)}>
+                            {veredito.rotulo}
+                          </span>
+                          <span className={cn("shrink-0 rounded px-1 py-px text-[9px] font-bold uppercase", st.cor)}>
+                            {st.texto}
+                          </span>
                         </p>
-                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 border-t border-slate-800 pt-1.5 text-[10px]">
-                          {(() => {
-                            const { tipo, qtd } = tipoDoAnuncio(ad);
-                            const nome = NOME_RESULTADO[tipo];
-                            const rotulo = qtd === 1 ? nome.singular : nome.plural;
-                            return (
-                              <>
-                                <span className={tipo === "venda" ? "font-bold text-emerald-500" : "text-slate-500"}>
-                                  {rotulo.charAt(0).toUpperCase() + rotulo.slice(1)}
-                                </span>
-                                <span className={cn("text-right font-semibold", tipo === "venda" ? "text-emerald-400" : "text-slate-200")}>
-                                  {formatNumber(qtd)}
-                                </span>
-                                {mostrarCusto && (
-                                  <>
-                                    <span className="text-slate-500">Custo/{nome.singular}</span>
-                                    <span className="text-right font-semibold text-slate-200">
-                                      {qtd > 0 ? formatCurrency(ad.spend / qtd) : "—"}
-                                    </span>
-                                  </>
-                                )}
-                              </>
-                            );
-                          })()}
-                          {mostrarCusto && (
-                            <>
-                              <span className="text-slate-500">Gasto</span>
-                              <span className="text-right font-semibold text-slate-300">{formatCurrency(ad.spend)}</span>
-                            </>
-                          )}
-                          <span className="text-slate-500">CTR</span>
-                          <span className="text-right text-slate-400">{ad.ctr.toFixed(2)}%</span>
-                        </div>
+                      </div>
+
+                      {/* Números alinhados à direita, mesma ordem em toda linha:
+                          resultado, custo do resultado e gasto. */}
+                      <div className="flex shrink-0 items-center gap-3 sm:gap-5">
+                        <Coluna
+                          valor={formatNumber(qtd)}
+                          rotulo={qtd === 1 ? nome.singular : nome.plural}
+                          destaque={ehVenda}
+                        />
+                        {mostrarCusto && (
+                          <Coluna
+                            valor={qtd > 0 ? formatCurrency(ad.spend / qtd) : "—"}
+                            rotulo={`por ${nome.singular}`}
+                          />
+                        )}
+                        {mostrarCusto && (
+                          <Coluna valor={formatCurrency(ad.spend)} rotulo="gasto" apagado escondeNoMobile />
+                        )}
                       </div>
                     </button>
                   );
@@ -499,14 +510,21 @@ export function AnaliseCriativos({
         </div>
       )}
 
-      {visiveis.length > limite && (
+      {visiveis.length > limite ? (
         <button
           onClick={() => setLimite((l) => l + POR_PAGINA)}
-          className="mx-auto mt-5 rounded-lg border border-slate-700 bg-slate-800/80 px-5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+          className="mx-auto mt-4 rounded-lg border border-slate-700/80 bg-slate-800/60 px-5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
         >
-          Mostrar mais ({visiveis.length - limite} restantes)
+          Ver mais ({visiveis.length - limite} restantes)
         </button>
-      )}
+      ) : limite > POR_PAGINA ? (
+        <button
+          onClick={() => { setLimite(POR_PAGINA); topoRef.current?.scrollIntoView({ block: "nearest" }); }}
+          className="mx-auto mt-4 rounded-lg border border-slate-800 bg-slate-900/60 px-5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+        >
+          Ver menos
+        </button>
+      ) : null}
 
       {aberto ? (
         <ModalAnuncio
@@ -705,6 +723,35 @@ function ModalAnuncio({
       </div>
     </div>,
     document.body,
+  );
+}
+
+/** Número + legenda, alinhados à direita numa linha da lista. */
+function Coluna({
+  valor,
+  rotulo,
+  destaque = false,
+  apagado = false,
+  escondeNoMobile = false,
+}: {
+  valor: string;
+  rotulo: string;
+  destaque?: boolean;
+  apagado?: boolean;
+  escondeNoMobile?: boolean;
+}) {
+  return (
+    <div className={cn("w-[62px] text-right sm:w-[76px]", escondeNoMobile && "hidden sm:block")}>
+      <p
+        className={cn(
+          "truncate text-[11px] font-bold sm:text-xs",
+          destaque ? "text-emerald-400" : apagado ? "text-slate-400" : "text-slate-100",
+        )}
+      >
+        {valor}
+      </p>
+      <p className="truncate text-[9px] uppercase tracking-wide text-slate-500">{rotulo}</p>
+    </div>
   );
 }
 
