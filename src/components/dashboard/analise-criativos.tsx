@@ -275,8 +275,8 @@ const STATUS_ROTULO: Record<string, { texto: string; cor: string }> = {
 /** Status desconhecido não pode virar "Pausado" — inventa informação. */
 const STATUS_PADRAO = STATUS_ROTULO.DESCONHECIDO;
 
-/** Linhas por leva. O resto entra pelo "Ver mais". */
-const POR_PAGINA = 8;
+/** Cards por leva (a grade comporta mais que a lista). */
+const POR_PAGINA = 10;
 
 export function AnaliseCriativos({
   creatives,
@@ -481,10 +481,11 @@ export function AnaliseCriativos({
                   </span>
                 </div>
               )}
-              {/* Coluna única sempre: uma linha por anúncio. Grade de cards
-                  grandes virava parede de imagem; a lista deixa comparar
-                  custo por resultado de cima a baixo, que é a leitura real. */}
-              <div className="space-y-1.5">
+              {/* Cards lado a lado com o criativo GRANDE: a peça é o que se
+                  analisa, e miniatura de 44px não deixa ver o anúncio. Duas
+                  colunas no celular (uma só virava rolagem infinita) e até
+                  cinco no desktop, onde a imagem fica realmente visível. */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {secao.mostrar.map(({ ad, veredito }) => {
                   const st = STATUS_ROTULO[ad.status] ?? STATUS_PADRAO;
                   const ehAtivo = ad.status === "ACTIVE";
@@ -496,12 +497,12 @@ export function AnaliseCriativos({
                       key={ad.id}
                       onClick={() => setAberto(ad)}
                       className={cn(
-                        "group flex w-full items-center gap-3 rounded-xl border bg-slate-900/30 p-2 text-left transition-colors hover:bg-slate-900/70",
+                        "group flex flex-col overflow-hidden rounded-xl border bg-slate-900/40 text-left transition-all hover:-translate-y-0.5 hover:bg-slate-900/70",
                         veredito.borda,
                       )}
                       title="Clique para ver o anúncio real"
                     >
-                      <div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-800">
+                      <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-800">
                         {ad.thumbnail ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -510,52 +511,64 @@ export function AnaliseCriativos({
                             className="h-full w-full object-cover"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                           />
-                        ) : null}
-                        <span className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
-                          <Eye size={13} className="text-white" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-widest text-slate-600">
+                            sem imagem
+                          </div>
+                        )}
+                        {/* Status escrito só quando foge do normal; ativo é o
+                            caso comum e o badge repetido virava ruído. */}
+                        {!ehAtivo && (
+                          <span className={cn("absolute left-2 top-2 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase backdrop-blur-sm", st.cor)}>
+                            {st.texto}
+                          </span>
+                        )}
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                          <span className="flex items-center gap-1.5 rounded-lg bg-black/70 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                            <Eye size={13} /> Ver anúncio
+                          </span>
                         </span>
                       </div>
 
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[11px] font-semibold text-slate-100 sm:text-xs">{ad.name}</p>
-                        {/* Uma linha só: sem nowrap o veredito quebrava em
-                            duas e cada linha ficava de uma altura. O status
-                            vira PONTO quando é "Ativo" — repetir o badge em
-                            toda linha era ruído e ainda comia o espaço do
-                            veredito; escrito só quando foge do normal. */}
-                        <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
-                          <span
-                            className={cn("h-1.5 w-1.5 shrink-0 rounded-full", ehAtivo ? "bg-emerald-400" : "bg-slate-600")}
-                            title={st.texto}
-                          />
-                          <span className={cn("truncate text-[10px] font-bold uppercase tracking-wide", veredito.cor)}>
-                            <span className="sm:hidden">{veredito.curto ?? veredito.rotulo}</span>
-                            <span className="hidden sm:inline">{veredito.rotulo}</span>
-                          </span>
-                          {!ehAtivo && (
-                            <span className={cn("shrink-0 whitespace-nowrap rounded px-1 py-px text-[9px] font-bold uppercase", st.cor)}>
-                              {st.texto}
+                      <div className="flex flex-1 flex-col gap-1.5 p-2.5 sm:p-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[11px] font-semibold text-slate-100 sm:text-xs">{ad.name}</p>
+                          <p className="mt-0.5 flex items-center gap-1.5">
+                            <span
+                              className={cn("h-1.5 w-1.5 shrink-0 rounded-full", ehAtivo ? "bg-emerald-400" : "bg-slate-600")}
+                              title={st.texto}
+                            />
+                            <span className={cn("truncate text-[10px] font-bold uppercase tracking-wide", veredito.cor)}>
+                              <span className="sm:hidden">{veredito.curto ?? veredito.rotulo}</span>
+                              <span className="hidden sm:inline">{veredito.rotulo}</span>
                             </span>
+                          </p>
+                        </div>
+
+                        {/* O número que decide primeiro e grande; gasto por
+                            último e apagado. */}
+                        <div className="mt-auto flex items-end justify-between gap-2 border-t border-slate-800/80 pt-2">
+                          <div className="min-w-0">
+                            <p className={cn("text-sm font-black leading-none", ehVenda ? "text-emerald-400" : "text-slate-100")}>
+                              {formatNumber(qtd)}
+                            </p>
+                            <p className="mt-0.5 truncate text-[9px] uppercase tracking-wide text-slate-500">
+                              {qtd === 1 ? nome.singular : nome.plural}
+                            </p>
+                          </div>
+                          {mostrarCusto && (
+                            <div className="min-w-0 text-right">
+                              <p className="truncate text-xs font-bold leading-none text-slate-100">
+                                {qtd > 0 ? formatCurrency(ad.spend / qtd) : "—"}
+                              </p>
+                              <p className="mt-0.5 truncate text-[9px] uppercase tracking-wide text-slate-500">custo</p>
+                            </div>
                           )}
                         </div>
-                      </div>
-
-                      {/* Números alinhados à direita, mesma ordem em toda linha:
-                          resultado, custo do resultado e gasto. */}
-                      <div className="flex shrink-0 items-center gap-3 sm:gap-5">
-                        <Coluna
-                          valor={formatNumber(qtd)}
-                          rotulo={qtd === 1 ? nome.singular : nome.plural}
-                          destaque={ehVenda}
-                        />
-                        {/* "custo" e não "por conversa": a coluna ao lado já
-                            nomeia o resultado, e o rótulo longo cortava no
-                            celular ("POR CONV..."). */}
                         {mostrarCusto && (
-                          <Coluna valor={qtd > 0 ? formatCurrency(ad.spend / qtd) : "—"} rotulo="custo" />
-                        )}
-                        {mostrarCusto && (
-                          <Coluna valor={formatCurrency(ad.spend)} rotulo="gasto" apagado escondeNoMobile />
+                          <p className="text-[9px] uppercase tracking-wide text-slate-600">
+                            {formatCurrency(ad.spend)} gastos
+                          </p>
                         )}
                       </div>
                     </button>
@@ -780,35 +793,6 @@ function ModalAnuncio({
       </div>
     </div>,
     document.body,
-  );
-}
-
-/** Número + legenda, alinhados à direita numa linha da lista. */
-function Coluna({
-  valor,
-  rotulo,
-  destaque = false,
-  apagado = false,
-  escondeNoMobile = false,
-}: {
-  valor: string;
-  rotulo: string;
-  destaque?: boolean;
-  apagado?: boolean;
-  escondeNoMobile?: boolean;
-}) {
-  return (
-    <div className={cn("w-[62px] text-right sm:w-[76px]", escondeNoMobile && "hidden sm:block")}>
-      <p
-        className={cn(
-          "truncate text-[11px] font-bold sm:text-xs",
-          destaque ? "text-emerald-400" : apagado ? "text-slate-400" : "text-slate-100",
-        )}
-      >
-        {valor}
-      </p>
-      <p className="truncate text-[9px] uppercase tracking-wide text-slate-500">{rotulo}</p>
-    </div>
   );
 }
 
