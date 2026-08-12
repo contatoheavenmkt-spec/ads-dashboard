@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Award, ExternalLink, Eye, Flame, Loader2, MousePointerClick,
   PauseCircle, PlayCircle, TrendingDown, X,
@@ -350,24 +351,27 @@ export function AnaliseCriativos({
     .filter((s) => s.mostrar.length > 0);
 
   return (
-    <div className="glass-panel flex flex-col rounded-2xl p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white/80">
+    <div className="glass-panel flex flex-col rounded-2xl p-4 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex items-center gap-2.5">
+          <h3 className="text-xs font-black uppercase tracking-[0.15em] text-white/80 sm:text-sm sm:tracking-[0.2em]">
             Análise de criativos
           </h3>
-          <span className="rounded-md border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-400">
+          <span className="whitespace-nowrap rounded-md border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-400">
             Meta Ads
           </span>
         </div>
-        <div className="flex gap-1">
+        {/* Rótulos curtos e sem quebra: "Rodaram no período" virava duas
+            linhas por pill no mobile e empurrava tudo. */}
+        <div className="no-scrollbar flex max-w-full gap-1 overflow-x-auto">
           {[
-            { id: "rodaram" as const, label: `Rodaram no período (${analisados.length})` },
-            { id: "ativos" as const, label: `Ativos (${ativos})` },
-            { id: "pausados" as const, label: `Pausados (${pausados})` },
+            { id: "rodaram" as const, label: `Rodaram (${analisados.length})`, dica: "Tudo que teve entrega no período, incluindo o que já foi pausado" },
+            { id: "ativos" as const, label: `Ativos (${ativos})`, dica: "Somente anúncios ativos agora" },
+            { id: "pausados" as const, label: `Pausados (${pausados})`, dica: "Rodaram no período mas estão pausados" },
           ].map((f) => (
             <button
               key={f.id}
+              title={f.dica}
               onClick={() => {
                 // Guard: reclique no filtro já ativo não pode colapsar a
                 // lista expandida de volta pra 18 (o scroll saltaria).
@@ -376,7 +380,7 @@ export function AnaliseCriativos({
                 setLimite(POR_PAGINA);
               }}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors",
+                "whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors",
                 filtro === f.id
                   ? "border-slate-600 bg-slate-800 text-white"
                   : "border-slate-800 bg-slate-900/60 text-slate-400 hover:bg-slate-800",
@@ -410,7 +414,9 @@ export function AnaliseCriativos({
                   </span>
                 </div>
               )}
-              <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+              {/* minmax 150: 2 colunas num celular de 390px (antes era 1 card
+                  gigante por tela) e grade mais densa no desktop. */}
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
                 {secao.mostrar.map(({ ad, veredito }) => {
                   const st = STATUS_ROTULO[ad.status] ?? STATUS_ROTULO.PAUSED;
                   return (
@@ -445,7 +451,7 @@ export function AnaliseCriativos({
                         </span>
                       </div>
 
-                      <div className="space-y-1.5 p-3">
+                      <div className="space-y-1.5 p-2.5 sm:p-3">
                         <p className="truncate text-[11px] font-semibold text-slate-200">{ad.name}</p>
                         <p className={cn("text-[10px] font-bold uppercase tracking-wider", veredito.cor)}>
                           {veredito.rotulo}
@@ -555,12 +561,29 @@ function ModalAnuncio({
 
   useEffect(() => { void buscarPreview(); }, [buscarPreview]);
 
+  // Modal aberto: trava o scroll do fundo (no celular a página rolava por
+  // baixo do overlay) e fecha no ESC.
+  useEffect(() => {
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onFechar(); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = original;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onFechar]);
+
   const st = STATUS_ROTULO[ad.status] ?? STATUS_ROTULO.PAUSED;
   const custoResultado = ad.conversions > 0 ? ad.spend / ad.conversions : null;
 
-  return (
+  // Portal no body: o painel pai usa backdrop-filter, que cria containing
+  // block e prende position:fixed DENTRO do painel — no mobile o modal
+  // abria a milhares de px da viewport, invisível. No body o fixed volta
+  // a valer contra a viewport de verdade.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-4"
       onClick={onFechar}
     >
       <div
@@ -676,7 +699,8 @@ function ModalAnuncio({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
