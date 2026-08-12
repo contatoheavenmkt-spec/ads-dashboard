@@ -513,14 +513,16 @@ export function AnaliseCriativos({
 
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[11px] font-semibold text-slate-100 sm:text-xs">{ad.name}</p>
-                        <p className="mt-0.5 flex items-center gap-1.5 text-[10px]">
-                          <span className={cn("font-bold uppercase tracking-wide", veredito.cor)}>
+                        {/* Uma linha só: sem nowrap o veredito quebrava em
+                            duas e cada linha da lista ficava de uma altura. */}
+                        <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                          <span className={cn("truncate text-[10px] font-bold uppercase tracking-wide", veredito.cor)}>
                             {veredito.rotulo}
                           </span>
-                          <span className={cn("shrink-0 rounded px-1 py-px text-[9px] font-bold uppercase", st.cor)}>
+                          <span className={cn("shrink-0 whitespace-nowrap rounded px-1 py-px text-[9px] font-bold uppercase", st.cor)}>
                             {st.texto}
                           </span>
-                        </p>
+                        </div>
                       </div>
 
                       {/* Números alinhados à direita, mesma ordem em toda linha:
@@ -531,11 +533,11 @@ export function AnaliseCriativos({
                           rotulo={qtd === 1 ? nome.singular : nome.plural}
                           destaque={ehVenda}
                         />
+                        {/* "custo" e não "por conversa": a coluna ao lado já
+                            nomeia o resultado, e o rótulo longo cortava no
+                            celular ("POR CONV..."). */}
                         {mostrarCusto && (
-                          <Coluna
-                            valor={qtd > 0 ? formatCurrency(ad.spend / qtd) : "—"}
-                            rotulo={`por ${nome.singular}`}
-                          />
+                          <Coluna valor={qtd > 0 ? formatCurrency(ad.spend / qtd) : "—"} rotulo="custo" />
                         )}
                         {mostrarCusto && (
                           <Coluna valor={formatCurrency(ad.spend)} rotulo="gasto" apagado escondeNoMobile />
