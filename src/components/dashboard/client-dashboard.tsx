@@ -230,6 +230,7 @@ export function ClientDashboard({
   const [ga4Data, setGa4Data] = useState<GA4Data | null>(null);
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [avisosCriativos, setAvisosCriativos] = useState<{ conta: string; erro: string }[]>([]);
+  const [criativosMeta, setCriativosMeta] = useState<{ total: number; truncado: boolean }>({ total: 0, truncado: false });
   const [demographics, setDemographics] = useState<{ gender: DemographicBreakdown[]; age: DemographicBreakdown[] }>({ gender: [], age: [] });
   const [regions, setRegions] = useState<{ name: string; value: number }[]>([]);
   const [placements, setPlacements] = useState<{ label: string; impressions: number; clicks: number; spend: number }[]>([]);
@@ -296,9 +297,10 @@ export function ClientDashboard({
       // Lista COMPLETA (ativos e pausados que rodaram): a análise de
       // criativos tem filtro próprio de status, igual à da agência.
       if (creativesRes) {
-        const r = creativesRes as { ads?: AdCreative[]; avisos?: { conta: string; erro: string }[] };
+        const r = creativesRes as { ads?: AdCreative[]; avisos?: { conta: string; erro: string }[]; totalComEntrega?: number; truncado?: boolean };
         setCreatives(r?.ads ?? []);
         setAvisosCriativos(r?.avisos ?? []);
+        setCriativosMeta({ total: r?.totalComEntrega ?? 0, truncado: Boolean(r?.truncado) });
       }
       if (demoRes) setDemographics(demoRes as { gender: DemographicBreakdown[]; age: DemographicBreakdown[] });
       if (regionsRes) setRegions((regionsRes as { regions: { name: string; value: number }[] })?.regions ?? []);
@@ -1353,6 +1355,8 @@ export function ClientDashboard({
             mostrarCusto={shouldShowMetric("spend", visibleMetrics, true)}
             periodo={currentPeriodLabel.toLowerCase()}
             avisos={avisosCriativos}
+            totalComEntrega={criativosMeta.total}
+            truncado={criativosMeta.truncado}
           />
         )}
 

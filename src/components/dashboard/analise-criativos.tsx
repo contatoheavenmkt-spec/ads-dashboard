@@ -314,6 +314,8 @@ export function AnaliseCriativos({
   mostrarCusto = true,
   periodo,
   avisos,
+  totalComEntrega,
+  truncado,
 }: {
   creatives: AdAnalisado[];
   workspaceIdParam?: string | null;
@@ -325,6 +327,10 @@ export function AnaliseCriativos({
   periodo?: string | null;
   /** Contas cuja busca falhou — dado incompleto tem que ser dito, não escondido. */
   avisos?: { conta: string; erro: string }[];
+  /** Total com entrega no período (pode ser maior que o detalhado na tela). */
+  totalComEntrega?: number;
+  /** true quando a janela é grande demais e só os maiores foram detalhados. */
+  truncado?: boolean;
 }) {
   const [aberto, setAberto] = useState<AdAnalisado | null>(null);
 
@@ -383,9 +389,20 @@ export function AnaliseCriativos({
       </div>
 
       {avisos && avisos.length > 0 ? (
-        <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-3 py-2 text-[11px] text-amber-300">
+        <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-3 py-2 text-[11px] leading-relaxed text-amber-300">
           Não foi possível carregar {avisos.length === 1 ? "a conta" : "as contas"}{" "}
-          {avisos.map((a) => a.conta).join(", ")}. A lista abaixo está incompleta.
+          <span className="font-semibold">{avisos.map((a) => a.conta).join(", ")}</span>.{" "}
+          {/* O motivo importa: "limite temporário" pede outra tentativa,
+              "token expirado" pede reconectar. Sem ele o gestor só vê falha. */}
+          {avisos[0].erro}
+        </div>
+      ) : null}
+
+      {truncado && totalComEntrega ? (
+        <div className="mb-3 rounded-lg border border-slate-700 bg-slate-800/40 px-3 py-2 text-[11px] leading-relaxed text-slate-400">
+          Janela longa: mostrando os <span className="font-semibold text-slate-200">{formatNumber(analisados.length)}</span> anúncios
+          de maior investimento entre os {formatNumber(totalComEntrega)} que tiveram entrega.
+          Reduza o período para ver todos.
         </div>
       ) : null}
 

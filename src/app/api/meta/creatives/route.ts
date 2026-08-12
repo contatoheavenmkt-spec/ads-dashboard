@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
   const ads = results
     .flatMap((r, i) =>
       r.status === "fulfilled"
-        ? r.value.map((ad) => ({
+        ? r.value.ads.map((ad) => ({
             ...ad,
             // O rótulo que desfaz a mistura na visão agregada, e o id da
             // conta que o preview precisa para autorizar.
@@ -162,5 +162,14 @@ export async function GET(req: NextRequest) {
     return [{ conta: nomeDaConta.get(contas[i].adAccountId) ?? contas[i].adAccountId, erro }];
   });
 
-  return NextResponse.json({ ads, avisos });
+  // Quando o histórico é grande demais para detalhar tudo, a tela precisa
+  // dizer — número sem régua foi o que já fez o gestor achar que faltava
+  // anúncio.
+  const totalComEntrega = results.reduce(
+    (soma, r) => soma + (r.status === "fulfilled" ? r.value.totalComEntrega : 0),
+    0,
+  );
+  const truncado = results.some((r) => r.status === "fulfilled" && r.value.truncado);
+
+  return NextResponse.json({ ads, avisos, totalComEntrega, truncado });
 }

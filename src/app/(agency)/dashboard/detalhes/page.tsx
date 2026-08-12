@@ -43,6 +43,7 @@ export default function DetalhesPage() {
   const [ga4Data, setGa4Data] = useState<{ totals: any; regions: { name: string; value: number }[]; demographics?: any } | null>(null);
   const [creatives, setCreatives] = useState<AdCreative[]>([]);
   const [avisosCriativos, setAvisosCriativos] = useState<{ conta: string; erro: string }[]>([]);
+  const [criativosMeta, setCriativosMeta] = useState<{ total: number; truncado: boolean }>({ total: 0, truncado: false });
   const [demographics, setDemographics] = useState<{ gender: DemographicBreakdown[]; age: DemographicBreakdown[] }>({ gender: [], age: [] });
   const [regions, setRegions] = useState<{ name: string; value: number }[]>([]);
   const [hasConnectedAccounts, setHasConnectedAccounts] = useState(false);
@@ -102,6 +103,7 @@ export default function DetalhesPage() {
       setMetaData(meta);
       setCreatives(creativesRes?.ads ?? []);
       setAvisosCriativos(creativesRes?.avisos ?? []);
+      setCriativosMeta({ total: creativesRes?.totalComEntrega ?? 0, truncado: Boolean(creativesRes?.truncado) });
       setDemographics(demo);
       setRegions((regionsRes as { regions: { name: string; value: number }[] })?.regions ?? []);
       setGoogleData(google);
@@ -363,6 +365,8 @@ export default function DetalhesPage() {
               agregadoSemConta={!selectedAccount || selectedAccount?.platform === "google"}
               periodo={rotuloPeriodo(days)}
               avisos={avisosCriativos}
+              totalComEntrega={criativosMeta.total}
+              truncado={criativosMeta.truncado}
             />
           </div>
         </div>}

@@ -455,6 +455,13 @@ export interface MetaAdCreative {
   cpm: number;
 }
 
+/**
+ * Quantos anúncios recebem criativo/status por conta. Cobre folgado o que a
+ * tela mostra (faixas de 24 cards) e mantém as chamadas ao Graph num número
+ * que não trava a conta em janelas de anos.
+ */
+const TETO_DETALHES = 200;
+
 /** Lotes de ids para o endpoint batch do Graph (teto de 50 por chamada). */
 function emLotes<T>(itens: T[], tamanho: number): T[][] {
   const lotes: T[][] = [];
@@ -528,7 +535,7 @@ export async function getAdCreatives(
   days: number = 30,
   customRange?: { since: string; until: string },
   campaignId?: string | null,
-): Promise<MetaAdCreative[]> {
+): Promise<{ ads: MetaAdCreative[]; totalComEntrega: number; truncado: boolean }> {
   const { since, until } = customRange ?? getInsightsDateRange(days);
 
   /*
@@ -619,7 +626,24 @@ export async function getAdCreatives(
     });
   }
 
-  if (porId.size === 0) return [];
+  /*
+   * Teto de detalhamento. Em "todo o histórico" a conta tem ~2 mil anúncios
+   * com entrega, e buscar criativo de todos são ~40 chamadas por conta (×12
+   * contas na visão agregada) — a Meta corta com "Application request limit"
+   * e a conta INTEIRA vinha vazia. Detalhamos os de maior investimento, que
+   * é o que a tela mostra, e dizemos quantos ficaram de fora: truncar em
+   * silêncio foi o bug que essa mesma tela já teve.
+   */
+  const totalComEntrega = porId.size;
+  let selecionados = [...porId.values()];
+  if (selecionados.length > TETO_DETALHES) {
+    selecionados = selecionados
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, TETO_DETALHES);
+  }
+  const paraDetalhar = new Map(selecionados.map((a) => [a.id, a]));
+
+  if (paraDetalhar.size === 0) return { ads: [], totalComEntrega, truncado: false };
 
   /*
    * Passo 2: criativo e status SÓ de quem entregou, em lotes de 50 (teto do
@@ -632,7 +656,7 @@ export async function getAdCreatives(
     `creative.thumbnail_width(512).thumbnail_height(512)` +
     `{thumbnail_url,image_url,title,body,instagram_permalink_url}`;
 
-  const lotes = emLotes([...porId.keys()], 50);
+  const lotes = emLotes([...paraDetalhar.keys()], 50);
   const respostas = await emOndas(lotes, 4, async (lote) => {
     const url =
       `${GRAPH_API}/?ids=${lote.join(",")}` +
@@ -671,7 +695,7 @@ export async function getAdCreatives(
   for (const r of respostas) {
     if (r.status !== "fulfilled") continue;
     for (const [id, det] of Object.entries(r.value)) {
-      const alvo = porId.get(id);
+      const alvo = paraDetalhar.get(id);
       if (!alvo || !det) continue;
       alvo.name = det.name ?? alvo.name;
       alvo.status = det.effective_status ?? det.status ?? alvo.status;
@@ -683,7 +707,11 @@ export async function getAdCreatives(
   }
 
   // Quem mais entregou primeiro.
-  return [...porId.values()].sort((a, b) => b.impressions - a.impressions);
+  return {
+    ads: [...paraDetalhar.values()].sort((a, b) => b.impressions - a.impressions),
+    totalComEntrega,
+    truncado: totalComEntrega > paraDetalhar.size,
+  };
 }
 
 // ─── Demographics ─────────────────────────────────────────────────────────────
