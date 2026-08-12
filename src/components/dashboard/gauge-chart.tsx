@@ -25,7 +25,10 @@ export function GaugeChart({
 
   return (
     <div className="flex w-full flex-col items-center justify-center py-2">
-      <svg width="100%" height="100" viewBox="0 0 180 100" className="overflow-visible" style={{ maxWidth: 180 }}>
+      {/* Sem `overflow-visible`: o brilho do arco pintava fora da caixa do
+          SVG, invadia o card de baixo e virava um borrão atrás do
+          backdrop-blur dele. O desenho inteiro cabe no viewBox. */}
+      <svg width="100%" height="100" viewBox="0 0 180 100" style={{ maxWidth: 180 }}>
         {/* Background Track */}
         <path
           d="M20 90 A 70 70 0 0 1 160 90"
