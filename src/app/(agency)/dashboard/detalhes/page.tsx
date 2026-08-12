@@ -28,6 +28,7 @@ const FALLBACK_AGE = { labels: ["45-54", "25-34", "35-44", "18-24", "63+", "55-6
 function rotuloPeriodo(days: number): string {
   if (days === -1) return "este mês";
   if (days === 1) return "hoje";
+  if (days >= 1095) return "todo o histórico";
   return `últimos ${days} dias`;
 }
 

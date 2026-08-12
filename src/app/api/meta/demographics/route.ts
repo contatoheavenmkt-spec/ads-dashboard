@@ -4,6 +4,7 @@ import { getStoredMetaToken } from "@/lib/meta-token";
 import { getGenderBreakdown, getAgeBreakdown } from "@/lib/meta-api";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
 import { safeInt } from "@/lib/utils";
+import { MAX_DIAS_JANELA } from "@/lib/date-range";
 
 function mergeBreakdown(results: { label: string; impressions: number; clicks: number }[][]) {
   const map = new Map<string, { impressions: number; clicks: number }>();
@@ -25,7 +26,7 @@ function mergeBreakdown(results: { label: string; impressions: number; clicks: n
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const days = safeInt(searchParams.get("days"), 30, 1, 366);
+  const days = safeInt(searchParams.get("days"), 30, 1, MAX_DIAS_JANELA);
   const adAccountIdParam = searchParams.get("adAccountId");
   const workspaceId = searchParams.get("workspaceId");
 

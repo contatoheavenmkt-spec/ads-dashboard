@@ -55,6 +55,7 @@ const PERIOD_OPTIONS = [
   { label: "Este mês", days: -1 },
   { label: "Últimos 30 dias", days: 30 },
   { label: "Últimos 90 dias", days: 90 },
+  { label: "Todo o histórico", days: 1095 },
 ];
 
 // ─── Platform icons ──────────────────────────────────────────────

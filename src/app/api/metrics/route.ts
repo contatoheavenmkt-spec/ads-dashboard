@@ -9,7 +9,7 @@ import {
 } from "@/lib/meta-api";
 import { getCachedMetrics, setCachedMetrics } from "@/lib/metrics-cache";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
-import { parseCustomRange, daysFromRange } from "@/lib/date-range";
+import { parseCustomRange, daysFromRange, MAX_DIAS_JANELA } from "@/lib/date-range";
 import { rateLimit } from "@/lib/rate-limit";
 import { safeInt } from "@/lib/utils";
 
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   const customRange = rangeResult.range;
   const days = customRange
     ? daysFromRange(customRange.since, customRange.until)
-    : safeInt(searchParams.get("days"), 30, 1, 366);
+    : safeInt(searchParams.get("days"), 30, 1, MAX_DIAS_JANELA);
   // Quando previousPeriod=1, retornamos os totals do período imediatamente
   // anterior — usado pelo client pra calcular delta % nos KPIs.
   const previousPeriod = searchParams.get("previousPeriod") === "1";

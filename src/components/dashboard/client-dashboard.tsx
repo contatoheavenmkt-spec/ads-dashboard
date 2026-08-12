@@ -45,6 +45,9 @@ const PERIOD_OPTIONS = [
   { label: "Este mês", days: -1 },
   { label: "Últimos 30 dias", days: 30 },
   { label: "Últimos 90 dias", days: 90 },
+  // Teto da Meta é 37 meses no /insights; 3 anos cabe com folga e responde
+  // "e o histórico todo da conta?" sem obrigar a montar range na mão.
+  { label: "Todo o histórico", days: 1095 },
   { label: "Personalizado", days: -2 },
 ];
 

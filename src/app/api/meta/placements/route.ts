@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getStoredMetaToken } from "@/lib/meta-token";
 import { getPlacementBreakdown, type PlacementBreakdown } from "@/lib/meta-api";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
-import { parseCustomRange } from "@/lib/date-range";
+import { parseCustomRange, MAX_DIAS_JANELA } from "@/lib/date-range";
 import { safeInt } from "@/lib/utils";
 
 function mergePlacements(results: PlacementBreakdown[][]): PlacementBreakdown[] {
@@ -25,7 +25,7 @@ function mergePlacements(results: PlacementBreakdown[][]): PlacementBreakdown[] 
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const days = safeInt(searchParams.get("days"), 30, 1, 366);
+  const days = safeInt(searchParams.get("days"), 30, 1, MAX_DIAS_JANELA);
   const adAccountIdParam = searchParams.get("adAccountId");
   const workspaceId = searchParams.get("workspaceId");
 

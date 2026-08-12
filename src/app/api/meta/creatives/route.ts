@@ -4,11 +4,11 @@ import { getStoredMetaToken } from "@/lib/meta-token";
 import { getAdCreatives } from "@/lib/meta-api";
 import { requireMetricsAccess, isAdAccountAuthorized } from "@/lib/workspace-access";
 import { safeInt } from "@/lib/utils";
-import { parseCustomRange } from "@/lib/date-range";
+import { parseCustomRange, MAX_DIAS_JANELA } from "@/lib/date-range";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const days = safeInt(searchParams.get("days"), 30, 1, 366);
+  const days = safeInt(searchParams.get("days"), 30, 1, MAX_DIAS_JANELA);
   // Período "Personalizado" manda since/until (sem days). A rota ignorava e
   // caía nos 30 dias padrão — o carrossel de anúncios do cliente final ficava
   // numa janela diferente dos KPIs da MESMA tela.

@@ -462,6 +462,26 @@ function emLotes<T>(itens: T[], tamanho: number): T[][] {
   return lotes;
 }
 
+/**
+ * Executa em ondas de no máximo `limite` requisições simultâneas.
+ *
+ * Disparar todos os lotes de uma vez estoura o "Application request limit"
+ * da Meta em janelas longas (medido: 3 anos = ~30 lotes simultâneos = erro),
+ * e o erro derrubava a conta inteira. Em ondas passa.
+ */
+async function emOndas<T, R>(
+  itens: T[],
+  limite: number,
+  tarefa: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const saida: PromiseSettledResult<R>[] = [];
+  for (let i = 0; i < itens.length; i += limite) {
+    const onda = itens.slice(i, i + limite);
+    saida.push(...(await Promise.allSettled(onda.map(tarefa))));
+  }
+  return saida;
+}
+
 /** Segue paging.next acumulando as linhas, com teto de páginas. */
 async function lerPaginado(
   urlInicial: string,
@@ -593,16 +613,28 @@ export async function getAdCreatives(
     `{thumbnail_url,image_url,title,body,instagram_permalink_url}`;
 
   const lotes = emLotes([...porId.keys()], 50);
-  const respostas = await Promise.allSettled(
-    lotes.map(async (lote) => {
-      const url =
-        `${GRAPH_API}/?ids=${lote.join(",")}` +
-        `&fields=${encodeURIComponent(camposAd)}` +
-        `&access_token=${accessToken}`;
+  const respostas = await emOndas(lotes, 4, async (lote) => {
+    const url =
+      `${GRAPH_API}/?ids=${lote.join(",")}` +
+      `&fields=${encodeURIComponent(camposAd)}` +
+      `&access_token=${accessToken}`;
+    const buscar = async () => {
       const res = await fetch(url, { cache: "no-store" });
       const data = await res.json();
       if (data.error) throw new Error(data.error.message);
-      return data as Record<string, {
+      return data;
+    };
+    let data;
+    try {
+      data = await buscar();
+    } catch (e) {
+      // Rate limit passa sozinho: uma pausa curta e mais uma tentativa
+      // salvam o lote em vez de deixar o card sem imagem.
+      if (!/request limit|rate limit|#17|#4/i.test(String(e))) throw e;
+      await new Promise((r) => setTimeout(r, 3000));
+      data = await buscar();
+    }
+    return data as Record<string, {
         name?: string;
         status?: string;
         effective_status?: string;
@@ -614,8 +646,7 @@ export async function getAdCreatives(
           instagram_permalink_url?: string;
         };
       }>;
-    }),
-  );
+  });
 
   for (const r of respostas) {
     if (r.status !== "fulfilled") continue;
