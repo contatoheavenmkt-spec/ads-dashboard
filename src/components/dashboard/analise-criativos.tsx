@@ -50,6 +50,20 @@ export interface AdAnalisado {
 
 type Veredito = {
   tipo: "vencedor" | "sem_resultado" | "caro" | "fadiga" | "media" | "sem_amostra";
+  /**
+   * Posição na ordem do melhor para o pior (0 = melhor). Campo obrigatório
+   * de propósito: cada veredito declara onde entra na fila, e o compilador
+   * cobra isso de todo caminho novo — ordenar por `tipo` num switch lá na
+   * tela deixaria um veredito futuro cair em silêncio no fim da lista.
+   */
+  rank: number;
+  /**
+   * Nota do anúncio dentro do mesmo veredito: resultados entregues ajustados
+   * pela eficiência (`qtd / custoRel`). Ordenar por GASTO colocava o maior
+   * orçamento na frente, e orçamento não é mérito. Só existe para quem
+   * entrega — sem resultado, o critério vira "quem queima mais verba".
+   */
+  nota?: number;
   rotulo: string;
   /** Versão curta para a linha da lista no celular, onde a coluna é estreita. */
   curto?: string;
@@ -130,6 +144,25 @@ function calcularReferencias(creatives: AdAnalisado[]): Referencias {
 }
 
 /**
+ * A ordem em que os anúncios aparecem: do que está funcionando ao que está
+ * queimando verba. É a ordem em que o gestor decide — escalar primeiro,
+ * cortar depois — e por isso vale mais que ordenar por gasto.
+ */
+const RANK = {
+  vencedor: 0,
+  na_media: 1,
+  acima_media: 2,
+  fadiga: 3,
+  caro: 4,
+  queima_verba: 5,
+  sem_resultado_ainda: 6,
+  sem_amostra: 7,
+} as const;
+
+/** Acima de 15% da média já não é "em linha com a conta". */
+const LIMITE_NA_MEDIA = 1.15;
+
+/**
  * O veredito, na hierarquia que importa para quem vende por WhatsApp: custo
  * por conversa decide, e custo por venda decide acima de tudo quando há
  * venda. CTR virou diagnóstico dentro do porquê, nunca sentença: clique é
@@ -140,6 +173,7 @@ function analisar(ad: AdAnalisado, ref: Referencias): Veredito {
   if (!amostraOk) {
     return {
       tipo: "sem_amostra",
+      rank: RANK.sem_amostra,
       rotulo: "Pouca amostra",
       porque: "Ainda não entregou o suficiente para concluir algo com honestidade.",
       cor: "text-slate-400",
@@ -166,6 +200,7 @@ function analisar(ad: AdAnalisado, ref: Referencias): Veredito {
             : "O criativo clica na média, mas ninguém vira conversa: o convite para chamar é o suspeito.";
       return {
         tipo: "sem_resultado",
+        rank: RANK.queima_verba,
         rotulo: `Gasta sem ${nomeDominante.singular}`,
         curto: "Queima verba",
         porque:
@@ -180,6 +215,9 @@ function analisar(ad: AdAnalisado, ref: Referencias): Veredito {
     }
     return {
       tipo: "media",
+      // Zero resultado com gasto pequeno: não é vitória nem condenação, mas
+      // fica DEPOIS de quem já entrega — senão subiria à frente de vencedor.
+      rank: RANK.sem_resultado_ainda,
       rotulo: "Sem resultado ainda",
       curto: "Sem resultado",
       porque: "Gasto ainda pequeno para condenar. Vale observar mais alguns dias.",
@@ -198,6 +236,8 @@ function analisar(ad: AdAnalisado, ref: Referencias): Veredito {
   if (qtd >= minimo && custoRel <= 0.8) {
     return {
       tipo: "vencedor",
+      rank: RANK.vencedor,
+      nota: qtd / custoRel,
       rotulo: "Vencedor",
       porque:
         `${qtd} ${qtd === 1 ? nome.singular : nome.plural} a ${formatCurrency(custo)} cada, ` +
@@ -219,6 +259,8 @@ function analisar(ad: AdAnalisado, ref: Referencias): Veredito {
           : "Criativo e clique estão na média: o custo alto vem de público ou lance.";
     return {
       tipo: "caro",
+      rank: RANK.caro,
+      nota: qtd / custoRel,
       rotulo:
         tipo === "venda" ? "Vendendo caro" : tipo === "conversa" ? "Conversa cara" : "Lead caro",
       porque:
@@ -233,6 +275,8 @@ function analisar(ad: AdAnalisado, ref: Referencias): Veredito {
   if (ad.frequency >= 3.5 && custoRel >= 1.15) {
     return {
       tipo: "fadiga",
+      rank: RANK.fadiga,
+      nota: qtd / custoRel,
       rotulo: "Fadigando",
       porque:
         `Cada pessoa viu ${ad.frequency.toFixed(1)} vezes e o custo por ${nome.singular} já está ` +
@@ -243,8 +287,28 @@ function analisar(ad: AdAnalisado, ref: Referencias): Veredito {
     };
   }
 
+  // O fallback engolia até custoRel 1,49 e ainda dizia "em linha com a
+  // conta" — mentira para quem está 45% acima. Agora a faixa 1,15–1,5 sem
+  // fadiga tem nome próprio e cai depois de quem realmente está na média.
+  if (custoRel >= LIMITE_NA_MEDIA) {
+    return {
+      tipo: "media",
+      rank: RANK.acima_media,
+      nota: qtd / custoRel,
+      rotulo: "Acima da média",
+      curto: "Acima da média",
+      porque:
+        `Cada ${nome.singular} custa ${formatCurrency(custo)}, ${Math.round((custoRel - 1) * 100)}% acima ` +
+        `da média da conta. Ainda entrega, mas é o próximo a otimizar se a verba apertar.`,
+      cor: "text-amber-300",
+      borda: "border-amber-500/25",
+    };
+  }
+
   return {
     tipo: "media",
+    rank: RANK.na_media,
+    nota: qtd / custoRel,
     rotulo: "Na média",
     porque: `${qtd} ${qtd === 1 ? nome.singular : nome.plural} a ${formatCurrency(custo)} cada, em linha com a conta. Não é o problema nem a solução.`,
     cor: "text-slate-300",
@@ -346,9 +410,43 @@ export function AnaliseCriativos({
   // Referências POR TIPO de resultado (venda/conversa/lead), ponderadas.
   const ref = useMemo(() => calcularReferencias(unicos), [unicos]);
 
+  /*
+   * Referência POR CONTA, não uma média só para tudo.
+   *
+   * Na visão "Todas as Fontes" a média era calculada sobre a mistura de
+   * todos os clientes: uma conta de nicho barato (conversa a R$3) virava
+   * vencedora em bloco e uma de ticket alto (conversa a R$40) virava cara em
+   * bloco, contra uma média que não é de nenhuma das duas. Como agora o
+   * veredito define a ORDEM dos cards, isso ordenaria a faixa por cliente.
+   * O próprio texto do card já promete "a média da conta" — agora é verdade.
+   *
+   * Conta com menos de 2 anúncios com amostra cai na referência global: com
+   * um anúncio só, ele seria sempre a própria média e nunca teria veredito.
+   */
+  const refPorConta = useMemo(() => {
+    const grupos = new Map<string, AdAnalisado[]>();
+    for (const ad of unicos) {
+      const chave = ad.adAccountId ?? "sem-conta";
+      const lista = grupos.get(chave) ?? [];
+      lista.push(ad);
+      grupos.set(chave, lista);
+    }
+    const mapa = new Map<string, Referencias>();
+    for (const [chave, lista] of grupos) {
+      const comAmostra = lista.filter((a) => a.impressions >= 1000 || a.spend >= 50);
+      mapa.set(chave, comAmostra.length >= 2 ? calcularReferencias(lista) : ref);
+    }
+    return mapa;
+  }, [unicos, ref]);
+
+  const refDoAnuncio = useCallback(
+    (ad: AdAnalisado) => refPorConta.get(ad.adAccountId ?? "sem-conta") ?? ref,
+    [refPorConta, ref],
+  );
+
   const analisados = useMemo(
-    () => unicos.map((ad) => ({ ad, veredito: analisar(ad, ref) })),
-    [unicos, ref],
+    () => unicos.map((ad) => ({ ad, veredito: analisar(ad, refDoAnuncio(ad)) })),
+    [unicos, refDoAnuncio],
   );
 
   /*
@@ -362,7 +460,21 @@ export function AnaliseCriativos({
       ...f,
       itens: analisados
         .filter((x) => f.combina(x.ad.status))
-        .sort((a, b) => b.ad.spend - a.ad.spend),
+        /*
+         * Vencedores primeiro, depois na média, e por último os que queimam
+         * verba. Dentro do mesmo veredito manda a NOTA (resultado entregue
+         * ajustado pela eficiência) — desempatar por gasto colocava o maior
+         * orçamento na frente, e orçamento não é mérito. Quem não entrega
+         * não tem nota: entre esses, quem torra mais verba primeiro, que é
+         * o mais urgente.
+         */
+        .sort((a, b) => {
+          if (a.veredito.rank !== b.veredito.rank) return a.veredito.rank - b.veredito.rank;
+          const na = a.veredito.nota;
+          const nb = b.veredito.nota;
+          if (na != null && nb != null && na !== nb) return nb - na;
+          return b.ad.spend - a.ad.spend;
+        }),
     }));
     return definicao.filter((f) => f.itens.length > 0);
   }, [analisados]);
@@ -439,7 +551,7 @@ export function AnaliseCriativos({
       {aberto ? (
         <ModalAnuncio
           ad={aberto}
-          veredito={analisar(aberto, ref)}
+          veredito={analisar(aberto, refDoAnuncio(aberto))}
           workspaceIdParam={workspaceIdParam}
           mostrarCusto={mostrarCusto}
           onFechar={() => setAberto(null)}
@@ -469,11 +581,22 @@ function Faixa({
   const [todos, setTodos] = useState(false);
   const visiveis = todos ? itens : itens.slice(0, POR_FAIXA);
   const gasto = itens.reduce((soma, x) => soma + x.ad.spend, 0);
+  const escondidosRuins = todos
+    ? 0
+    : itens.slice(POR_FAIXA).filter((x) => x.veredito.tipo === "sem_resultado").length;
 
-  // No celular arrasta com o dedo; no desktop o mouse não arrasta, então as
-  // setas existem — sem elas metade da fileira ficaria inalcançável.
-  const rolar = (direcao: 1 | -1) =>
-    trilhoRef.current?.scrollBy({ left: direcao * 420, behavior: "smooth" });
+  /*
+   * Setas em TODAS as larguras. No celular o trilho não tem barra de rolagem
+   * (.no-scrollbar) e, num 390px, dois cards cabem exatos — nem sobra a borda
+   * do terceiro para sugerir que há mais. Sem as setas, nada indicava
+   * profundidade, e agora o fim da fileira é onde mora o que queima verba.
+   * Rola quase uma "tela" por clique, em vez de 420px fixos.
+   */
+  const rolar = (direcao: 1 | -1) => {
+    const trilho = trilhoRef.current;
+    if (!trilho) return;
+    trilho.scrollBy({ left: direcao * Math.max(200, trilho.clientWidth * 0.85), behavior: "smooth" });
+  };
 
   return (
     <section>
@@ -489,20 +612,33 @@ function Faixa({
               onClick={() => setTodos((v) => !v)}
               className="rounded-md border border-slate-800 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
             >
-              {todos ? "Ver menos" : `Ver todos (${itens.length})`}
+              {todos ? (
+                "Ver menos"
+              ) : (
+                <>
+                  Ver todos ({itens.length})
+                  {/* Com a ordem por veredito o PIOR foi para o fim da fila, e
+                      o corte de 24 passou a escondê-lo. Antes o maior gastador
+                      era o card nº 1. Se sobrou alguém queimando verba atrás
+                      do corte, o botão diz. */}
+                  {escondidosRuins > 0 && (
+                    <span className="text-red-400"> · {escondidosRuins} queimando verba</span>
+                  )}
+                </>
+              )}
             </button>
           )}
           <button
             onClick={() => rolar(-1)}
             aria-label="Voltar"
-            className="hidden rounded-md border border-slate-800 p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white sm:block"
+            className="rounded-md border border-slate-800 p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
           >
             <ChevronLeft size={14} />
           </button>
           <button
             onClick={() => rolar(1)}
             aria-label="Avançar"
-            className="hidden rounded-md border border-slate-800 p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white sm:block"
+            className="rounded-md border border-slate-800 p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
           >
             <ChevronRight size={14} />
           </button>
@@ -535,6 +671,7 @@ function Faixa({
                   <img
                     src={ad.thumbnail}
                     alt=""
+                    loading="lazy"
                     className="h-full w-full object-cover"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                   />
