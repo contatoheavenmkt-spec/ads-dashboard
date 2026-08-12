@@ -483,6 +483,7 @@ export function AnaliseCriativos({
               <div className="space-y-1.5">
                 {secao.mostrar.map(({ ad, veredito }) => {
                   const st = STATUS_ROTULO[ad.status] ?? STATUS_PADRAO;
+                  const ehAtivo = ad.status === "ACTIVE";
                   const { tipo, qtd } = tipoDoAnuncio(ad);
                   const nome = NOME_RESULTADO[tipo];
                   const ehVenda = tipo === "venda";
@@ -514,14 +515,23 @@ export function AnaliseCriativos({
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[11px] font-semibold text-slate-100 sm:text-xs">{ad.name}</p>
                         {/* Uma linha só: sem nowrap o veredito quebrava em
-                            duas e cada linha da lista ficava de uma altura. */}
+                            duas e cada linha ficava de uma altura. O status
+                            vira PONTO quando é "Ativo" — repetir o badge em
+                            toda linha era ruído e ainda comia o espaço do
+                            veredito; escrito só quando foge do normal. */}
                         <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                          <span
+                            className={cn("h-1.5 w-1.5 shrink-0 rounded-full", ehAtivo ? "bg-emerald-400" : "bg-slate-600")}
+                            title={st.texto}
+                          />
                           <span className={cn("truncate text-[10px] font-bold uppercase tracking-wide", veredito.cor)}>
                             {veredito.rotulo}
                           </span>
-                          <span className={cn("shrink-0 whitespace-nowrap rounded px-1 py-px text-[9px] font-bold uppercase", st.cor)}>
-                            {st.texto}
-                          </span>
+                          {!ehAtivo && (
+                            <span className={cn("shrink-0 whitespace-nowrap rounded px-1 py-px text-[9px] font-bold uppercase", st.cor)}>
+                              {st.texto}
+                            </span>
+                          )}
                         </div>
                       </div>
 
