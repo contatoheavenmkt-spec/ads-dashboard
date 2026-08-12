@@ -151,14 +151,16 @@ export async function GET(req: NextRequest) {
    * nada — indistinguível de "não rodou nada". O gestor precisa saber que
    * está olhando dado incompleto.
    */
-  const avisos = results.flatMap((r, i) =>
-    r.status === "rejected"
-      ? [{
-          conta: nomeDaConta.get(contas[i].adAccountId) ?? contas[i].adAccountId,
-          erro: r.reason instanceof Error ? r.reason.message : String(r.reason),
-        }]
-      : [],
-  );
+  const avisos = results.flatMap((r, i) => {
+    if (r.status !== "rejected") return [];
+    const cru = r.reason instanceof Error ? r.reason.message : String(r.reason);
+    // Throttle da Meta é temporário: dizer isso evita que o gestor ache que
+    // perdeu dado. Janela longa em conta grande é o gatilho típico.
+    const erro = /request limit|rate limit|too many calls|reduce the amount of data/i.test(cru)
+      ? "A Meta limitou temporariamente as consultas (janela muito longa). Tente de novo em alguns minutos ou reduza o período."
+      : cru;
+    return [{ conta: nomeDaConta.get(contas[i].adAccountId) ?? contas[i].adAccountId, erro }];
+  });
 
   return NextResponse.json({ ads, avisos });
 }

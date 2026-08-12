@@ -482,6 +482,13 @@ async function emOndas<T, R>(
   return saida;
 }
 
+/** Throttle da Meta: passa sozinho, então vale esperar em vez de desistir. */
+function ehLimiteDeUso(erro: unknown): boolean {
+  return /request limit|rate limit|reduce the amount of data|too many calls|#17|#4|#613/i.test(
+    String(erro),
+  );
+}
+
 /** Segue paging.next acumulando as linhas, com teto de páginas. */
 async function lerPaginado(
   urlInicial: string,
@@ -491,12 +498,25 @@ async function lerPaginado(
   let url: string | undefined = urlInicial;
   let paginas = 0;
   while (url && paginas < maxPaginas) {
-    const res: Response = await fetch(url, { cache: "no-store" });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
+    /*
+     * Janela longa ("todo o histórico") pede várias páginas e pode esbarrar
+     * no throttle do app — que é temporário. Duas tentativas com espera
+     * crescente resolvem; desistir na primeira devolveria a conta vazia e o
+     * gestor leria isso como "não rodou nada".
+     */
+    let data: { error?: { message?: string }; data?: unknown[]; paging?: { next?: string } } | null = null;
+    for (let tentativa = 0; tentativa < 3; tentativa++) {
+      const res: Response = await fetch(url, { cache: "no-store" });
+      const corpo = await res.json();
+      if (!corpo.error) { data = corpo; break; }
+      const msg = corpo.error.message ?? "erro desconhecido";
+      if (!ehLimiteDeUso(msg) || tentativa === 2) throw new Error(msg);
+      await new Promise((r) => setTimeout(r, tentativa === 0 ? 5000 : 15000));
+    }
+    if (!data) break;
     linhas.push(...((data.data ?? []) as Record<string, unknown>[]));
     // O Graph devolve o next absoluto e já com o token embutido.
-    url = data.paging?.next as string | undefined;
+    url = data.paging?.next;
     paginas++;
   }
   return { linhas, truncado: Boolean(url) };
@@ -630,7 +650,7 @@ export async function getAdCreatives(
     } catch (e) {
       // Rate limit passa sozinho: uma pausa curta e mais uma tentativa
       // salvam o lote em vez de deixar o card sem imagem.
-      if (!/request limit|rate limit|#17|#4/i.test(String(e))) throw e;
+      if (!ehLimiteDeUso(e)) throw e;
       await new Promise((r) => setTimeout(r, 3000));
       data = await buscar();
     }
